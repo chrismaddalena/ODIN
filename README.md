@@ -1,12 +1,21 @@
 ##Codename Viper
 
-
- _____        __                          _   _________  _______
-/ ___/__  ___/ /__ ___  ___ ___ _  ___   | | / /  _/ _ \/ __/ _ \
-/ /__/ _ \/ _  / -_) _ \/ _ `/  ' \/ -_)  | |/ // // ___/ _// , _/
-\___/\___/\_,_/\__/_//_/\_,_/_/_/_/\__/   |___/___/_/  /___/_/|_|
-
 >A Python tool for automating penetration testing work, like intelligence gathering, testing, and reporting.
 
-###viper.py:
-The main script. Execute viper.py to view Viper's menus and use the tools.
+###Getting Started
+Run the setup.py script in the /setup directory to walk through setup steps, like creation of directories and setup of API keys.
+
+Then run setup_check.py to make sure everything is in order.
+
+Install any missing libraries by running pip with the requirements.txt file in the /setup directory:
+
+>pip install -r requirements.txt
+
+###What Can Viper Do?
+Viper is still very much in development, but it aims to automate many of the common tasks carried out by penetration testers. Such as:
+* Email harvesting with theharvester.
+* File discovery via goofile and Google Hacking.
+* Investigating targets with DNS tools, urlcrazy, Shodan, and more.
+* Actively scanning targets with nmap and masscan.
+* Parsing scan results to find ports of interest and target them with tools like httpscreenshot and Nikto.
+* Managing reports and files for tasks like joining multiple Nessus files and parsing Burp reports.

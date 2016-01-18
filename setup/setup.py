@@ -14,8 +14,7 @@ def setup():
         except:
             exit("run as sudo!")
     elif os.path.exists("../auth"):
-        twittersetup()
-        shodansetup()
+        shodanSetup()
     else:
         exit("Could not proceed with setup! Try running as sudo!")
 
