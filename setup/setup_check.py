@@ -25,3 +25,9 @@ try:
     print '[+] FOUND: Whois library'
 except:
     print '[!] MISSING: Whois library'
+
+try:
+    import BeaitufulSoup
+    print '[+] FOUND: BeautifulSoup library'
+except:
+    print '[!] MISSING: BeautifulSoup library'
