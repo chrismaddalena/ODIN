@@ -48,7 +48,7 @@ def main():
         elif option == "5":
             cvsMenu()
         elif option == "0":
-            print "The shed's door slams shut with a clang of its latch."
+            print "Thank you for using Viper!"
             sys.exit()
         else:
             print "No tools for that job (invalid input)."
@@ -60,8 +60,7 @@ def main():
 def intelMenu():
     global domain
     global client
-    print """Enter the domain name you wish to target (e.g. clientcompany.com).
-Then you will be asked to select the intelligence you want to gather.
+    print """
     """
     if client == "":
         client = raw_input("Client's name: ")
@@ -136,7 +135,7 @@ def pentestMenu():
 #Reporting menu options
 def reportingMenu():
     print """
-    The reprting toolkit:
+    The reporting toolkit:
 
     1.
 
