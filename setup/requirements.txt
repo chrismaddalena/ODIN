@@ -1,0 +1,4 @@
+shodan
+python-whois
+BeautifulSoup
+pwnedcheck

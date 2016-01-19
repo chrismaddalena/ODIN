@@ -1,11 +1,11 @@
 .pyc
 .DS_Store
-.txt
 
 *.pyc
-*.txt
 *.html
 
+/auth/*
+/reports/*
 /lib/theharvester/*
 /lib/hostchecker.py
 /lib/htmlExport.py
