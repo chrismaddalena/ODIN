@@ -5,6 +5,7 @@ from time import sleep
 import sys
 
 def setup():
+    downloadLibs()
     if not os.path.exists("../auth"):
         print "Adding the 'auth' directory."
         try:
@@ -28,5 +29,13 @@ def shodanSetup():
         f.write(key+'\n')
         f.close()
     return
+
+def downloadLibs():
+    # Download theHarvester
+    print "Downloading theHarvester.py"
+    os.system('wget https://github.com/laramies/theHarvester/archive/master.zip -O ../lib/harvester.zip')
+    os.system('unzip ../lib/harvester.zip -d ../lib/')
+    os.system('mv ../lib/theHarvester-master ../lib/theharvester')
+    os.system('rm ../lib/harvester.zip')
 
 setup()
