@@ -82,7 +82,6 @@ def intelMenu():
     # Email tools
     if option == "1":
         email_tools.harvest(client,domain)
-        email_tools.pwnedCheck()
         intelMenu()
     # Domain tools
     elif option == "2":
