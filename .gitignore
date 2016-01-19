@@ -5,3 +5,9 @@
 *.pyc
 *.txt
 *.html
+
+/lib/theharvester/*
+/lib/hostchecker.py
+/lib/htmlExport.py
+/lib/markup.py
+/lib/graphs.py
