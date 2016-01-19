@@ -27,7 +27,7 @@ except:
     print '[!] MISSING: Whois library'
 
 try:
-    import BeaitufulSoup
+    import BeautifulSoup
     print '[+] FOUND: BeautifulSoup library'
 except:
     print '[!] MISSING: BeautifulSoup library'
