@@ -7,6 +7,7 @@
 / /__/ _ \/ _  / -_) _ \/ _ `/  ' \/ -_)  | |/ // // ___/ _// , _/
 \___/\___/\_,_/\__/_//_/\_,_/_/_/_/\__/   |___/___/_/  /___/_/|_|
 
+Developer: Chris Maddalena
 """
 
 import sys
@@ -19,9 +20,9 @@ client = ""
 def main():
     # Clear the terminal window
     os.system('cls' if os.name == 'nt' else 'clear')
-
+    asciis.printArt()
     try:
-        print """The tool shed doors swing open with a bang. What is the job?
+        print """Please select a job from the options below.
 
     1. Intelligence Gathering (Passive)
 
@@ -82,6 +83,7 @@ Then you will be asked to select the intelligence you want to gather.
     # Email tools
     if option == "1":
         email_tools.harvest(client,domain)
+        email_tools.pwnedCheck()
         intelMenu()
     # Domain tools
     elif option == "2":

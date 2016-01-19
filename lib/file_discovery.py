@@ -6,7 +6,7 @@ from BeautifulSoup import BeautifulSoup
 import urllib2
 
 # Total commands
-total = 16
+total = 17
 
 def discover(client,domain):
 	print """

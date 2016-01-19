@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import pwnedcheck
 
 # Number of commands
 total = 5
@@ -10,7 +11,7 @@ harvesterDomains = 5
 def harvest(client,domain):
 	print """
 	"""
-	
+
 	client = client
 	domain = domain
 
@@ -31,3 +32,16 @@ def harvest(client,domain):
 	os.system('theharvester -d %s -b baidu >> reports/%s/Harvester_Baidu.txt' % (domain,client))
 	print "[-] Harvesting Bing (5/%s)" % harvesterDomains
 	os.system('theharvester -d %s -b bing >> reports/%s/Harvester_Bing.txt' % (domain,client))
+
+def pwnedCheck():
+	#print pwnedcheck.check("chris.maddalena@gmail.com")
+
+	with open('harvest.txt') as harvest:
+		# Skip to the emails
+		for line in harvest:
+			if line.strip() == "[+] Emails found:":
+				break
+		for line in harvest:
+			if line.strip() == '[+] Hosts found in search engines:':
+				break
+			print line
