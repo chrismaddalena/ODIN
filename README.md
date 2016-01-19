@@ -1,5 +1,7 @@
 ##Codename Viper
 
+![Codename Viper](https://upload.wikimedia.org/wikipedia/en/8/8e/Cobra_Viper_Figure.jpg)
+
 >A Python tool for automating penetration testing work, like intelligence gathering, testing, and reporting.
 
 ###Getting Started
