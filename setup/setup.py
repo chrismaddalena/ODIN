@@ -45,4 +45,10 @@ def downloadLibs():
     else:
         print "TheHarvester is installed."
 
+    try:
+        print "Downloading ZAP API module"
+        os.system('pip install --upgrade git+https://github.com/Grunny/zap-cli.git')
+    except:
+        exit("Could not proceed with setup! Try running as sudo!")
+
 setup()
