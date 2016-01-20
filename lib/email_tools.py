@@ -4,16 +4,20 @@
 import os
 import pwnedcheck
 import sys
+import urllib2
 
 sys.path.append('lib/theharvester/')
 from theHarvester import *
 
 # Number of commands
-total = 5
-harvesterDomains = 6
+total = 2 # Tests
+harvesterDomains = 6 # Search engines used with theHarvester
+# Headers for use with urllib2
+user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
+headers = { 'User-Agent' : user_agent }
 
 def harvest(client,domain):
-	print """
+	print """Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. This may take a few minutes.
 	"""
 
 	client = client
@@ -28,6 +32,8 @@ def harvest(client,domain):
 		except:
 			print "[!] Could not create reports directory!"
 	print "[+] Running The Harvester (1/%s)" % total
+	# Search trhough most of Harvester's supported engines
+	# No Baidu because it always seems to hang or take way too long
 	print "[-] Harvesting Google (1/%s)" % harvesterDomains
 	search = googlesearch.search_google(domain,harvestLimit,harvestStart)
 	search.process()
@@ -57,34 +63,55 @@ def harvest(client,domain):
 	totalEmails = googleHarvest + bingHarvest + yahooHarvest
 	unique = set(totalEmails)
 	uniqueEmails = list(unique)
-	totalPeople = linkHarvest + twitHarvest + jigsawHarvest
+	# Do the same with people, but keep Twitter handles separate
+	totalPeople = linkHarvest + jigsawHarvest
 	unique = set(totalPeople)
 	uniquePeople = list(unique)
-	print "[+] Harvester found a total of %s emails and %s names across all engines" % (len(uniqueEmails),len(uniquePeople))
+	unique = set(twitHarvest)
+	uniqueTwitter = list(unique)
 
+	print "[+] Harvester found a total of %s emails and %s names across all engines" % (len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter))
+	uniqueEmails.append("foo@bar.com")
 	print "[+] Running emails through haveibeenpwned and writing report (2/%s)" % total
 	file = "reports/%s/Email_Report.txt" % client
 	with open(file, 'w') as report:
-		report.write("### Email Report for %s ###\n" % domain)
+		report.write("### Email & People Report for %s ###\n" % domain)
+		report.write("---TheHarvester Results---\n")
+		report.write("Emails checked with HaveIBeenPwned for breaches and pastes\n")
 		for email in uniqueEmails:
-			report.write('\n' + 'Email: ' + email + '\n')
-			report.write('Pwned: ')
-			pwned = pwnedcheck.check(email)
-			if not pwned:
-				report.write('None' + '\n')
+			# Make sure we drop that @domain.com result Harvester always includes
+			if email == '@' + domain:
+				pass
 			else:
-				for pwn in pwned:
-					report.write(pwn)
-	report.close()
+				report.write('\n' + 'Email: ' + email + '\n')
+				report.write('Pwned: ')
+				# Check haveibeenpwned data breaches
+				pwned = pwnedcheck.check(email)
+				# If no results for breaches we return None
+				if not pwned:
+					report.write('None' + '\n')
+				else:
+					report.write('\n')
+					for pwn in pwned:
+						report.write('+ ' + pwn + '\n')
+				# Check haveibeenpwned for pastes from Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
+				url = "https://haveibeenpwned.com/api/v2/pasteaccount/" + email
+				page = urllib2.Request(url, None, headers)
+				# We must use Try because an empty result is like a 404 and causes an error
+				try:
+					source = urllib2.urlopen(page).read()
+					report.write("Pastes: " + source + "\n")
+				except:
+					report.write("Pastes: No pastes\n")
+		report.write("\n---People Results---\n")
+		report.write("Names and social media accounts (Twitter and LinkedIn)\n\n")
+		for person in uniquePeople:
+			report.write(person + '\n')
+		for twit in uniqueTwitter:
+			# Drop the lonely @ Harvester often includes
+			if twit == '@':
+				pass
+			else:
+				report.write(twit + '\n')
 
-	#print pwnedcheck.check("chris.maddalena@gmail.com")
-	# No longer necessary
-	#with open('harvest.txt') as harvest:
-		# Skip to the emails
-	#	for line in harvest:
-	#		if line.strip() == "[+] Emails found:":
-	#			break
-	#	for line in harvest:
-	#		if line.strip() == '[+] Hosts found in search engines:':
-	#			break
-	#		print line
+	report.close()

@@ -2,3 +2,5 @@ shodan
 python-whois
 BeautifulSoup
 pwnedcheck
+urllib2
+python-owasp-zap
