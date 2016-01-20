@@ -24,13 +24,13 @@ def harvest(client,domain):
 	domain = domain
 	harvestLimit = 100
 	harvestStart = 0
-
 	# Create drectory for client reports
 	if not os.path.exists("reports/%s" % client):
 		try:
 			os.mkdir("reports/%s" % client)
 		except:
 			print "[!] Could not create reports directory!"
+			
 	print "[+] Running The Harvester (1/%s)" % total
 	# Search trhough most of Harvester's supported engines
 	# No Baidu because it always seems to hang or take way too long

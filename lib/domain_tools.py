@@ -16,12 +16,12 @@ except:
     sho_api = None
 
 # Number of commands
-total = 5
+total = 5 # Tests
 
 def collect(client,domain):
-	print """
+	print """Viper will now attempt to gather information from DNS records and other sources.
 	"""
-
+    
 	client = client
 	domain = domain
 	# Create drectory for client reports
@@ -30,9 +30,11 @@ def collect(client,domain):
 			os.mkdir("reports/%s" % client)
 		except:
 			print "[!] Could not create reports directory!"
-	# Create the Domain Report
+
+    # Create the Domain Report
 	os.system('echo "### Domain Report for %s ###\n" >> reports/%s/Domain_Report.txt' % (domain,client))
 	print "[+] Running whois (1/%s)" % total
+    # Run whois
 	os.system('echo "\n---WHOIS Results---\n" >> reports/%s/Domain_Report.txt' % client)
 	who = whois.whois(domain)
 	os.system('echo "Registrant: %s" >> reports/%s/Domain_Report.txt' % (who.name,client))
@@ -43,10 +45,12 @@ def collect(client,domain):
 	os.system('echo "DNSSEC: %s" >> reports/%s/Domain_Report.txt' % (who.dnssec,client))
 	os.system('echo "Status: %s" >> reports/%s/Domain_Report.txt' % (who.status,client))
 
+    # Run urlcrazy
 	print "[+] Running urlcrazy (2/%s)" % total
 	os.system('echo "\n---URLCRAZY Results---\n" >> reports/%s/Domain_Report.txt' % client)
 	os.system('urlcrazy %s >> reports/%s/Domain_Report.txt' % (domain,domain))
 
+    # Run dnsrecon for several different lookups
 	print "[+] Running dnsrecon (3/%s)" % total
 	os.system('echo "\n---DNSRECON Results---\n" >> reports/%s/Domain_Report.txt' % client)
 	# Standard lookup for records
@@ -58,26 +62,28 @@ def collect(client,domain):
 	# Sub-domains
 	os.system('dnsrecon -d %s -t brt -D /pentest/intelligence-gathering/dnsrecon/namelist.txt --iw -f >> reports/%s/Domain_Report.txt' % (domain,domain))
 
+    # Run firece
 	print "[+] Running fierce (4/%s)" % total
 	os.system('echo "\n---FIERCE Results---\n" >> reports/%s/Domain_Report.txt' % client)
 	os.system('fierce -dns %s -wordlist /pentest/intelligence-gathering/fierce/hosts.txt -suppress>> reports/%s/Domain_Report.txt' % (domain,client))
 
+    # Perform Shodan searches
 	print "[+] Checking Shodan (5/%s)" % total
 	api = shodan.Shodan(SHODAN_API_KEY)
 	os.system('echo "\n---SHODAN Results---\n" >> reports/%s/Domain_Report.txt' % client)
 	try:
-		# Search Shodan
+		# Use API key to search Shodan for client name and client domain
 		clientResults = api.search(client)
 		domainResults = api.search(domain)
 
 		os.system('echo "Client name results found: %s" >> reports/%s/Domain_Report.txt' % (clientResults['total'],client))
+        # Pull the most interesting information from search results
 		for result in clientResults['matches']:
 				os.system('echo "IP: %s" >> reports/%s/Domain_Report.txt' % (result['ip_str'],client))
 				os.system('echo "Hostname: %s" >> reports/%s/Domain_Report.txt' % (result['hostnames'],client))
 				os.system('echo "OS: %s" >> reports/%s/Domain_Report.txt' % (result['os'],client))
 				os.system('echo "Port: %s" >> reports/%s/Domain_Report.txt' % (result['port'],client))
 				os.system('echo "Data: %s" >> reports/%s/Domain_Report.txt' % (result['data'],client))
-
 		os.system('echo "Domain results found: %s" >> reports/%s/Domain_Report.txt' % (domainResults['total'],client))
 		for result in domainResults['matches']:
 				os.system('echo "IP: %s" >> reports/%s/Domain_Report.txt' % (result['ip_str'],client))
