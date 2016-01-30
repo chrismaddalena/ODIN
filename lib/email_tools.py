@@ -5,6 +5,7 @@ import os
 import pwnedcheck
 import sys
 import urllib2
+from colors import red, green
 
 sys.path.append('lib/theharvester/')
 from theHarvester import *
@@ -17,21 +18,23 @@ user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
 headers = { 'User-Agent' : user_agent }
 
 def harvest(client,domain):
-	print """Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. This may take a few minutes.
-	"""
+	print green("""Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. This may take a few minutes.
+	""")
 
 	client = client
 	domain = domain
 	harvestLimit = 100
 	harvestStart = 0
-	# Create drectory for client reports
+	# Create drectory for client reports and report
 	if not os.path.exists("reports/%s" % client):
 		try:
 			os.mkdir("reports/%s" % client)
 		except:
-			print "[!] Could not create reports directory!"
-			
-	print "[+] Running The Harvester (1/%s)" % total
+			print red("[!] Could not create reports directory!")
+
+	file = "reports/%s/Email_Report.txt" % client
+
+	print green("[+] Running The Harvester (1/%s)" % total)
 	# Search trhough most of Harvester's supported engines
 	# No Baidu because it always seems to hang or take way too long
 	print "[-] Harvesting Google (1/%s)" % harvesterDomains
@@ -67,16 +70,22 @@ def harvest(client,domain):
 	totalPeople = linkHarvest + jigsawHarvest
 	unique = set(totalPeople)
 	uniquePeople = list(unique)
-	unique = set(twitHarvest)
+	# Process Twitter handles to kill duplicates
+	handles = []
+	for twit in twitHarvest:
+		# Split handle from account description and strip rogue periods
+		handle = twit.split(' ')[0]
+		handle = handle.rstrip('.')
+		handles.append(handle)
+	unique = set(handles)
 	uniqueTwitter = list(unique)
 
-	print "[+] Harvester found a total of %s emails and %s names across all engines" % (len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter))
-	uniqueEmails.append("foo@bar.com")
-	print "[+] Running emails through haveibeenpwned and writing report (2/%s)" % total
-	file = "reports/%s/Email_Report.txt" % client
+	print green("[+] Harvester found a total of %s emails and %s names across all engines" % (len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter)))
+	#uniqueEmails.append("foo@bar.com")
+	print green("[+] Running emails through haveibeenpwned and writing report (2/%s)" % total)
 	with open(file, 'w') as report:
 		report.write("### Email & People Report for %s ###\n" % domain)
-		report.write("---TheHarvester Results---\n")
+		report.write("---THEHARVESTER Results---\n")
 		report.write("Emails checked with HaveIBeenPwned for breaches and pastes\n")
 		for email in uniqueEmails:
 			# Make sure we drop that @domain.com result Harvester always includes
@@ -103,15 +112,16 @@ def harvest(client,domain):
 					report.write("Pastes: " + source + "\n")
 				except:
 					report.write("Pastes: No pastes\n")
-		report.write("\n---People Results---\n")
+
+		report.write("\n---PEOPLE Results---\n")
 		report.write("Names and social media accounts (Twitter and LinkedIn)\n\n")
 		for person in uniquePeople:
-			report.write(person + '\n')
+			report.write('Name: ' + person + '\n')
 		for twit in uniqueTwitter:
 			# Drop the lonely @ Harvester often includes
 			if twit == '@':
 				pass
 			else:
-				report.write(twit + '\n')
+				report.write('Twitter: ' + twit + '\n')
 
 	report.close()
