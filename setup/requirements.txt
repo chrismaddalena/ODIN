@@ -4,3 +4,5 @@ BeautifulSoup
 pwnedcheck
 urllib2
 python-owasp-zap
+python-nmap
+ansicolors
