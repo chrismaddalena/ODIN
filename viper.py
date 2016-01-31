@@ -22,6 +22,7 @@ def main():
     # Clear the terminal window
     os.system('cls' if os.name == 'nt' else 'clear')
     asciis.printArt()
+    # Main menu display
     try:
         print green("Welcome to Viper!\n")
         print red("Warning: Some functions will require running Viper with sudo (e.g. nmap SYN scans)!\n")
@@ -50,7 +51,7 @@ def main():
             print "Thank you for using Viper!"
             sys.exit()
         else:
-            print red("No tools for that job (invalid input).")
+            print red("[!] Invalid option - Select from the menu")
             main()
     except (KeyboardInterrupt):
         main()
@@ -59,54 +60,59 @@ def main():
 def intelMenu():
     global domain
     global client
-    print """
-    """
-    if client == "":
-        client = raw_input("Client's name: ")
-    if domain == "":
-        domain = raw_input("Enter the domain: ")
-    print green("""The Shadow-Viper intelligence gathering toolkit:
+    try:
+        print green("""\nOSINT requires a client name and domain name. If the client has a generic name (e.g. ABC), try using a complete name for Shodan and Google searches.
+        """)
+        if client == "":
+            client = raw_input("Client's name: ")
+        if domain == "":
+            domain = raw_input("Enter the domain: ")
+        print green("""\nThe Shadow-Viper intelligence gathering toolkit:
 
-    1. Harvest email addresses and social media accounts
+        1. Harvest email addresses and social media accounts
 
-    2. Collect domain information
+        2. Collect domain information
 
-    3. Discover files for the domain
+        3. Discover files for the domain
 
-    4. Knowing is half the battle
+        4. Knowing is half the battle
 
-    0. Return
-    """)
-    option = raw_input("Select a tool: ")
-    # Email tools
-    if option == "1":
-        email_tools.harvest(client,domain)
-        intelMenu()
-    # Domain tools
-    elif option == "2":
-        domain_tools.collect(client,domain)
-        intelMenu()
-    # Find files
-    elif option == "3":
-        file_discovery.discover(client,domain)
-        intelMenu()
-    # I don't know yet!
-    elif option == "4":
-        print red("G.") + "I." + blue(" Jooooe!")
-        intelMenu()
-    #Exit to main menu
-    elif option == "0":
+        0. Return
+        """)
+        option = raw_input("Select a tool: ")
+        # Email tools
+        if option == "1":
+            email_tools.harvest(client,domain)
+            intelMenu()
+        # Domain tools
+        elif option == "2":
+            domain_tools.collect(client,domain)
+            intelMenu()
+        # Find files
+        elif option == "3":
+            file_discovery.discover(client,domain)
+            intelMenu()
+        # Could be something useful, but Saturday Morning Cartoon references
+        elif option == "4":
+            print red("G.") + "I." + blue(" Jooooe!")
+            intelMenu()
+        #Exit to main menu
+        elif option == "0":
+            main()
+        else:
+            print red("[!] Invalid option - Select from the menu")
+            intelMenu()
+    except (KeyboardInterrupt):
         main()
-    else:
-        print red("The tool isn't here. Does it exist?.")
-        intelMenu()
 
 #Penetration testing menu options
 def pentestMenu():
-    print green("""The Pit-Viper penetration testing toolkit:
+    try:
+        print green("""\nThe Pit-Viper penetration testing toolkit""")
 
-Some of these scans require running Viper with sudo!
+        print red("""\nSome of these scans require running Viper with sudo!""")
 
+        print green("""
     1. Check your scope
 
     2. Network - Active scanning with nmap and masscan (you pick)
@@ -116,126 +122,207 @@ Some of these scans require running Viper with sudo!
     4.
 
     0. Return
-    """)
-    option = raw_input("Select a tool: ")
-    if option == "1":
-        print green("""
-Viper will attempt to verify ownership of the provided IP addresses
-using various tools: ARIN, whois, DNS, and SSL cert informaiton.
-Please provide a list of IPs in a text file and Viper will output a CSV of results.""")
-        # initialize our array for IP address storage
-        ips = []
-        # initialize our dict for info storage
-        out = {}
+        """)
+        option = raw_input("Select a tool: ")
 
-        infile = raw_input("File with IPs:")
-        outfile = raw_input("Output filename for CSV:")
-        CIDR = raw_input("Is there a CIDR (y/n?):")
-        if CIDR == "y":
-            breakrange = True
+        # Check scope option
+        if option == "1":
+            print green("""
+    Viper will attempt to verify ownership of the provided IP addresses
+    using various tools: ARIN, whois, DNS, and SSL cert informaiton.
+    Please provide a list of IPs in a text file and Viper will output a CSV of results.""")
+            # initialize our array for IP address storage
+            ips = []
+            # initialize our dict for info storage
+            out = {}
+
+            infile = raw_input("File with IPs:")
+            outfile = raw_input("Output filename for CSV:")
+            CIDR = raw_input("Is there a CIDR (y/n?):")
+            if CIDR == "y":
+                breakrange = True
+            else:
+                breakrange = False
+            verify.infile(infile, ips, breakrange)
+            verify.who(ips, out)
+            verify.outfile(out, outfile)
+            pentestMenu()
+        # Network scanning menu begins
+        elif option == "2":
+            scanMenu()
+        # Web scanning menu begins
+        elif option == "3":
+            webScanMenu()
+        elif option == "4":
+            print "Under construction!"
+        elif option == "0":
+            main()
         else:
-            breakrange = False
-        verify.infile(infile, ips, breakrange)
-        verify.who(ips, out)
-        verify.outfile(out, outfile)
-        pentestMenu()
-    elif option == "2":
+            print red("[!] Invalid option - Select from the menu")
+            pentestMenu()
+    except (KeyboardInterrupt):
+        main()
+
+#Reporting menu options
+def reportingMenu():
+    try:
+        print green("""\nThe Ninja-Viper reporting toolkit:
+
+        1. Combine multiple Nessus reports (.nessus)
+
+        2.
+
+        3.
+
+        4.
+
+        0. Return
+        """)
+        option = raw_input("Select a tool: ")
+        # Joining Nessus report files
+        if option == "1":
+            print green("""\nViper can join multiple .nessus files into one report.
+        1. Place your files into the same directory.
+        2. Provide the directory and the first .nessus file.
+        3. Provide name for the final .nessus file and report title.
+            """)
+
+            dir = raw_input("Diretory with Nessus files: ")
+            first = raw_input("First Nessus file: ")
+            output = raw_input("Name for final Nessus file: ")
+            name = raw_input("Name for final report: ")
+            jonessus.joiner(first,dir,output,name)
+        elif option == "2":
+            print "Under construction!"
+        elif option == "3":
+            print "Under construction!"
+        elif option == "4":
+            print "Under construction!"
+        elif option == "0":
+            main()
+        else:
+            print red("[!] Invalid option - Select from the menu")
+            reportingMenu()
+    except (KeyboardInterrupt):
+        main()
+
+#Phishing menu options
+def phishingMenu():
+    try:
+        print green("""The Swamp-Viper phishing toolkit:
+
+        1. Parse list of names into first and last (csv)
+
+        2.
+
+        3.
+
+        4.
+
+        0. Return
+        """)
+        option = raw_input("Select a tool: ")
+        if option == "1":
+            print "Under construction!"
+        elif option == "2":
+            print "Under construction!"
+        elif option == "3":
+            print "Under construction!"
+        elif option == "4":
+            print "Under construction!"
+        elif option == "0":
+            main()
+        else:
+            print red("[!] Invalid option - Select from the menu")
+            phishingMenu()
+    except (KeyboardInterrupt):
+        main()
+
+# Network scanning options
+def scanMenu():
+    try:
         print green("""
-Viper has shortcuts for many of the popular scanners.
-Select a scanner, provide a text file with IPs, and Viper will take care of the rest.
-You can run full nmap SYN scans, the same with common scripts, or Masscan with full ports.
-For custom Masscan scans, edit Viper's masscan.config file.
-""")
+    Viper has shortcuts for many of the popular scanners.
+    Select a scanner, provide a text file with IPs, and Viper will take care of the rest.
+    You can run full nmap SYN scans, the same with common scripts, or Masscan with full ports.
+    For custom Masscan scans, edit Viper's masscan.config file.
+    """)
         print red("""SYN scans require sudo! Start Viper with sudo if you want to use them.
-""")
+    """)
         print green("""Select a scan to run:
 
-    1. Standard nmap SYN full scan (-sSV -T4 -p-)
+        1. Full port nmap SYN scan (-p0-65535 -sS -sSV -T4)
 
-    2. With scripts nmap (-sSC)
+        2. Default port nmap SYN scan (-sS -sSV -T4)
 
-    3. Standard full masscan (-p0-65535)
+        3. Full port masscan (-p0-65535)
 
-    4. Masscan with conf file (-c)
+        4. Masscan with conf file (-c)
+
+        0. Return
+        """)
+        option = raw_input("Select an option: ")
+        # nmap scan options
+        if option == "1":
+            scanType = 1
+            scan_tools.runNMAP(scanType)
+            pentestMenu()
+        elif option == "2":
+            scanType = 2
+            scan_tools.runNMAP(scanType)
+            pentestMenu()
+        # masscan scan options
+        elif option == "3":
+            scanType = 1
+            scan_tools.runMasscan(1)
+            pentestMenu()
+        elif option == "4":
+            scanType = 2
+            scan_tools.runMasscan(2)
+            pentestMenu()
+        # Return to the pen test menu
+        elif option == "0":
+            pentestMenu()
+        else:
+            print red("[!] Invalid option - Select from the menu")
+            scanMenu()
+    except (KeyboardInterrupt):
+        main()
+
+# Web scanning options
+def webScanMenu():
+    try:
+        print green("""
+Viper can automate some web scans for you.
+""")
+        print red("""ZAP needs to be running and setup as your proxy to use the ZAP scanner.""")
+        print green("""Select a scan to run:
+
+    1. Spider and scan a target website with ZAP
+
+    2.
+
+    3.
+
+    4.
 
     0. Return
         """)
         option = raw_input("Select an option: ")
         if option == "1":
-            scanType = 1
-            scan_tools.runNMAP(scanType)
+            target = raw_input("Enter target URL: ")
+            scan_tools.runZAP(target)
             pentestMenu()
-        if option == "2":
-            scanType = 2
-            scan_tools.runNMAP(scanType)
+        elif option == "2":
             pentestMenu()
-    elif option == "2":
-        print "Under construction!"
-    elif option == "3":
-        print "Under construction!"
-    elif option == "0":
-        main()
-    else:
-        print red("The tool isn't here. Does it exist?.")
-        pentestMenu()
-
-#Reporting menu options
-def reportingMenu():
-    print green("""The Ninja-Viper reporting toolkit:
-
-    1. Combine multiple Nessus reports (.nessus)
-
-    2.
-
-    3.
-
-    4.
-
-    0. Return
-    """)
-    option = raw_input("Select a tool: ")
-    if option == "1":
-        print "Under construction!"
-    elif option == "2":
-        print "Under construction!"
-    elif option == "3":
-        print "Under construction!"
-    elif option == "4":
-        print "Under construction!"
-    elif option == "0":
-        main()
-    else:
-        print red("The tool isn't here. Does it exist?.")
-        reortingMenu()
-
-#Phishing menu options
-def phishingMenu():
-    print green("""The Swamp-Viper phishing toolkit:
-
-    1. Parse list of names into first and last (csv)
-
-    2.
-
-    3.
-
-    4.
-
-    0. Return
-    """)
-    option = raw_input("Select a tool: ")
-    if option == "1":
-        print "Under construction!"
-    elif option == "2":
-        print "Under construction!"
-    elif option == "3":
-        print "Under construction!"
-    elif option == "4":
-        print "Under construction!"
-    elif option == "0":
-        main()
-    else:
-        print red("The tool isn't here. Does it exist?.")
-        phishingMenu()
+        elif option == "3":
+            pentestMenu()
+        elif option == "0":
+            pentestMenu()
+        else:
+            pentestMenu()
+    except (KeyboardInterrupt):
+            main()
 
 if __name__ == "__main__":
     main()
