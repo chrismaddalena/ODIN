@@ -4,6 +4,13 @@
 
 >A Python tool for automating penetration testing work, like intelligence gathering, testing, and reporting.
 
+###Special Thanks
+A big thank you to a few contributors who gave me the OK to re-use some of their code.
+
+Ninjasl0th - Creator of the original scope verification script and all around cool dude!
+
+0xF1 - Creator of the original JoiNessus tool and a great guy to have on your team!
+
 ###Getting Started
 Run the setup.py script in the /setup directory to walk through setup steps, like creation of directories and setup of API keys.
 

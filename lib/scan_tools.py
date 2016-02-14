@@ -22,10 +22,10 @@ def runNMAP(type):
 			# Different scan types for nmap
 			if scanType == 1:
 				print green("[+] Running full port scan with nmap - this will take a while")
-				scanner.scan(hosts=ip,ports="0-65535",arguments="-sS -sV -T4")
+				scanner.scan(hosts=ip,ports="0-65535",arguments="-sS -sV -T4 -oG nmap.gnmap")
 			if scanType == 2:
 				print green("[+] Running default port scan with nmap - take a break")
-				scanner.scan(hosts=ip,arguments="-sS -sV -T4")
+				scanner.scan(hosts=ip,arguments="-sS -sV -T4 -oG nmap.gnmap")
 			print green("[+] Equiviliant command if nmap was run manually:")
 			print red(scanner.command_line())
 			for host in scanner.all_hosts():
@@ -48,6 +48,34 @@ def runNMAP(type):
 	print green("[+] Creating %s to hold results" % outfile)
 	with open(outfile,'w') as results:
 		results.write(scanner.csv())
+
+def webNMAP():
+		infile = raw_input("Name of IP file: ")
+		scanner = nmap.PortScanner()
+
+		with open(infile, 'r') as ips:
+			for ip in ips:
+				print green("[+] Scanning for web ports listed in /setup/web_ports.txt")
+				with open('setup/web_ports.txt','r') as ports:
+					for port in ports:
+						print "[+] Scanning for port %s" % port
+						scanner.scan(hosts=ip,ports=port,arguments="-sS -sV -T4 --open")
+						for host in scanner.all_hosts():
+							print('\nHost: %s (%s)' % (host, scanner[host].hostname()))
+							print('State: %s' % scanner[host].state())
+							for proto in scanner[host].all_protocols():
+								print('----------')
+								print('Protocol: %s' % proto)
+
+								lport = scanner[host][proto].keys()
+								lport.sort()
+								for port in lport:
+									print ('Port: %s\tstate: %s' % (port, scanner[host][proto][port]['state']))
+									banner = retBanner(host,port)
+									try:
+										print ('Banner: %s' % banner.rstrip('\n'))
+									except:
+										pass
 
 # Perform banner grabbing for discovered open ports
 def retBanner(ip, port):
@@ -79,4 +107,3 @@ If you've never setup one, you can dump a configuration using this command:""")
 				print green("[+] Running masscan with %s" % conf)
 				command = "masscan -p0-65535 --rate 50000 --banners %s -oX %s" % (ip.rstrip(),outfile)
 				os.system(command)
- 

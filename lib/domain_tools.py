@@ -56,19 +56,19 @@ def collect(client,domain):
         # Run urlcrazy
     	print green("[+] Running urlcrazy (2/%s)" % total)
     	report.write("\n---URLCRAZY Results---\n")
-    	os.system('urlcrazy %s >> reports/%s/Domain_Report.txt' % (domain,domain))
+    	os.system('urlcrazy %s >> reports/%s/Domain_Report.txt' % (client,domain))
 
         # Run dnsrecon for several different lookups
     	print green("[+] Running dnsrecon (3/%s)" % total)
     	report.write("\n---DNSRECON Results---\n")
     	# Standard lookup for records
-    	os.system('dnsrecon -d %s -t std >> reports/%s/Domain_Report.txt' % (domain,domain))
+    	os.system('dnsrecon -d %s -t std >> reports/%s/Domain_Report.txt' % (client,domain))
     	# Google for sub-domains
-    	os.system('dnsrecon -d %s -t goo >> reports/%s/Domain_Report.txt' % (domain,domain))
+    	os.system('dnsrecon -d %s -t goo >> reports/%s/Domain_Report.txt' % (client,domain))
     	# Zone Transfers
-    	os.system('dnsrecon -d %s -t axfr >> reports/%s/Domain_Report.txt' % (domain,domain))
+    	os.system('dnsrecon -d %s -t axfr >> reports/%s/Domain_Report.txt' % (client,domain))
     	# Sub-domains
-    	os.system('dnsrecon -d %s -t brt -D /pentest/intelligence-gathering/dnsrecon/namelist.txt --iw -f >> reports/%s/Domain_Report.txt' % (domain,domain))
+    	os.system('dnsrecon -d %s -t brt -D /pentest/intelligence-gathering/dnsrecon/namelist.txt --iw -f >> reports/%s/Domain_Report.txt' % (client,domain))
 
         # Run firece
     	print green("[+] Running fierce (4/%s)" % total)
@@ -83,6 +83,7 @@ def collect(client,domain):
     		# Use API key to search Shodan for client name and client domain
     		clientResults = api.search(client)
     		domainResults = api.search(domain)
+
 
     		report.write("Client name results found: %s\n" % clientResults['total'])
             # Pull the most interesting information from search results

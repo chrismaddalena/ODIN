@@ -117,7 +117,7 @@ def pentestMenu():
 
     2. Network - Active scanning with nmap and masscan (you pick)
 
-    3. Web - Scanning with ZAP, Nikto, and other tools
+    3. Web - Scanning with httpscreenshot, Nikto, and other tools
 
     4.
 
@@ -264,13 +264,21 @@ def scanMenu():
         option = raw_input("Select an option: ")
         # nmap scan options
         if option == "1":
-            scanType = 1
-            scan_tools.runNMAP(scanType)
-            pentestMenu()
+            try:
+                scanType = 1
+                scan_tools.runNMAP(scanType)
+                pentestMenu()
+            except:
+                print red("[!] The namp scan failed! Remember to use sudo to start Viper.")
+                pentestMenu()
         elif option == "2":
-            scanType = 2
-            scan_tools.runNMAP(scanType)
-            pentestMenu()
+            try:
+                scanType = 2
+                scan_tools.runNMAP(scanType)
+                pentestMenu()
+            except:
+                print red("[!] The namp scan failed! Remember to use sudo to start Viper.")
+                pentestMenu()
         # masscan scan options
         elif option == "3":
             scanType = 1
@@ -295,14 +303,13 @@ def webScanMenu():
         print green("""
 Viper can automate some web scans for you.
 """)
-        print red("""ZAP needs to be running and setup as your proxy to use the ZAP scanner.""")
         print green("""Select a scan to run:
 
-    1. Spider and scan a target website with ZAP
+    1. Scan for web ports and run Nikto
 
-    2.
+    2. Scan for port 443 and run SSLScan
 
-    3.
+    3. Run domain through SSL Labs
 
     4.
 
@@ -310,12 +317,19 @@ Viper can automate some web scans for you.
         """)
         option = raw_input("Select an option: ")
         if option == "1":
-            target = raw_input("Enter target URL: ")
-            scan_tools.runZAP(target)
+            scanType = 3
+            scan_tools.webNMAP()
             pentestMenu()
         elif option == "2":
             pentestMenu()
         elif option == "3":
+            target = raw_input("Enter target for scan (e.g. www.google.com): ")
+            data = ssllabsscanner.newScan(target)
+            print red("""
+        Server Name: %s
+        Server IP: %s
+        Grade: %s
+            """) % (data['endpoints'][0]['serverName'],data['endpoints'][0]['ipAddress'],data['endpoints'][0]['grade'])
             pentestMenu()
         elif option == "0":
             pentestMenu()

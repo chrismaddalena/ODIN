@@ -2,7 +2,7 @@ shodan
 python-whois
 BeautifulSoup
 pwnedcheck
-urllib2
-python-owasp-zap
+urllib3
 python-nmap
 ansicolors
+timeout
