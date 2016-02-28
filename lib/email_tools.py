@@ -82,7 +82,7 @@ def harvest(client,domain):
 
 	print green("[+] Harvester found a total of %s emails and %s names across all engines" % (len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter)))
 	#uniqueEmails.append("foo@bar.com")
-	print green("[+] Running emails through haveibeenpwned and writing report (2/%s)" % total)
+	print green("[+] Running emails through HaveIBeenPwned and writing report (2/%s)" % total)
 	with open(file, 'w') as report:
 		report.write("### Email & People Report for %s ###\n" % domain)
 		report.write("---THEHARVESTER Results---\n")

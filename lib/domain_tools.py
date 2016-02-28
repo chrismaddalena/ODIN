@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import subprocess
 import shodan
 import whois
 from BeautifulSoup import BeautifulSoup
@@ -27,7 +28,7 @@ def collect(client,domain):
     domain = domain
     browser = urllib2.build_opener()
     browser.addheaders = [('User-agent', 'Mozilla/5.0')] # Google-friendly user-agent
-	# Create drectory for client reports and report
+	# Create directory for client reports and report
     if not os.path.exists("reports/%s" % client):
 		try:
 			os.mkdir("reports/%s" % client)
@@ -55,25 +56,38 @@ def collect(client,domain):
 
         # Run urlcrazy
     	print green("[+] Running urlcrazy (2/%s)" % total)
-    	report.write("\n---URLCRAZY Results---\n")
-    	os.system('urlcrazy %s >> reports/%s/Domain_Report.txt' % (client,domain))
+        report.write("\n---URLCRAZY Results---\n")
+        cmd = "urlcrazy %s -f csv" % domain
+        result = subprocess.check_output(cmd,shell=True)
+        report.write(result)
 
         # Run dnsrecon for several different lookups
     	print green("[+] Running dnsrecon (3/%s)" % total)
     	report.write("\n---DNSRECON Results---\n")
     	# Standard lookup for records
-    	os.system('dnsrecon -d %s -t std >> reports/%s/Domain_Report.txt' % (client,domain))
+        cmd = "dnsrecon -d %s -t std" % domain
+        result = subprocess.check_output(cmd,shell=True)
+        report.write(result)
     	# Google for sub-domains
-    	os.system('dnsrecon -d %s -t goo >> reports/%s/Domain_Report.txt' % (client,domain))
+        cmd = "dnsrecon -d %s -t goo" % domain
+        result = subprocess.check_output(cmd,shell=True)
+        report.write(result)
     	# Zone Transfers
-    	os.system('dnsrecon -d %s -t axfr >> reports/%s/Domain_Report.txt' % (client,domain))
+        cmd = "dnsrecon -d %s -t axfr" % domain
+        result = subprocess.check_output(cmd,shell=True)
+        report.write(result)
     	# Sub-domains
-    	os.system('dnsrecon -d %s -t brt -D /pentest/intelligence-gathering/dnsrecon/namelist.txt --iw -f >> reports/%s/Domain_Report.txt' % (client,domain))
+        cmd = "dnsrecon -d %s -t brt -D /usr/share/dnsrecon/namelist.txt --iw -f" % domain
+        result = subprocess.check_output(cmd,shell=True)
+        report.write(result)
 
         # Run firece
     	print green("[+] Running fierce (4/%s)" % total)
-    	report.write("\n---FIERCE Results---\n")
-    	os.system('fierce -dns %s -wordlist /pentest/intelligence-gathering/fierce/hosts.txt -suppress>> reports/%s/Domain_Report.txt' % (domain,client))
+        os.system("\n---FIERCE Results---\n")
+        # The wordlist location is the default location for fierce's hosts.txt on Kali 2
+        cmd = "fierce -dns %s -wordlist /usr/share/fierce/hosts.txt" % domain
+        result = subprocess.check_output(cmd,shell=True)
+        report.write(result)
 
         # Perform Shodan searches
     	print green("[+] Checking Shodan (5/%s)" % total)
@@ -83,7 +97,6 @@ def collect(client,domain):
     		# Use API key to search Shodan for client name and client domain
     		clientResults = api.search(client)
     		domainResults = api.search(domain)
-
 
     		report.write("Client name results found: %s\n" % clientResults['total'])
             # Pull the most interesting information from search results
@@ -107,37 +120,41 @@ def collect(client,domain):
     	# Search for different login/logon/admin/administrator pages
     	report.write("\n--- GOOGLE HACKING LOGIN Results ---\n")
         print green("[+] Checking Google for login pages (6/%s)" % total)
-    	# Login
-    	for start in range(0,10):
-    		url = "https://www.google.com/search?q=site:%s+intitle:login&start=" % domain + str(start*10)
-    		page = browser.open(url)
-    		soup = BeautifulSoup(page)
+        print red("[!] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, just try again or use a VPN.")
+        try:
+        	# Login
+        	for start in range(0,10):
+        		url = "https://www.google.com/search?q=site:%s+intitle:login&start=" % domain + str(start*10)
+        		page = browser.open(url)
+        		soup = BeautifulSoup(page)
 
-    		for cite in soup.findAll('cite'):
-    			report.write("%s\n" % cite.text)
-    	# Logon
-    	for start in range(0,10):
-    		url = "https://www.google.com/search?q=site:%s+intitle:logon&start=" % domain + str(start*10)
-    		page = browser.open(url)
-    		soup = BeautifulSoup(page)
+        		for cite in soup.findAll('cite'):
+        			report.write("%s\n" % cite.text)
+        	# Logon
+        	for start in range(0,10):
+        		url = "https://www.google.com/search?q=site:%s+intitle:logon&start=" % domain + str(start*10)
+        		page = browser.open(url)
+        		soup = BeautifulSoup(page)
 
-    		for cite in soup.findAll('cite'):
-    			report.write("%s\n" % cite.text)
-    	# Admin
-    	for start in range(0,10):
-    		url = "https://www.google.com/search?q=site:%s+intitle:admin&start=" % domain + str(start*10)
-    		page = browser.open(url)
-    		soup = BeautifulSoup(page)
+        		for cite in soup.findAll('cite'):
+        			report.write("%s\n" % cite.text)
+        	# Admin
+        	for start in range(0,10):
+        		url = "https://www.google.com/search?q=site:%s+intitle:admin&start=" % domain + str(start*10)
+        		page = browser.open(url)
+        		soup = BeautifulSoup(page)
 
-    		for cite in soup.findAll('cite'):
-    			report.write("%s\n" % cite.text)
-    	# Administrator
-    	for start in range(0,10):
-    		url = "https://www.google.com/search?q=site:%s+intitle:administrator&start=" % domain + str(start*10)
-    		page = browser.open(url)
-    		soup = BeautifulSoup(page)
+        		for cite in soup.findAll('cite'):
+        			report.write("%s\n" % cite.text)
+        	# Administrator
+        	for start in range(0,10):
+        		url = "https://www.google.com/search?q=site:%s+intitle:administrator&start=" % domain + str(start*10)
+        		page = browser.open(url)
+        		soup = BeautifulSoup(page)
 
-    		for cite in soup.findAll('cite'):
-    			report.write("%s\n" % cite.text)
-
+        		for cite in soup.findAll('cite'):
+        			report.write("%s\n" % cite.text)
+        except:
+            print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again.")
+            pass
     report.close()

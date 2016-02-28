@@ -69,16 +69,20 @@ def intelMenu():
             domain = raw_input("Enter the domain: ")
         print green("""\nThe Shadow-Viper intelligence gathering toolkit:
 
-        1. Harvest email addresses and social media accounts
+Your current targets are %s and %s.
 
-        2. Collect domain information
+    1. Harvest email addresses and social media accounts
 
-        3. Discover files for the domain
+    2. Collect domain information
 
-        4. Knowing is half the battle
+    3. Discover files for the domain
 
-        0. Return
-        """)
+    4. Change target information (client name and domain)
+
+    5. Knowing is half the battle
+
+    0. Return
+""" % (client,domain))
         option = raw_input("Select a tool: ")
         # Email tools
         if option == "1":
@@ -94,6 +98,10 @@ def intelMenu():
             intelMenu()
         # Could be something useful, but Saturday Morning Cartoon references
         elif option == "4":
+            print green("Enter new target information:")
+            client = raw_input("Client's name: ")
+            domain = raw_input("Enter the domain: ")
+        elif option == "5":
             print red("G.") + "I." + blue(" Jooooe!")
             intelMenu()
         #Exit to main menu
@@ -168,23 +176,23 @@ def reportingMenu():
     try:
         print green("""\nThe Ninja-Viper reporting toolkit:
 
-        1. Combine multiple Nessus reports (.nessus)
+    1. Combine multiple Nessus reports (.nessus)
 
-        2.
+    2.
 
-        3.
+    3.
 
-        4.
+    4.
 
-        0. Return
-        """)
+    0. Return
+""")
         option = raw_input("Select a tool: ")
         # Joining Nessus report files
         if option == "1":
             print green("""\nViper can join multiple .nessus files into one report.
-        1. Place your files into the same directory.
-        2. Provide the directory and the first .nessus file.
-        3. Provide name for the final .nessus file and report title.
+    1. Place your files into the same directory.
+    2. Provide the directory and the first .nessus file.
+    3. Provide name for the final .nessus file and report title.
             """)
 
             dir = raw_input("Diretory with Nessus files: ")
@@ -211,16 +219,16 @@ def phishingMenu():
     try:
         print green("""The Swamp-Viper phishing toolkit:
 
-        1. Parse list of names into first and last (csv)
+    1. Parse list of names into first and last (csv)
 
-        2.
+    2.
 
-        3.
+    3.
 
-        4.
+    4.
 
-        0. Return
-        """)
+    0. Return
+""")
         option = raw_input("Select a tool: ")
         if option == "1":
             print "Under construction!"
@@ -251,16 +259,16 @@ def scanMenu():
     """)
         print green("""Select a scan to run:
 
-        1. Full port nmap SYN scan (-p0-65535 -sS -sSV -T4)
+    1. Full port nmap SYN scan (-p0-65535 -sS -sSV -T4)
 
-        2. Default port nmap SYN scan (-sS -sSV -T4)
+    2. Default port nmap SYN scan (-sS -sSV -T4)
 
-        3. Full port masscan (-p0-65535)
+    3. Full port masscan (-p0-65535)
 
-        4. Masscan with conf file (-c)
+    4. Masscan with conf file (-c)
 
-        0. Return
-        """)
+    0. Return
+""")
         option = raw_input("Select an option: ")
         # nmap scan options
         if option == "1":

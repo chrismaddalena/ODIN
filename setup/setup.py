@@ -18,6 +18,7 @@ def setup():
         shodanSetup()
     else:
         exit("Could not proceed with setup! Try running as sudo!")
+    print("[+] Setup complete!")
 
 def shodanSetup():
     if os.path.isfile('../auth/shodankey.txt'):
@@ -32,7 +33,7 @@ def shodanSetup():
 
 def downloadLibs():
     # Download theHarvester
-    if os.path.isfile('../lib/theharvester'):
+    if not os.path.isfile('../lib/theharvester'):
         print "Downloading theHarvester.py"
         os.system('wget https://github.com/laramies/theHarvester/archive/master.zip -O ../lib/harvester.zip')
         os.system('unzip ../lib/harvester.zip -d ../lib/')
@@ -44,11 +45,5 @@ def downloadLibs():
         os.system('mv ../lib/theharvester/lib/markup.py ../lib/markup.py')
     else:
         print "TheHarvester is installed."
-
-    try:
-        print "Downloading ZAP API module"
-        os.system('pip install --upgrade git+https://github.com/Grunny/zap-cli.git')
-    except:
-        exit("Could not proceed with setup! Try running as sudo!")
 
 setup()
