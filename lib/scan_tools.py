@@ -6,8 +6,6 @@ import sys
 import socket
 import nmap
 import time
-from zapv2 import ZAPv2
-from pprint import pprint
 from colors import red, green
 
 # Run nmap scans - it accepts the type of scan from pentestMenu()

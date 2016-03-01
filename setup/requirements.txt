@@ -6,3 +6,4 @@ urllib3
 python-nmap
 ansicolors
 timeout
+netaddr
