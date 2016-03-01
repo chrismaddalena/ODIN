@@ -28,7 +28,7 @@ def harvest(client,domain):
 	# Create drectory for client reports and report
 	if not os.path.exists("reports/%s" % client):
 		try:
-			os.mkdir("reports/%s" % client)
+			os.makedirs("reports/%s" % client)
 		except:
 			print red("[!] Could not create reports directory!")
 

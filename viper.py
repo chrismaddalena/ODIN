@@ -67,7 +67,7 @@ def intelMenu():
             client = raw_input("Client's name: ")
         if domain == "":
             domain = raw_input("Enter the domain: ")
-        print green("""\nThe Shadow-Viper intelligence gathering toolkit:
+        print green("""The Shadow-Viper intelligence gathering toolkit:
 
 Your current targets are %s and %s.
 
@@ -96,7 +96,7 @@ Your current targets are %s and %s.
         elif option == "3":
             file_discovery.discover(client,domain)
             intelMenu()
-        # Could be something useful, but Saturday Morning Cartoon references
+        # Could be something useful, but Saturday morning cartoon references
         elif option == "4":
             print green("Enter new target information:")
             client = raw_input("Client's name: ")
@@ -324,12 +324,14 @@ Viper can automate some web scans for you.
     0. Return
         """)
         option = raw_input("Select an option: ")
+        # Nikto
         if option == "1":
-            scanType = 3
             scan_tools.webNMAP()
             pentestMenu()
+        # SSLScan
         elif option == "2":
             pentestMenu()
+        # SSL Labs check
         elif option == "3":
             target = raw_input("Enter target for scan (e.g. www.google.com): ")
             data = ssllabsscanner.newScan(target)
