@@ -31,7 +31,7 @@ def collect(client,domain):
 	# Create directory for client reports and report
 	if not os.path.exists("reports/%s" % client):
 		try:
-			os.mkdir("reports/%s" % client)
+			os.makedirs("reports/%s" % client)
 		except Exception as e:
 			print red("[!] Could not create reports directory! Terminating and returning...")
 			print red("[!] Error: %s" % e)
@@ -70,7 +70,6 @@ def collect(client,domain):
 		except:
 			print red("[!] Execution of urlcrazy failed!")
 			report.write("Execution of urlcrazy failed!\n")
-			pass
 
 		# Run dnsrecon for several different lookups
 		print green("[+] Running dnsrecon (3/%s)" % total)
@@ -83,7 +82,6 @@ def collect(client,domain):
 		except:
 			print red("[!] Execution of dnsrecon -t std failed!")
 			report.write("Execution of dnsrecon -t stdfailed!\n")
-			pass
 		# Google for sub-domains
 		try:
 			cmd = "dnsrecon -d %s -t goo" % domain
@@ -92,7 +90,6 @@ def collect(client,domain):
 		except:
 			print red("[!] Execution of dnsrecon -t goo failed!")
 			report.write("Execution of dnsrecon -t goo failed!\n")
-			pass
 		# Zone Transfers
 		try:
 			cmd = "dnsrecon -d %s -t axfr" % domain
@@ -101,7 +98,6 @@ def collect(client,domain):
 		except:
 			print red("[!] Execution of dnsrecon -t axfr failed!")
 			report.write("Execution of dnsrecon -t axfr failed!\n")
-			pass
 		# Sub-domains
 		try:
 			cmd = "dnsrecon -d %s -t brt -D /usr/share/dnsrecon/namelist.txt --iw -f" % domain
@@ -110,11 +106,10 @@ def collect(client,domain):
 		except:
 			print red("[!] Execution of dnsrecon -t brt failed!")
 			report.write("Execution of dnsrecon -t brt failed!\n")
-			pass
 
 		# Run firece
 		print green("[+] Running fierce (4/%s)" % total)
-		os.system("\n---FIERCE Results---\n")
+		report.write("\n---FIERCE Results---\n")
 		# The wordlist location is the default location for fierce's hosts.txt on Kali 2
 		try:
 			cmd = "fierce -dns %s -wordlist /usr/share/fierce/hosts.txt" % domain
@@ -123,7 +118,6 @@ def collect(client,domain):
 		except:
 			print red("[!] Execution of fierce failed!")
 			report.write("Execution of fierce failed!\n")
-			pass
 
 		# Perform Shodan searches
 		print green("[+] Checking Shodan (5/%s)" % total)
@@ -151,7 +145,6 @@ def collect(client,domain):
 					report.write("Data: %s\n" % result['data'])
 		except shodan.APIError, e:
 				print 'Error: %s' % e
-				pass
 
 		# Search for different login/logon/admin/administrator pages
 		report.write("\n--- GOOGLE HACKING LOGIN Results ---\n")
@@ -169,15 +162,13 @@ def collect(client,domain):
 					report.write("%s\n" % cite.text)
 		except:
 			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again.")
-			print red("[!] You can try manually running this search: %s" % url)
-			pass
+			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: %s \n" % url)
 
 		report.write("\n--- GOOGLE HACKING INDEX OF Results ---\n")
 		print green("[+] Checking Google for pages offering file indexes (7/%s)" % total)
 		print red("[!] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, just try again or use a VPN.")
 		try:
-			# Login Logon Admin and administrator
-			# Add '+OR+intitle:YOUR_TERM' to add more options to search for
+			# Look for "index of"
 			for start in range(0,10):
 				url = "https://www.google.com/search?q=site:%s+intitle:index.of&start=" % domain + str(start*10)
 				page = browser.open(url)
@@ -187,7 +178,6 @@ def collect(client,domain):
 					report.write("%s\n" % cite.text)
 		except:
 			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again.")
-			print red("[!] You can try manually running this search: %s" % url)
-			pass
+			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: %s \n" % url)
 
 	report.close()
