@@ -231,7 +231,9 @@ def phishingMenu():
 """)
         option = raw_input("Select a tool: ")
         if option == "1":
-            print "Under construction!"
+            file = raw_input("Enter name of file wit the names: ")
+            phish_tools.parseName(file)
+            phishingMenu()
         elif option == "2":
             print "Under construction!"
         elif option == "3":
