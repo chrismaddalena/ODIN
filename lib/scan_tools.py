@@ -41,7 +41,7 @@ def runNMAP(type):
 						try:
 							print ('Banner: %s' % banner.rstrip('\n'))
 						except:
-							pass
+							pass # Banner grab fails if the banner does not exist, so we pass
 
 	print green("[+] Creating %s to hold results" % outfile)
 	with open(outfile,'w') as results:
