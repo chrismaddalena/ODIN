@@ -29,8 +29,8 @@ Install any missing libraries by running pip with the requirements.txt file in t
 ###What Can Viper Do?
 Viper is still very much in development, but it aims to automate many of the common tasks carried out by penetration testers. Such as:
 * Email harvesting with theharvester.
-* File discovery via goofile and Google Hacking.
+* File discovery via Google Hacking.
 * Investigating targets with DNS tools, urlcrazy, Shodan, and more.
 * Actively scanning targets with nmap and masscan.
-* Parsing scan results to find ports of interest and target them with tools like httpscreenshot and Nikto.
+* Parsing scan results to find ports of interest and target them with tools like EyeWitness.
 * Managing reports and files for tasks like joining multiple Nessus files and parsing Burp reports.
