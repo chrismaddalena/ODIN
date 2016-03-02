@@ -123,9 +123,9 @@ def pentestMenu():
 		print green("""
 	1. Check your scope
 
-	2. Network - Active scanning with nmap and masscan (you pick)
+	2. Network Scans - Active scanning with nmap and masscan (you pick)
 
-	3. Web - Scanning with httpscreenshot, Nikto, and other tools
+	3. Run domain through Qualys SSL Labs
 
 	4.
 
@@ -155,12 +155,19 @@ def pentestMenu():
 			verify.who(ips, out)
 			verify.outfile(out, outfile)
 			pentestMenu()
-		# Network scanning menu begins
+		# Launch network scanning menu
 		elif option == "2":
 			scanMenu()
-		# Web scanning menu begins
+		# SSL check with Qualys
 		elif option == "3":
-			webScanMenu()
+			target = raw_input("Enter target for scan (e.g. www.google.com): ")
+			data = ssllabsscanner.newScan(target)
+			print red("""
+		Server Name: %s
+		Server IP: %s
+		Grade: %s
+			""") % (data['endpoints'][0]['serverName'],data['endpoints'][0]['ipAddress'],data['endpoints'][0]['grade'])
+			pentestMenu()
 		elif option == "4":
 			print "Under construction!"
 		elif option == "0":
@@ -323,49 +330,6 @@ def scanMenu():
 			scanMenu()
 	except (KeyboardInterrupt):
 		main()
-
-# Web scanning options
-def webScanMenu():
-	try:
-		print green("""
-Viper can automate some web scans for you.
-""")
-		print green("""Select a scan to run:
-
-	1. Scan for web ports and run Nikto
-
-	2. Scan for port 443 and run SSLScan
-
-	3. Run domain through SSL Labs
-
-	4.
-
-	0. Return
-		""")
-		option = raw_input("Select an option: ")
-		# Nikto
-		if option == "1":
-			scan_tools.webNMAP()
-			pentestMenu()
-		# SSLScan
-		elif option == "2":
-			pentestMenu()
-		# SSL Labs check
-		elif option == "3":
-			target = raw_input("Enter target for scan (e.g. www.google.com): ")
-			data = ssllabsscanner.newScan(target)
-			print red("""
-		Server Name: %s
-		Server IP: %s
-		Grade: %s
-			""") % (data['endpoints'][0]['serverName'],data['endpoints'][0]['ipAddress'],data['endpoints'][0]['grade'])
-			pentestMenu()
-		elif option == "0":
-			pentestMenu()
-		else:
-			pentestMenu()
-	except (KeyboardInterrupt):
-			main()
 
 if __name__ == "__main__":
 	main()
