@@ -6,6 +6,8 @@ import sys
 import socket
 import nmap
 import time
+import OpenSSL
+import ssl
 from colors import red, green
 
 # Run nmap scans - it accepts the type of scan from pentestMenu()
@@ -14,6 +16,7 @@ def runNMAP(type):
 	infile = raw_input("Name of IP file: ")
 	outfile = raw_input("Name for output: ")
 	scanner = nmap.PortScanner()
+	temp = []
 
 	with open(infile, 'r') as ips:
 		for ip in ips:
@@ -42,6 +45,16 @@ def runNMAP(type):
 							print ('Banner: %s' % banner.rstrip('\n'))
 						except:
 							pass # Banner grab fails if the banner does not exist, so we pass
+						# Check if port is a known web port, add IP to target list for Eye Witness
+						try:
+							with open("Web_Hosts.txt","w") as output:
+								with open("setup/web_ports.txt","r") as file:
+									for line in file:
+										if line.rstrip() == port:
+											temp.append("%s:%s" % (ip, port))
+								output.write('\n'.join(temp))
+						except:
+							pass
 
 	print green("[+] Creating %s to hold results" % outfile)
 	with open(outfile,'w') as results:
@@ -105,3 +118,35 @@ If you've never setup one, you can dump a configuration using this command:""")
 				print green("[+] Running masscan with %s" % conf)
 				command = "masscan -p0-65535 --rate 50000 --banners %s -oX %s" % (ip.rstrip(),outfile)
 				os.system(command)
+
+def checkSSL(a):
+	"""Get SSL Cert CN"""
+	# Return None because we can't navigate to a CIDR for ssl.
+	if "/" in a:
+		print red("[!] Viper can't get certicate information for a CIDR! Supply a hostname or single IP.")
+		return None
+	else:
+		next
+	try:
+		# Connect over port 443.
+		cert = ssl.get_server_certificate((a, 443))
+	except Exception, e:
+		# If it can't connect, return nothing/fail
+		return None
+	try:
+		# use openssl to pull cert information
+		c = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
+		subj = c.get_subject()
+		comp = subj.get_components()
+		print comp
+		for i in comp:
+			if 'CN' in i:
+				print i[1]
+			elif 'CN' not in i:
+				continue
+			else:
+				return None
+	except Exception,e:
+		# if openssl fails to get information, return nothing/fail
+		print red("[!] Viper failed to get te certfication information!")
+		print red("[!] Error: %s" % e)
