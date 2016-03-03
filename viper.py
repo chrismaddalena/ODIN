@@ -125,9 +125,9 @@ def pentestMenu():
 
 	2. Network Scans - Active scanning with nmap and masscan (you pick)
 
-	3. Run domain through Qualys SSL Labs
+	3. Run domain through Qualys SSL Labs (New Scan)
 
-	4.
+	4. Run domain through Qualys SSL Labs (Results From Cache)
 
 	0. Return
 		""")
@@ -160,16 +160,15 @@ def pentestMenu():
 			scanMenu()
 		# SSL check with Qualys
 		elif option == "3":
+			testType = 1
 			target = raw_input("Enter target for scan (e.g. www.google.com): ")
-			data = ssllabsscanner.newScan(target)
-			print red("""
-		Server Name: %s
-		Server IP: %s
-		Grade: %s
-			""") % (data['endpoints'][0]['serverName'],data['endpoints'][0]['ipAddress'],data['endpoints'][0]['grade'])
+			ssllabsscanner.getResults(target,testType)
 			pentestMenu()
 		elif option == "4":
-			print "Under construction!"
+			testType = 2
+			target = raw_input("Enter target for scan (e.g. www.google.com): ")
+			ssllabsscanner.getResults(target,testType)
+			pentestMenu()
 		elif option == "0":
 			main()
 		else:
