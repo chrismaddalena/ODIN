@@ -63,6 +63,8 @@ def intelMenu():
 	try:
 		print green("""\nOSINT requires a client name and domain name. If the client has a generic name (e.g. ABC), try using a complete name for Shodan and Google searches.
 		""")
+		print red("""[!] Warning: Avoid the use of apostrophes in the client name to avoid issues woth Shodan.
+		""")
 		if client == "":
 			client = raw_input("Client's name: ")
 		if domain == "":
@@ -101,6 +103,7 @@ Your current targets are %s and %s.
 			print green("Enter new target information:")
 			client = raw_input("Client's name: ")
 			domain = raw_input("Enter the domain: ")
+			intelMenu()
 		elif option == "5":
 			print red("G.") + "I." + blue(" Jooooe!")
 			intelMenu()
@@ -136,7 +139,7 @@ def pentestMenu():
 		# Check scope option
 		if option == "1":
 			print green("""
-	Viper will attempt to verify ownership of the provided IP addresses
+	Viper will attempt to verify ownership of the provided IP addresses (single or CIDR ranges)
 	using various tools: ARIN, whois, DNS, and SSL cert informaiton.
 	Please provide a list of IPs in a text file and Viper will output a CSV of results.""")
 			# initialize our array for IP address storage
@@ -147,13 +150,17 @@ def pentestMenu():
 			infile = raw_input("File with IPs:")
 			outfile = raw_input("Output filename for CSV:")
 			CIDR = raw_input("Is there a CIDR (y/n?):")
-			if CIDR == "y":
-				breakrange = True
-			else:
-				breakrange = False
-			verify.infile(infile, ips, breakrange)
-			verify.who(ips, out)
-			verify.outfile(out, outfile)
+			try:
+				if CIDR == "y":
+					breakrange = True
+				else:
+					breakrange = False
+				verify.infile(infile, ips, breakrange)
+				verify.who(ips, out)
+				verify.outfile(out, outfile)
+			except Exception as e:
+				print red("[!] Verification failed!")
+				print red("[!] Error: %s" % e)
 			pentestMenu()
 		# Launch network scanning menu
 		elif option == "2":
@@ -161,12 +168,12 @@ def pentestMenu():
 		# SSL check with Qualys
 		elif option == "3":
 			testType = 1
-			target = raw_input("Enter target for scan (e.g. www.google.com): ")
+			target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
 			ssllabsscanner.getResults(target,testType)
 			pentestMenu()
 		elif option == "4":
 			testType = 2
-			target = raw_input("Enter target for scan (e.g. www.google.com): ")
+			target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
 			ssllabsscanner.getResults(target,testType)
 			pentestMenu()
 		elif option == "0":
