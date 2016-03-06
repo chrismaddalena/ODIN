@@ -87,8 +87,8 @@ def getResults(target,type):
 	# CRIME
 	try:
 		crime = "No"
-			if data['endpoints'][0]['details']['compressionMethods']!= 0 and result['endpoints'][0]['details']['supportsNpn'] == False:
-				crime ="Yes"
+		if data['endpoints'][0]['details']['compressionMethods']!= 0 and result['endpoints'][0]['details']['supportsNpn'] == False:
+			crime ="Yes"
 	except Exception as e:
 		print red("[!] Could not determine CRIME vulnerability!")
 		print red("[!] Error: %s" % e)
@@ -183,3 +183,4 @@ def getResults(target,type):
 	except Exception as e:
 		print red("[!] Could not retrieve RC4 support information!")
 		print red("[!] Error: %s" % e)
+	#
