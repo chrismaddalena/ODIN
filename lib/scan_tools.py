@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
@@ -8,7 +8,43 @@ import nmap
 import time
 import OpenSSL
 import ssl
+import shodan
 from colors import red, green
+
+# Try to get the user's Shodan API key
+try:
+	shodan_key_file = open('auth/shodankey.txt', 'r')
+	shodan_key_line = shodan_key_file.readlines()
+	SHODAN_API_KEY = shodan_key_line[1].rstrip()
+	api = shodan.Shodan(SHODAN_API_KEY)
+	shodan_key_file.close()
+except:
+	sho_api = None
+
+# Find what Shodan knows about your list of IPs
+def shodanIPSearch(infile):
+	print green("[+] Checking Shodan")
+	api = shodan.Shodan(SHODAN_API_KEY)
+	# Use API key to search Shodan for each IP
+	with open(infile, 'r') as list:
+		for ip in list:
+			print green("[+] Performing Shodan search for %s" % ip)
+			try:
+				host = api.host(ip)
+				print """
+					IP: %s
+					Organization: %s
+					OS: %s
+				""" % (host['ip_str'], host.get('org', 'n/a'), host.get('os','n/a'))
+
+				for item in host['data']:
+					print """
+						Port: %s
+						Banner: %s
+					""" % (item['port'], item['data'])
+
+			except shodan.APIError, e:
+				print red("[!] Error: %s\n" % e)
 
 # Run nmap scans - it accepts the type of scan from pentestMenu()
 def runNMAP(type):
@@ -18,17 +54,18 @@ def runNMAP(type):
 	scanner = nmap.PortScanner()
 	temp = []
 
+	if scanType == 1:
+		print green("[+] Running full port scan with nmap - this will take a while")
+	if scanType == 2:
+		print green("[+] Running default port scan with nmap - take a break")
+
 	with open(infile, 'r') as ips:
 		for ip in ips:
 			# Different scan types for nmap
 			if scanType == 1:
-				print green("[+] Running full port scan with nmap - this will take a while")
-				scanner.scan(hosts=ip,ports="0-65535",arguments="-sS -sV -T4 -oG nmap.gnmap")
+				scanner.scan(hosts=ip,ports="0-65535",arguments="-sS -T4")
 			if scanType == 2:
-				print green("[+] Running default port scan with nmap - take a break")
-				scanner.scan(hosts=ip,arguments="-sS -sV -T4 -oG nmap.gnmap")
-			print green("[+] Equiviliant command if nmap was run manually:")
-			print red(scanner.command_line())
+				scanner.scan(hosts=ip,ports="80,8080,443",arguments="-sS -T4 --open")
 			for host in scanner.all_hosts():
 				print('\nHost: %s (%s)' % (host, scanner[host].hostname()))
 				print('State: %s' % scanner[host].state())
@@ -44,14 +81,14 @@ def runNMAP(type):
 						try:
 							print ('Banner: %s' % banner.rstrip('\n'))
 						except:
-							pass # Banner grab fails if the banner does not exist, so we pass
+							print ('Banner: Unknown')
 						# Check if port is a known web port, add IP to target list for Eye Witness
 						try:
 							with open("Web_Hosts.txt","w") as output:
 								with open("setup/web_ports.txt","r") as file:
 									for line in file:
-										if line.rstrip() == port:
-											temp.append("%s:%s" % (ip, port))
+										if str(line.rstrip()) == str(port):
+											temp.append("%s:%s" % (host.rstrip(), port))
 								output.write('\n'.join(temp))
 						except:
 							pass

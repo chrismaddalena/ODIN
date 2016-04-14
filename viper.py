@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """
@@ -61,15 +61,16 @@ def intelMenu():
 	global domain
 	global client
 	try:
-		print green("""\nOSINT requires a client name and domain name. If the client has a generic name (e.g. ABC), try using a complete name for Shodan and Google searches.
+		print green("""
+OSINT requires a client name and domain name. If the client has a generic name (e.g. ABC), try using a complete name for Shodan and Google searches.
 		""")
-		print red("""[!] Warning: Avoid the use of apostrophes in the client name to avoid issues woth Shodan.
-		""")
+		print red("[!] Warning: Apostrophes in the client name may cause issues with Shodan.")
 		if client == "":
 			client = raw_input("Client's name: ")
 		if domain == "":
 			domain = raw_input("Enter the domain: ")
-		print green("""The Shadow-Viper intelligence gathering toolkit:
+		print green("""
+The Shadow-Viper intelligence gathering toolkit:
 
 Your current targets are %s and %s.
 
@@ -119,9 +120,9 @@ Your current targets are %s and %s.
 #Penetration testing menu options
 def pentestMenu():
 	try:
-		print green("""\nThe Pit-Viper penetration testing toolkit""")
+		print green("\nThe Pit-Viper penetration testing toolkit")
 
-		print red("""\nSome of these scans require running Viper with sudo!""")
+		print red("\nSome of these scans require running Viper with sudo!")
 
 		print green("""
 	1. Check your scope
@@ -132,6 +133,8 @@ def pentestMenu():
 
 	4. Run domain through Qualys SSL Labs (Results From Cache)
 
+	5. Lookup IPs on Shodan
+
 	0. Return
 		""")
 		option = raw_input("Select a tool: ")
@@ -139,17 +142,17 @@ def pentestMenu():
 		# Check scope option
 		if option == "1":
 			print green("""
-	Viper will attempt to verify ownership of the provided IP addresses (single or CIDR ranges)
-	using various tools: ARIN, whois, DNS, and SSL cert informaiton.
-	Please provide a list of IPs in a text file and Viper will output a CSV of results.""")
+Viper will attempt to verify ownership of the provided IP addresses (single or CIDR ranges) using various tools: ARIN, whois, DNS, and SSL cert informaiton.
+Please provide a list of IPs in a text file and Viper will output a CSV of results.
+			""")
 			# initialize our array for IP address storage
 			ips = []
 			# initialize our dict for info storage
 			out = {}
 
-			infile = raw_input("File with IPs:")
-			outfile = raw_input("Output filename for CSV:")
-			CIDR = raw_input("Is there a CIDR (y/n?):")
+			infile = raw_input("File path to your text file of IP addresses: ")
+			outfile = raw_input("Output filename for CSV: ")
+			CIDR = raw_input("Is there a CIDR (y/n?): ")
 			try:
 				if CIDR == "y":
 					breakrange = True
@@ -176,6 +179,11 @@ def pentestMenu():
 			target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
 			ssllabsscanner.getResults(target,testType)
 			pentestMenu()
+		# Lookup IPs on Shodan
+		elif option == "5":
+			infile = raw_input("File path to your text file of IP addresses:")
+			scan_tools.shodanIPSearch(infile)
+			pentestMenu()
 		elif option == "0":
 			main()
 		else:
@@ -187,7 +195,8 @@ def pentestMenu():
 #Reporting menu options
 def reportingMenu():
 	try:
-		print green("""\nThe Ninja-Viper reporting toolkit:
+		print green("""
+The Ninja-Viper reporting toolkit:
 
 	1. Combine multiple Nessus reports (.nessus)
 
@@ -202,7 +211,9 @@ def reportingMenu():
 		option = raw_input("Select a tool: ")
 		# Joining Nessus report files
 		if option == "1":
-			print green("""\nViper can join multiple .nessus files into one report.
+			print green("""
+Viper can join multiple .nessus files into one report.
+
 	1. Place your files into the same directory.
 	2. Provide the directory and the first .nessus file.
 	3. Provide name for the final .nessus file and report title.
@@ -230,7 +241,8 @@ def reportingMenu():
 #Phishing menu options
 def phishingMenu():
 	try:
-		print green("""The Swamp-Viper phishing toolkit:
+		print green("""
+The Swamp-Viper phishing toolkit:
 
 	1. Parse list of names into first and last (csv)
 
@@ -282,25 +294,24 @@ def phishingMenu():
 def scanMenu():
 	try:
 		print green("""
-	Viper has shortcuts for many of the popular scanners.
-	Select a scanner, provide a text file with IPs, and Viper will take care of the rest.
-	You can run full nmap SYN scans, the same with common scripts, or Masscan with full ports.
-	For custom Masscan scans, edit Viper's masscan.config file.
-	""")
-		print red("""SYN scans require sudo! Start Viper with sudo if you want to use them.
-	""")
-		print green("""Select a scan to run:
+Viper has shortcuts for many of the popular scanners. Select a scanner, provide a text file with IPs, and Viper will take care of the rest.
+You can run full nmap SYN scans, the same with common scripts, or Masscan with full ports.
+For custom Masscan scans, edit Viper's masscan.config file.
+		""")
+		print red("SYN scans require sudo! Start Viper with sudo if you want to use them.")
+		print green("""
+Select a scan to run:
 
-	1. Full port nmap SYN scan (-p0-65535 -sS -sSV -T4)
+	1. Full port nmap SYN scan (-sS -T4 -p-)
 
-	2. Default port nmap SYN scan (-sS -sSV -T4)
+	2. Default 1000 port nmap SYN scan (-sS -T4)
 
 	3. Full port masscan (-p0-65535)
 
 	4. Masscan with conf file (-c)
 
 	0. Return
-""")
+		""")
 		option = raw_input("Select an option: ")
 		# nmap scan options
 		if option == "1":
@@ -308,7 +319,7 @@ def scanMenu():
 				scanType = 1
 				scan_tools.runNMAP(scanType)
 				pentestMenu()
-			except:
+			except Exception as e:
 				print red("[!] The namp scan failed! Remember to use sudo to start Viper.")
 				pentestMenu()
 		elif option == "2":

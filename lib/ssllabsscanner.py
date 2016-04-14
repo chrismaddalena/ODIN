@@ -62,6 +62,7 @@ def getResults(target,type):
 	# Sorting through the LOADS of information returned by the scanner
 	# We need individual try/excepts in case one piece of information is unavailable for some reason
 	# This avoids the whole thing failing because of one litte variable
+	# Docs - https://github.com/ssllabs/ssllabs-scan/blob/stable/ssllabs-api-docs.md
 	# Server name
 	try:
 		print green("Server Name: %s" % data['endpoints'][0]['serverName'])

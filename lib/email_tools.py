@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import os
@@ -18,7 +18,8 @@ user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
 headers = { 'User-Agent' : user_agent }
 
 def harvest(client,domain):
-	print green("""Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. This may take a few minutes.
+	print green("""
+Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. This may take a few minutes.
 	""")
 
 	client = client
@@ -64,7 +65,11 @@ def harvest(client,domain):
 
 	# Combine lists and strip out duplicate findings for unique lists
 	totalEmails = googleHarvest + bingHarvest + yahooHarvest
-	unique = set(totalEmails)
+	temp = []
+	for email in totalEmails:
+		email = email.lower()
+		temp.append(email)
+	unique = set(temp)
 	uniqueEmails = list(unique)
 	# Do the same with people, but keep Twitter handles separate
 	totalPeople = linkHarvest + jigsawHarvest
@@ -76,33 +81,35 @@ def harvest(client,domain):
 		# Split handle from account description and strip rogue periods
 		handle = twit.split(' ')[0]
 		handle = handle.rstrip('.')
-		handles.append(handle)
+		handles.append(handle.lower())
 	unique = set(handles)
 	uniqueTwitter = list(unique)
 
 	print green("[+] Harvester found a total of %s emails and %s names across all engines" % (len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter)))
-	#uniqueEmails.append("foo@bar.com")
 	print green("[+] Running emails through HaveIBeenPwned and writing report (2/%s)" % total)
 	with open(file, 'w') as report:
-		report.write("### Email & People Report for %s ###\n" % domain)
+		report.write("### Email & People Report for %s ###\n\n" % domain)
 		report.write("---THEHARVESTER Results---\n")
-		report.write("Emails checked with HaveIBeenPwned for breaches and pastes\n")
+		report.write("Emails checked with HaveIBeenPwned for breaches and pastes:\n\n")
 		for email in uniqueEmails:
 			# Make sure we drop that @domain.com result Harvester always includes
 			if email == '@' + domain:
 				pass
 			else:
-				report.write('\n' + 'Email: ' + email + '\n')
-				report.write('Pwned: ')
 				# Check haveibeenpwned data breaches
-				pwned = pwnedcheck.check(email)
+				try:
+					pwned = pwnedcheck.check(email)
+				except:
+					print red("[!] Could not parse JSON. Moving on...")
 				# If no results for breaches we return None
 				if not pwned:
-					report.write('None' + '\n')
+					report.write("%s\n" % email)
+					pass
 				else:
-					report.write('\n')
+					report.write("%s (Pwned:" % email)
 					for pwn in pwned:
-						report.write('+ ' + pwn + '\n')
+						report.write(' + ' + pwn)
+					report.write(")\n")
 				# Check haveibeenpwned for pastes from Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
 				url = "https://haveibeenpwned.com/api/v2/pasteaccount/" + email
 				page = urllib2.Request(url, None, headers)
@@ -111,17 +118,18 @@ def harvest(client,domain):
 					source = urllib2.urlopen(page).read()
 					report.write("Pastes: " + source + "\n")
 				except:
-					report.write("Pastes: No pastes\n")
+					pass
 
 		report.write("\n---PEOPLE Results---\n")
-		report.write("Names and social media accounts (Twitter and LinkedIn)\n\n")
+		report.write("Names and social media accounts (Twitter and LinkedIn):\n\n")
 		for person in uniquePeople:
-			report.write('Name: ' + person + '\n')
+			report.write("%s\n" % person)
+		report.write("\nTwitter handles potentially related to %s:\n\n" % client)
 		for twit in uniqueTwitter:
-			# Drop the lonely @ Harvester often includes
-			if twit == '@':
+			# Drop the lonely @ Harvester often includes and common false positives
+			if twit == '@' or twit == '@-moz-keyframes' or twit == '@keyframes' or twit == '@media':
 				pass
 			else:
-				report.write('Twitter: ' + twit + '\n')
+				report.write("%s\n" % twit)
 
 	report.close()
