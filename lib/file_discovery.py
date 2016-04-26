@@ -3,8 +3,9 @@
 
 import os
 from BeautifulSoup import BeautifulSoup
-import urllib2
-from colors import red, green
+import requests
+import time
+from colors import red, green, yellow
 
 # Total commands
 total = 9 # Tests
@@ -15,8 +16,8 @@ def discover(client,domain):
 	file = 'reports/%s/File_Report.txt' % client
 	client = client
 	domain = domain
-	browser = urllib2.build_opener()
-	browser.addheaders = [('User-agent', 'Mozilla/5.0')] # Google-friendly user-agent
+	my_headers = {'User-agent' : '(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6'} # Google-friendly user-agent
+
 	# Create drectory for client reports
 	if not os.path.exists("reports/%s" % client):
 		try:
@@ -30,94 +31,39 @@ def discover(client,domain):
 		report.write("### File Discovery Report for %s ###\n" % domain)
 		# Use Google Hacking queries
 		print green("[+] Using Google to find documents")
-		print red("[!] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, just try again or use a VPN.")
+		print yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy.")
 		report.write("\n--- GOOGLE HACKING Results ---\n")
 		# Perform search and grab just the URLs for each result
 		# 'Start' is used here to allow for iterating through X pages
+		# Edit setup/google_filetypes.txt to customize your search terms
 		try:
-			print "[-] Searching for pdf (1/%s)" % total
-			# PDF
 			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:pdf&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
+				with open('setup/google_filetypes.txt') as googles:
+					url = "https://www.google.com/search?q=site:%s+" % domain
+					terms = googles.readlines()
+					totalTerms = len(terms)
+					for i in range (totalTerms-1):
+						url = url + "filetype:%s+OR+" % terms[i].rstrip()
+					url = url + "filetype:%s&start=%s" % (terms[totalTerms-1].rstrip(), str(start*10))
+
+				r = requests.get(url, headers = my_headers)
+				status = r.status_code
+				soup = BeautifulSoup(r.text)
 
 				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-			# DOC
-			print "[-] Searching for doc (2/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:doc&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
+					try:
+						report.write("%s\n" % cite.text)
+					except:
+						if not status == 200:
+							report.write("Viper did not receive a 200 OK! You can double check by using this search query:\n")
+							report.write("Query: %s" % url)
+						continue
 
-				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-			# DOCX
-			print "[-] Searching for docx (3/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:docx&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
-
-			for cite in soup.findAll('cite'):
-				report.write("%s\n" % cite.text)
-			# XLS
-			print "[-] Searching for xls (4/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:xls&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
-
-				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-			# XLSX
-			print "[-] Searching for xlsx (5/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:xlsx&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
-
-				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-			# PPT
-			print "[-] Searching for ppt (6/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:ppt&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
-
-				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-			# PPTX
-			print "[-] Searching for pptx (7/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:pptx&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
-
-				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-			# TXT
-			print "[-] Searching for txt (8/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:txt&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
-
-				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-			# KEY
-			print "[-] Searching for keys (9/%s)" % total
-			for start in range(0,10):
-				url = "https://www.google.com/search?q=site:%s+filetype:key+'private'&start=" % domain + str(start*10)
-				page = browser.open(url)
-				soup = BeautifulSoup(page)
-
-				for cite in soup.findAll('cite'):
-					report.write("%s\n" % cite.text)
-		except:
-			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again.")
-			pass
+				# Take a break to avoid Google blocking our IP
+				time.sleep(10)
+		except Exception as e:
+			print ("Error: %s" % e)
+			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again later.")
+			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: %s \n" % url)
 
 	report.close()
