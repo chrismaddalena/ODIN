@@ -12,7 +12,7 @@ Developer: Chris Maddalena
 
 import sys
 import os
-from colors import red, green, yellow, blue
+from colors import *
 from lib import *
 
 domain = ""
@@ -28,18 +28,15 @@ def main():
 		print red("Warning: Some functions will require running Viper with sudo (e.g. nmap SYN scans)!\n")
 		print green("""Please select a job from the options below.
 
-	1. Intelligence Gathering (Passive)
+	1. Intelligence Gathering (Passive)	3. Reporting
 
-	2. Penetration Testing (Active)
-
-	3. Reporting
-
-	4. Phishing
+	2. Penetration Testing (Active)		4. Phishing
 
 	0. Exit
 		""")
 		option = raw_input("Your tool: ")
 		if option == "1":
+			setupTargets()
 			intelMenu()
 		if option == "2":
 			pentestMenu()
@@ -57,32 +54,32 @@ def main():
 		main()
 
 #Intel menu options
+def setupTargets():
+	global client
+	global domain
+	print green("""
+OSINT requires a client name and domain name. If the client has a generic name (e.g. ABC), try using a complete name for Shodan and Google searches.
+	""")
+	print red("[!] Warning: Apostrophes in the client name may cause issues with Shodan.")
+	client = raw_input("Client's name: ")
+	domain = raw_input("Enter the domain: ")
+
 def intelMenu():
 	global domain
 	global client
 	try:
 		print green("""
-OSINT requires a client name and domain name. If the client has a generic name (e.g. ABC), try using a complete name for Shodan and Google searches.
-		""")
-		print red("[!] Warning: Apostrophes in the client name may cause issues with Shodan.")
-		if client == "":
-			client = raw_input("Client's name: ")
-		if domain == "":
-			domain = raw_input("Enter the domain: ")
-		print green("""
 The Shadow-Viper intelligence gathering toolkit:
 
 Your current targets are %s and %s.
 
-	1. Harvest email addresses and social media accounts
+	1. Harvest email addresses	4. Check IPs with Shodan
 
-	2. Collect domain information
+	2. Collect domain information	5. Check IPs with Cymon
 
-	3. Discover files for the domain
+	3. Discover files		6. Change targets
 
-	4. Change target information (client name and domain)
-
-	5. Knowing is half the battle
+	7. Knowing is half the battle
 
 	0. Return
 """ % (client,domain))
@@ -99,13 +96,25 @@ Your current targets are %s and %s.
 		elif option == "3":
 			file_discovery.discover(client,domain)
 			intelMenu()
-		# Could be something useful, but Saturday morning cartoon references
+		# Lookup IPs on Shodan
+		elif option == "4":
+			infile = raw_input("File path to your text file of IP addresses: ")
+			scan_tools.shodanIPSearch(infile)
+			pentestMenu()
+		# Lookup IPs in Cymon
+		elif option == "5":
+			infile = raw_input("File path to your text file of IP addresses: ")
+			scan_tools.cymonIPEventSearch(infile)
+			scan_tools.cymonIPDomainSearch(infile)
+			pentestMenu()
+		# Change targeted name and domain
 		elif option == "4":
 			print green("Enter new target information:")
 			client = raw_input("Client's name: ")
 			domain = raw_input("Enter the domain: ")
 			intelMenu()
-		elif option == "5":
+		# Could be something useful, but Saturday morning cartoon references
+		elif option == "7":
 			print red("G.") + "I." + blue(" Jooooe!")
 			intelMenu()
 		#Exit to main menu
@@ -132,8 +141,6 @@ def pentestMenu():
 	3. Run domain through Qualys SSL Labs (New Scan)
 
 	4. Run domain through Qualys SSL Labs (Results From Cache)
-
-	5. Lookup IPs on Shodan
 
 	0. Return
 		""")
@@ -178,11 +185,6 @@ Please provide a list of IPs in a text file and Viper will output a CSV of resul
 			testType = 2
 			target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
 			ssllabsscanner.getResults(target,testType)
-			pentestMenu()
-		# Lookup IPs on Shodan
-		elif option == "5":
-			infile = raw_input("File path to your text file of IP addresses:")
-			scan_tools.shodanIPSearch(infile)
 			pentestMenu()
 		elif option == "0":
 			main()
@@ -248,7 +250,7 @@ The Swamp-Viper phishing toolkit:
 
 	2. Randomize a list of targets
 
-	3.
+	3. Run urlcrazy
 
 	4.
 
@@ -278,8 +280,10 @@ The Swamp-Viper phishing toolkit:
 				print red("[!] Failed to open the file!")
 				print red("[!] Error: %s" % e)
 				phishingMenu()
+		# Run urlcrazy
 		elif option == "3":
-			print "Under construction!"
+			target = raw_input("Enter the domain: ")
+			phish_tools.getURLs(target)
 		elif option == "4":
 			print "Under construction!"
 		elif option == "0":

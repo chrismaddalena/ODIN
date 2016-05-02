@@ -9,9 +9,10 @@ import time
 import OpenSSL
 import ssl
 import shodan
-from colors import red, green
+import requests
+from colors import *
 
-# Try to get the user's Shodan API key
+# Try to get the user's API keys
 try:
 	shodan_key_file = open('auth/shodankey.txt', 'r')
 	shodan_key_line = shodan_key_file.readlines()
@@ -20,6 +21,12 @@ try:
 	shodan_key_file.close()
 except:
 	sho_api = None
+try:
+	cymon_key_file = open('auth/cymonkey.txt', 'r')
+	cymon_key_line = cymon_key_file.readlines()
+	CYMON_API_KEY = cymon_key_line[1].rstrip()
+except:
+	CYMON_API_KEY = None
 
 # Find what Shodan knows about your list of IPs
 def shodanIPSearch(infile):
@@ -187,3 +194,46 @@ def checkSSL(a):
 		# if openssl fails to get information, return nothing/fail
 		print red("[!] Viper failed to get te certfication information!")
 		print red("[!] Error: %s" % e)
+
+# Cymon searches:
+# Provides URLs associated with an IP
+def cymonIPDomainSearch(infile):
+	print green("[+] Checking Cymon for domains associated with these IPs")
+	try:
+		with open(infile, 'r') as list:
+			for ip in list:
+				url = "https://cymon.io:443/api/nexus/v1/ip/%s/urls/" % ip.rstrip()
+				response = requests.get(url)
+				try:
+					data = response.json()
+					results = data['results']
+					for result in results:
+						print "URL: %s" % result['location']
+						print "Created: %s" % result['created']
+						print "Updated: %s\n" % result['updated']
+				except:
+					print red("[!] Could not load Cymon!")
+	except:
+		print red("[!] Could not open %s" % infile)
+
+# Provides security event resources
+def cymonIPEventSearch(infile):
+	print green("[+] Checking Cymon for events")
+	try:
+		with open(infile, 'r') as list:
+			for ip in list:
+				url = "https://cymon.io:443/api/nexus/v1/ip/%s/events/" % ip.rstrip()
+				response = requests.get(url)
+				try:
+					data = response.json()
+					results = data['results']
+					for result in results:
+						print "Title: %s" % result['title']
+						print "Description: %s" % result['description']
+						print "Created: %s" % result['created']
+						print "Updated: %s" % result['updated']
+						print "Details: %s\n" % result['details_url']
+				except:
+					print red("[!] Could not load Cymon!")
+	except:
+		print red("[!] Could not open %s" % infile)

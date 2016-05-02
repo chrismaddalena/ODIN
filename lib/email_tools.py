@@ -5,10 +5,10 @@ import os
 import pwnedcheck
 import sys
 import urllib2
-from colors import red, green
+from colors import *
 
-sys.path.append('lib/theharvester/')
-from theHarvester import *
+#sys.path.append('lib/theharvester/')
+#from theHarvester import *
 
 # Number of commands
 total = 2 # Tests

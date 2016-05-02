@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import random
-from colors import red, green
+from colors import *
 
 # Ingest a list of names and email addresses to output a comma delimited version
 def parseName(file):
@@ -26,3 +26,12 @@ def randomList(listA):
 		listA.remove(element)
 		listB.append(element)
 	return listB
+
+def getURLs(domain):
+	print green("[+] Running urlcrazy on %s" % domain)
+	try:
+		cmd = "urlcrazy %s -f csv | sed 1d | cut -d , -f 2-5" % domain
+		result = subprocess.check_output(cmd,shell=True)
+		print result
+	except:
+		print red("[!] Execution of urlcrazy failed!")
