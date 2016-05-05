@@ -198,7 +198,7 @@ def checkSSL(a):
 # Cymon searches:
 # Provides URLs associated with an IP
 def cymonIPDomainSearch(infile):
-	print green("[+] Checking Cymon for domains associated with these IPs")
+	print green("[+] Checking Cymon for domains associated with the provided list of IPs")
 	try:
 		with open(infile, 'r') as list:
 			for ip in list:
@@ -212,13 +212,13 @@ def cymonIPDomainSearch(infile):
 						print "Created: %s" % result['created']
 						print "Updated: %s\n" % result['updated']
 				except:
-					print red("[!] Could not load Cymon!")
+					print red("[!] Could not load Cymon.io! Check your connection to Cymon.")
 	except:
 		print red("[!] Could not open %s" % infile)
 
 # Provides security event resources
 def cymonIPEventSearch(infile):
-	print green("[+] Checking Cymon for events")
+	print green("[+] Checking Cymon for events associated with the provided list of IPs")
 	try:
 		with open(infile, 'r') as list:
 			for ip in list:
@@ -234,6 +234,6 @@ def cymonIPEventSearch(infile):
 						print "Updated: %s" % result['updated']
 						print "Details: %s\n" % result['details_url']
 				except:
-					print red("[!] Could not load Cymon!")
+					print red("[!] Could not load Cymon.io! Check your connection to Cymon.")
 	except:
 		print red("[!] Could not open %s" % infile)
