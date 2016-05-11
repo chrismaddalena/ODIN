@@ -24,7 +24,7 @@ except:
 try:
 	cymon_key_file = open('auth/cymonkey.txt', 'r')
 	cymon_key_line = cymon_key_file.readlines()
-	CYMON_API_KEY = cymon_key_line[1].rstrip()
+	CYMON_API_KEY = "Token %s" % cymon_key_line[1].rstrip()
 except:
 	CYMON_API_KEY = None
 
@@ -203,7 +203,12 @@ def cymonIPDomainSearch(infile):
 		with open(infile, 'r') as list:
 			for ip in list:
 				url = "https://cymon.io:443/api/nexus/v1/ip/%s/urls/" % ip.rstrip()
-				response = requests.get(url)
+				if CYMON_API_KEY is None:
+					response = requests.get(url)
+				else:
+					print green("[+] Cymon API key was found, so using it for queries.")
+					headers = {'Authorization',CYMON_API_KEY}
+					response = requests.get(url)
 				try:
 					data = response.json()
 					results = data['results']
@@ -223,7 +228,12 @@ def cymonIPEventSearch(infile):
 		with open(infile, 'r') as list:
 			for ip in list:
 				url = "https://cymon.io:443/api/nexus/v1/ip/%s/events/" % ip.rstrip()
-				response = requests.get(url)
+				if CYMON_API_KEY is None:
+					response = requests.get(url)
+				else:
+					print green("[+] Cymon API key was found, so using it for queries.")
+					headers = {'Authorization',CYMON_API_KEY}
+					response = requests.get(url)
 				try:
 					data = response.json()
 					results = data['results']

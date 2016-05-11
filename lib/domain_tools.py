@@ -7,6 +7,7 @@ import shodan
 import whois
 from BeautifulSoup import BeautifulSoup
 import requests
+from xml.etree import ElementTree as ET
 import time
 from colors import *
 
@@ -19,6 +20,15 @@ try:
 	shodan_key_file.close()
 except:
 	sho_api = None
+
+# Try to get the user's URLVoid API key
+try:
+	urlvoid_key_file = open('auth/urlvoidkey.txt', 'r')
+	urlvoid_key_line = urlvoid_key_file.readlines()
+	URLVOID_API_KEY = urlvoid_key_line[1].rstrip()
+	urlvoid_key_file.close()
+except:
+	URLVOID_API_KEY = None
 
 # Number of commands
 total = 7 # Tests
@@ -44,26 +54,68 @@ def collect(client,domain):
 	with open(file, 'w') as report:
 		# Create the Domain Report
 		try:
-			report.write("### Domain Report for %s ###\n" % (domain))
+			report.write("### Domain Report for %s ###\n" % domain)
 			print green("[+] Running whois (1/%s)" % total)
 			# Run whois
 			report.write("\n---WHOIS Results---\n")
 			who = whois.whois(domain)
 			report.write("Registrant: %s\n" % who.name)
-			report.write("Organization: %s\n" % (who.org))
+			report.write("Organization: %s\n" % who.org)
 			for email in who.emails:
 			   report.write("Email: %s\n" % email)
 			report.write("Address: %s, %s %s, %s, %s\n" % (who.address,who.city,who.zipcode,who.state,who.country))
 			for server in who.name_servers:
 				report.write("DNS: %s\n" % server)
-			report.write("DNSSEC: %s\n" % (who.dnssec))
-			report.write("Status: %s\n" % (who.status))
+			report.write("DNSSEC: %s\n" % who.dnssec)
+			report.write("Status: %s\n" % who.status)
 		except Exception as e:
 			print red("[!] Failed to collect whois information.")
 			print red("[!] Error: %s" % e)
 
+		# Check reputation with URLVoid
+		try:
+			if URLVOID_API_KEY is not None:
+				print green("[+] Checking reputation with URLVoid (2/%s)" % total)
+				report.write("\n---URLVOID Results---\n")
+				url = "http://api.urlvoid.com/api1000/%s/host/%s" % (URLVOID_API_KEY,domain)
+				response = requests.get(url)
+				tree = ET.fromstring(response.content)
+
+				for child in tree:
+					maliciousCheck = child.tag
+					if maliciousCheck == "detections":
+						detected = 1
+					else:
+						detected = 0
+
+				if detected == 1:
+					print red("[+] URLVoid found malicious activity reported for this domain!")
+				else:
+					print green("[+] URLVoid found no malicious activity reported for this domain.")
+
+				repData = tree[0]
+				ipData = repData[11]
+
+				report.write("Host: %s\n" % ET.tostring(repData[0], method='text'))
+				report.write("Domain Age: %s\n" % ET.tostring(repData[3], method='text'))
+				report.write("Google Rank: %s\n" % ET.tostring(repData[4], method='text'))
+				report.write("Alexa Rank: %s\n" % ET.tostring(repData[5], method='text'))
+
+				report.write("Address: %s\n" % ET.tostring(ipData[0], method='text'))
+				report.write("Hostname: %s\n" % ET.tostring(ipData[1], method='text'))
+				report.write("ASN: %s\n" % ET.tostring(ipData[2], method='text'))
+				report.write("ASName: %s\n" % ET.tostring(ipData[3], method='text'))
+				report.write("Country: %s\n" % ET.tostring(ipData[5], method='text'))
+				report.write("Region: %s\n" % ET.tostring(ipData[6], method='text'))
+				report.write("City: %s\n" % ET.tostring(ipData[7], method='text'))
+			else:
+				print green("[-] No URLVoid API key, so skipping this test.")
+				pass
+		except:
+			print red("[!] Could not load URLVoid for reputation check!")
+
 		# Run dnsrecon for several different lookups
-		print green("[+] Running dnsrecon (2/%s)" % total)
+		print green("[+] Running dnsrecon (3/%s)" % total)
 		report.write("\n---DNSRECON Results---\n")
 		# Standard lookup for records
 		try:
@@ -99,7 +151,7 @@ def collect(client,domain):
 			report.write("Execution of dnsrecon -t brt failed!\n")
 
 		# Run firece
-		print green("[+] Running fierce (3/%s)" % total)
+		print green("[+] Running fierce (4/%s)" % total)
 		report.write("\n---FIERCE Results---\n")
 		# The wordlist location is the default location for fierce's hosts.txt on Kali 2
 		try:
@@ -111,7 +163,7 @@ def collect(client,domain):
 			report.write("Execution of fierce failed!\n")
 
 		# Perform Shodan searches
-		print green("[+] Checking Shodan (4/%s)" % total)
+		print green("[+] Checking Shodan (5/%s)" % total)
 		api = shodan.Shodan(SHODAN_API_KEY)
 		report.write("\n---SHODAN Results---\n")
 		# Use API key to search Shodan for client name and client domain
@@ -156,8 +208,9 @@ def collect(client,domain):
 
 		# Search for different login/logon/admin/administrator pages
 		report.write("\n--- GOOGLE HACKING LOGIN Results ---\n")
-		print green("[+] Checking Google for login pages (5/%s)" % total)
+		print green("[+] Beginning Google queries...")
 		print yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy.")
+		print green("[+] Checking Google for login pages (6/%s)" % total)
 		try:
 			# Login Logon Admin and administrator
 			# Edit setup/google_strings.txt to customize your search terms
@@ -193,7 +246,7 @@ def collect(client,domain):
 			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: %s \n" % url)
 
 		report.write("\n--- GOOGLE HACKING INDEX OF Results ---\n")
-		print green("[+] Checking Google for pages offering file indexes (6/%s)" % total)
+		print green("[+] Checking Google for pages offering file indexes (7/%s)" % total)
 		try:
 			# Look for "index of"
 			for start in range(0,10):

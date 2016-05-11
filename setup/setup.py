@@ -17,6 +17,7 @@ def setup():
 	elif os.path.exists("../auth"):
 		shodanSetup()
 		cymonSetup()
+		urlvoidSetup()
 	else:
 		exit("Could not proceed with setup! Try running as sudo!")
 	print("[+] Setup complete!")
@@ -39,6 +40,17 @@ def cymonSetup():
 		f = open('../auth/'+'cymonkey.txt', 'w')
 		key = raw_input('Cymon API key: ')
 		f.write('#Cymon API key\n')
+		f.write(key+'\n')
+		f.close()
+	return
+
+def urlvoidSetup():
+	if os.path.isfile('../auth/urlvoidkey.txt'):
+		exit('The URLVoid API key is already present!')
+	else:
+		f = open('../auth/'+'urlvoidkey.txt', 'w')
+		key = raw_input('URLVoid API key: ')
+		f.write('#URLVoid API key\n')
 		f.write(key+'\n')
 		f.close()
 	return
