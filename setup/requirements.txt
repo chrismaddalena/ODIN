@@ -6,3 +6,4 @@ python-nmap
 ansicolors
 timeout
 netaddr
+cymon

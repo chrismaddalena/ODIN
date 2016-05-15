@@ -10,6 +10,7 @@ import OpenSSL
 import ssl
 import shodan
 import requests
+from cymon import Cymon
 from colors import *
 
 # Try to get the user's API keys
@@ -21,12 +22,17 @@ try:
 	shodan_key_file.close()
 except:
 	sho_api = None
+
 try:
 	cymon_key_file = open('auth/cymonkey.txt', 'r')
 	cymon_key_line = cymon_key_file.readlines()
-	CYMON_API_KEY = "Token %s" % cymon_key_line[1].rstrip()
+	CYMON_API_KEY = cymon_key_line[1].rstrip()
+	cyAPI = Cymon(CYMON_API_KEY)
+	cymon_key_file.close()
 except:
 	CYMON_API_KEY = None
+
+headers = ""
 
 # Find what Shodan knows about your list of IPs
 def shodanIPSearch(infile):
@@ -70,9 +76,9 @@ def runNMAP(type):
 		for ip in ips:
 			# Different scan types for nmap
 			if scanType == 1:
-				scanner.scan(hosts=ip,ports="0-65535",arguments="-sS -T4")
+				scanner.scan(hosts=ip,ports="0-65535",arguments="-sS -T4 --open")
 			if scanType == 2:
-				scanner.scan(hosts=ip,ports="80,8080,443",arguments="-sS -T4 --open")
+				scanner.scan(hosts=ip,arguments="-sS -T4 --open")
 			for host in scanner.all_hosts():
 				print('\nHost: %s (%s)' % (host, scanner[host].hostname()))
 				print('State: %s' % scanner[host].state())
@@ -192,58 +198,39 @@ def checkSSL(a):
 				return None
 	except Exception,e:
 		# if openssl fails to get information, return nothing/fail
-		print red("[!] Viper failed to get te certfication information!")
+		print red("[!] Viper failed to get the certfication information!")
 		print red("[!] Error: %s" % e)
 
 # Cymon searches:
 # Provides URLs associated with an IP
-def cymonIPDomainSearch(infile):
+def searchCymon(infile,outfile):
 	print green("[+] Checking Cymon for domains associated with the provided list of IPs")
 	try:
-		with open(infile, 'r') as list:
-			for ip in list:
-				url = "https://cymon.io:443/api/nexus/v1/ip/%s/urls/" % ip.rstrip()
-				if CYMON_API_KEY is None:
-					response = requests.get(url)
-				else:
-					print green("[+] Cymon API key was found, so using it for queries.")
-					headers = {'Authorization',CYMON_API_KEY}
-					response = requests.get(url)
-				try:
-					data = response.json()
-					results = data['results']
-					for result in results:
-						print "URL: %s" % result['location']
-						print "Created: %s" % result['created']
-						print "Updated: %s\n" % result['updated']
-				except:
-					print red("[!] Could not load Cymon.io! Check your connection to Cymon.")
-	except:
-		print red("[!] Could not open %s" % infile)
-
-# Provides security event resources
-def cymonIPEventSearch(infile):
-	print green("[+] Checking Cymon for events associated with the provided list of IPs")
-	try:
-		with open(infile, 'r') as list:
-			for ip in list:
-				url = "https://cymon.io:443/api/nexus/v1/ip/%s/events/" % ip.rstrip()
-				if CYMON_API_KEY is None:
-					response = requests.get(url)
-				else:
-					print green("[+] Cymon API key was found, so using it for queries.")
-					headers = {'Authorization',CYMON_API_KEY}
-					response = requests.get(url)
-				try:
-					data = response.json()
-					results = data['results']
-					for result in results:
-						print "Title: %s" % result['title']
-						print "Description: %s" % result['description']
-						print "Created: %s" % result['created']
-						print "Updated: %s" % result['updated']
-						print "Details: %s\n" % result['details_url']
-				except:
-					print red("[!] Could not load Cymon.io! Check your connection to Cymon.")
+		with open(outfile, 'w') as report:
+			with open(infile, 'r') as list:
+				for ip in list:
+					try:
+						# Search for domains tied to the IP
+						data = cyAPI.ip_domains(ip.rstrip())
+						results = data['results']
+						report.write("\n--- The following data is for IP: %s ---\n" % ip.rstrip())
+						report.write("DOMAIN search results:\n")
+						for result in results:
+							report.write("\nURL: %s\n" % result['name'])
+							report.write("Created: %s\n" % result['created'])
+							report.write("Updated: %s\n" % result['updated'])
+						# Search for security events for the IP
+						data = cyAPI.ip_events(ip.rstrip())
+						results = data['results']
+						report.write("\nEVENT results:\n")
+						for result in results:
+							report.write("\nTitle: %s\n" % result['title'])
+							report.write("Description: %s\n" % result['description'])
+							report.write("Created: %s\n" % result['created'])
+							report.write("Updated: %s\n" % result['updated'])
+							report.write("Details: %s\n" % result['details_url'])
+					except:
+						print red("[!] Could not load Cymon.io! Check your connection to Cymon.")
+				print green("[+] Cymon searches completed and report has been written to %s" % outfile)
 	except:
 		print red("[!] Could not open %s" % infile)

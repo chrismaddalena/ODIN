@@ -28,9 +28,11 @@ def main():
 		print red("Warning: Some functions will require running Viper with sudo (e.g. nmap SYN scans)!\n")
 		print green("""Please select a job from the options below.
 
-	1. Intelligence Gathering (Passive)	3. Reporting
+	1. Intelligence Gathering (Passive)	4. Reporting
 
-	2. Penetration Testing (Active)		4. Phishing
+	2. Review IPs and domains		5. Phishing
+
+	3. Penetration Testing (Active)
 
 	0. Exit
 		""")
@@ -39,10 +41,12 @@ def main():
 			setupTargets()
 			intelMenu()
 		if option == "2":
-			pentestMenu()
+			queryMenu()
 		elif option == "3":
-			reportingMenu()
+			pentestMenu()
 		elif option == "4":
+			reportingMenu()
+		elif option == "5":
 			phishingMenu()
 		elif option == "0":
 			print "Thank you for using Viper!"
@@ -100,13 +104,13 @@ Your current targets are %s and %s.
 		elif option == "4":
 			infile = raw_input("File path to your text file of IP addresses: ")
 			scan_tools.shodanIPSearch(infile)
-			pentestMenu()
+			intelMenu()
 		# Lookup IPs in Cymon
 		elif option == "5":
 			infile = raw_input("File path to your text file of IP addresses: ")
-			scan_tools.cymonIPEventSearch(infile)
-			scan_tools.cymonIPDomainSearch(infile)
-			pentestMenu()
+			outfile = raw_input("File name for Cymon report: ")
+			scan_tools.searchCymon(infile,outfile)
+			intelMenu()
 		# Change targeted name and domain
 		elif option == "4":
 			print green("Enter new target information:")
@@ -126,7 +130,40 @@ Your current targets are %s and %s.
 	except (KeyboardInterrupt):
 		main()
 
-#Penetration testing menu options
+# Options for such services as Shodan and Cymon
+def queryMenu():
+	try:
+		print green("""
+The Range-Viper network data toolkit:
+
+	1. Check IPs with Shodan
+
+	2. Check IPs with Cymon
+
+	0. Return
+""")
+		option = raw_input("Select a tool: ")
+		# Lookup IPs on Shodan
+		if option == "1":
+			infile = raw_input("File path to your text file of IP addresses: ")
+			scan_tools.shodanIPSearch(infile)
+			queryMenu()
+		# Lookup IPs in Cymon
+		elif option == "2":
+			infile = raw_input("File path to your text file of IP addresses: ")
+			outfile = raw_input("File name for Cymon report: ")
+			scan_tools.searchCymon(infile,outfile)
+			queryMenu()
+		#Exit to main menu
+		elif option == "0":
+			main()
+		else:
+			print red("[!] Invalid option - Select from the menu")
+			intelMenu()
+	except (KeyboardInterrupt):
+		queryMenu()
+
+# Penetration testing menu options
 def pentestMenu():
 	try:
 		print green("\nThe Pit-Viper penetration testing toolkit")
@@ -134,13 +171,13 @@ def pentestMenu():
 		print red("\nSome of these scans require running Viper with sudo!")
 
 		print green("""
-	1. Check your scope
+	1. Check your scope		5. Check SSL certificate for host
 
-	2. Network Scans - Active scanning with nmap and masscan (you pick)
+	2. Network Scan options
 
-	3. Run domain through Qualys SSL Labs (New Scan)
+	3. New Qualys SSL Labs scan
 
-	4. Run domain through Qualys SSL Labs (Results From Cache)
+	4. Cached Qualys SSL Labs scan
 
 	0. Return
 		""")
@@ -185,6 +222,10 @@ Please provide a list of IPs in a text file and Viper will output a CSV of resul
 			testType = 2
 			target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
 			ssllabsscanner.getResults(target,testType)
+			pentestMenu()
+		elif option == "5":
+			host = raw_input("Enter IP or hostname to check: ")
+			scan_tools.checkSSL(host)
 			pentestMenu()
 		elif option == "0":
 			main()
