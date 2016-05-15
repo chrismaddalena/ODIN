@@ -63,62 +63,78 @@ def getResults(target,type):
 	# We need individual try/excepts in case one piece of information is unavailable for some reason
 	# This avoids the whole thing failing because of one litte variable
 	# Docs - https://github.com/ssllabs/ssllabs-scan/blob/stable/ssllabs-api-docs.md
+
 	# Server name
 	try:
 		print green("Server Name: %s" % data['endpoints'][0]['serverName'])
 	except:
-		print red("[!] Could not retrieve server name!")
+		print red("Server Name: Unavailable")
+
 	# IP Address
 	try:
 		print green("IP Address: %s" % data['endpoints'][0]['ipAddress'])
-	except Exception as e:
-		print red("[!] Could not retrieve server name!")
-		print red("[!] Error: %s" % e)
-	# Grades
+	except:
+		print red("[!] IP Address: Unavailable!")
+
+	# SSL Labs Grades
 	try:
 		print green("Grade: %s" % data['endpoints'][0]['grade'])
 	except Exception as e:
-		print red("[!] Could not retrieve SSL Labs grade!")
-		print red("[!] Error: %s" % e)
+		print red("Grade: Unavailable")
 	try:
 		print green("SGrade: %s" % data['endpoints'][0]['gradeTrustIgnored'])
-	except Exception as e:
-		print red("[!] Could not retrieve SSL Labs grade!")
-		print red("[!] Error: %s" % e)
+	except:
+		print red("SGrade: Unavailable")
+
 	# CRIME
 	try:
 		crime = "No"
 		if data['endpoints'][0]['details']['compressionMethods']!= 0 and result['endpoints'][0]['details']['supportsNpn'] == False:
 			crime ="Yes"
-	except Exception as e:
-		print red("[!] Could not determine CRIME vulnerability!")
-		print red("[!] Error: %s" % e)
+			print green("CRIME: %s" % crime)
+		else:
+			print green("CRIME: %s" % crime)
+	except:
+		print red("CRIME: Status unavailable")
+
 	# FREAK
 	try:
-		print green("Freak: %s" % data['endpoints'][0]['details']['freak'])
-	except Exception as e:
-		print red("[!] Could not detemrine FREAK vulnerability!")
-		print red("[!] Error: %s" % e)
-	# Poodle vuln check
+		print green("FREAK: %s" % data['endpoints'][0]['details']['freak'])
+	except:
+		print red("FREAK: Status unavailable")
+
+	# POODLE SSL
 	try:
 		poodleSSL = "No"
 		if data['endpoints'][0]['details']['poodle'] == True:
 			poodleSSL = "Yes"
-		print green("Poodle SSL: %s" % poodleSSL)
+		print green("POODLE SSL: %s" % poodleSSL)
 		poodleTLS = data['endpoints'][0]['details']['poodleTls']
 		if poodleTLS == 1:
-			print green("Poodle TLS: No")
+			print green("POODLE TLS: No")
 		if poodleTLS == 2:
-			print green("Poodle TLS: Yes")
-	except Exception as e:
-		print red("[!] Could not retrieve info for Poodle vuln!")
-		print red("[!] Error: %s" % e)
+			print green("POODLE TLS: Yes")
+	except:
+		print red("POODLE SSL: Status unavailable")
+
+	# POODLE TLS
+	try:
+		poodleTLS = data['endpoints'][0]['details']['poodleTls']
+		if poodleTLS == 2:
+			print green("POODLE TLS: Yes")
+		elif poodleTLS == 1:
+			print green("POODLE TLS: No")
+		else:
+			print green("POODLE TLS: Failed check")
+	except:
+		print red("POODLE TLS: Status unavailable")
+
 	# Heartbleed
 	try:
 		print green("Heartbleed: %s" % data['endpoints'][0]['details']['heartbleed'])
-	except Exception as e:
-		print red("[!] Could not retrieve info for Heartbleed vuln!")
-		print red("[!] Error: %s" % e)
+	except:
+		print red("Heartbleed: Status unavailable")
+
 	# Renegotiation Support
 	try:
 		reneg = data['endpoints'][0]['details']['renegSupport']
@@ -126,9 +142,9 @@ def getResults(target,type):
 			print green("Renegotiation: Yes")
 		else:
 			print green("Renegotiation: No")
-	except Exception as e:
-		print red("[!] Could not retrieve info for Heartbleed vuln!")
-		print red("[!] Error: %s" % e)
+	except:
+		print red("Renegotiation: Status unavailable")
+
 	# OpenSSL CCS Injection
 	try:
 		ccs = data['endpoints'][0]['details']['openSslCcs']
@@ -138,9 +154,9 @@ def getResults(target,type):
 			print green("OpenSSL CCS Injection: Yes")
 		else:
 			print green("OpenSSL CCS Injection: No")
-	except Exception as e:
-		print red("[!] Could not retrieve info for OpenSSL CCS Injection vuln!")
-		print red("[!] Error: %s" % e)
+	except:
+		print red("OpenSSL CCS Injection: Status unavailable")
+
 	# DHE suites
 	try:
 		dhe = "No"
@@ -153,12 +169,11 @@ def getResults(target,type):
 							print green("Possible Insecure DHE: %s" % suite['name'])
 					except:
 						print green("Secure Suite: %s" % suite['name'])
-			except Exception as e:
-					print red("[!] Problem finding DHE suites!")
-					print red("Error: %s" % e)
-	except Exception as e:
-		print red("[!] Could not retrieve info for DHE suites!")
-		print red("[!] Error: %s" % e)
+			except:
+					print red("DHE Suites: DHE suite information unavailable")
+	except:
+		print red("DHE Suites: DHE suite information unavailable")
+
 	# SSL versions
 	ssl2 = "No"
 	ssl3 = "No"
@@ -170,9 +185,9 @@ def getResults(target,type):
 				ssl3 = "Yes"
 		print green("SSLv2: %s" % ssl2)
 		print green("SSLv3: %s" % ssl3)
-	except Exception as e:
-		print red("[!] Could not retrieve SSL support information!")
-		print red("[!] Error: %s" % e)
+	except:
+		print red("SSLv2/3: SSL version support information unavailable")
+
 	# RC4
 	try:
 			rc4 = data['endpoints'][0]['details']['supportsRc4']
@@ -181,7 +196,5 @@ def getResults(target,type):
 			else:
 				rc4 = "No"
 			print green("RC4: %s" % rc4)
-	except Exception as e:
-		print red("[!] Could not retrieve RC4 support information!")
-		print red("[!] Error: %s" % e)
-	#
+	except:
+		print red("RC4: Status unavailable")
