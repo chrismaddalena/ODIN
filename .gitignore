@@ -3,6 +3,7 @@
 
 *.pyc
 *.html
+*.txt
 
 /auth/*
 /reports/*
