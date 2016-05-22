@@ -16,10 +16,10 @@ try:
 	shodan_key_file = open('auth/shodankey.txt', 'r')
 	shodan_key_line = shodan_key_file.readlines()
 	SHODAN_API_KEY = shodan_key_line[1].rstrip()
-	api = shodan.Shodan(SHODAN_API_KEY)
+	shoAPI = shodan.Shodan(SHODAN_API_KEY)
 	shodan_key_file.close()
 except:
-	sho_api = None
+	shoAPI = None
 
 # Try to get the user's URLVoid API key
 try:
@@ -141,7 +141,7 @@ def collect(client,domain):
 		except:
 			print red("[!] Execution of dnsrecon -t axfr failed!")
 			report.write("Execution of dnsrecon -t axfr failed!\n")
-		# Brute for ce sub-domains
+		# Brute force sub-domains
 		try:
 			cmd = "dnsrecon -d %s -t brt -D /usr/share/dnsrecon/namelist.txt --iw -f | cut -b 5-" % domain
 			result = subprocess.check_output(cmd,shell=True)
@@ -164,20 +164,20 @@ def collect(client,domain):
 
 		# Perform Shodan searches
 		print green("[+] Checking Shodan (5/%s)" % total)
-		if api is None:
+		if shoAPI is None:
 			print red("[!] No Shodan API key, so skipping Shodan searches")
 		else:
 			report.write("\n---SHODAN Results---\n")
 			# Use API key to search Shodan for client name and client domain
 			print green("[+] Performing Shodan search for %s" % client)
 			try:
-				clientResults = api.search(client)
+				clientResults = shoAPI.search(client)
 			except shodan.APIError, e:
 				print red("[!] Error: %s" % e)
 				report.write("Error: %s\n" % e)
 			print green("[+] Performing Shodan search for %s" % domain)
 			try:
-				domainResults = api.search(domain)
+				domainResults = shoAPI.search(domain)
 			except shodan.APIError, e:
 				print red("[!] Error: %s" % e)
 				report.write("Error: %s\n" % e)

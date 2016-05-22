@@ -18,10 +18,10 @@ try:
 	shodan_key_file = open('auth/shodankey.txt', 'r')
 	shodan_key_line = shodan_key_file.readlines()
 	SHODAN_API_KEY = shodan_key_line[1].rstrip()
-	api = shodan.Shodan(SHODAN_API_KEY)
+	shoAPI = shodan.Shodan(SHODAN_API_KEY)
 	shodan_key_file.close()
 except:
-	sho_api = None
+	shoAPI = None
 
 try:
 	cymon_key_file = open('auth/cymonkey.txt', 'r')
@@ -43,7 +43,7 @@ def shodanIPSearch(infile):
 		for ip in list:
 			print green("[+] Performing Shodan search for %s" % ip)
 			try:
-				host = api.host(ip)
+				host = shoAPI.host(ip)
 				print """
 					IP: %s
 					Organization: %s
