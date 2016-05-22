@@ -164,47 +164,49 @@ def collect(client,domain):
 
 		# Perform Shodan searches
 		print green("[+] Checking Shodan (5/%s)" % total)
-		api = shodan.Shodan(SHODAN_API_KEY)
-		report.write("\n---SHODAN Results---\n")
-		# Use API key to search Shodan for client name and client domain
-		print green("[+] Performing Shodan search for %s" % client)
-		try:
-			clientResults = api.search(client)
-		except shodan.APIError, e:
-			print red("[!] Error: %s" % e)
-			report.write("Error: %s\n" % e)
-		print green("[+] Performing Shodan search for %s" % domain)
-		try:
-			domainResults = api.search(domain)
-		except shodan.APIError, e:
-			print red("[!] Error: %s" % e)
-			report.write("Error: %s\n" % e)
-		report.write("Client name results found: %s\n" % clientResults['total'])
-		try:
-			# Pull the most interesting information from search results
-			for result in clientResults['matches']:
-					report.write("IP: %s\n" % result['ip_str'])
-					for name in result['hostnames']:
-						report.write("Hostname: %s\n" % name)
-					report.write("OS: %s\n" % result['os'])
-					report.write("Port: %s\n" % result['port'])
-					report.write("Data: %s\n" % result['data'])
-		except Exception, e:
-			print red("[!] Error: %s" % e)
-			report.write("Error: %s\n" % e)
+		if api is None:
+			print red("[!] No Shodan API key, so skipping Shodan searches")
+		else:
+			report.write("\n---SHODAN Results---\n")
+			# Use API key to search Shodan for client name and client domain
+			print green("[+] Performing Shodan search for %s" % client)
+			try:
+				clientResults = api.search(client)
+			except shodan.APIError, e:
+				print red("[!] Error: %s" % e)
+				report.write("Error: %s\n" % e)
+			print green("[+] Performing Shodan search for %s" % domain)
+			try:
+				domainResults = api.search(domain)
+			except shodan.APIError, e:
+				print red("[!] Error: %s" % e)
+				report.write("Error: %s\n" % e)
+			report.write("Client name results found: %s\n" % clientResults['total'])
+			try:
+				# Pull the most interesting information from search results
+				for result in clientResults['matches']:
+						report.write("IP: %s\n" % result['ip_str'])
+						for name in result['hostnames']:
+							report.write("Hostname: %s\n" % name)
+						report.write("OS: %s\n" % result['os'])
+						report.write("Port: %s\n" % result['port'])
+						report.write("Data: %s\n" % result['data'])
+			except Exception, e:
+				print red("[!] Error: %s" % e)
+				report.write("Error: %s\n" % e)
 
-		report.write("Domain results found: %s\n" % domainResults['total'])
-		try:
-			for result in domainResults['matches']:
-					report.write("IP: %s\n" % result['ip_str'])
-					for name in result['hostnames']:
-						report.write("Hostname: %s\n" % name)
-					report.write("OS: %s\n" % result['os'])
-					report.write("Port: %s\n" % result['port'])
-					report.write("Data: %s\n" % result['data'])
-		except Exception, e:
-			print red("[!] Error: %s" % e)
-			report.write("Error: %s\n" % e)
+			report.write("Domain results found: %s\n" % domainResults['total'])
+			try:
+				for result in domainResults['matches']:
+						report.write("IP: %s\n" % result['ip_str'])
+						for name in result['hostnames']:
+							report.write("Hostname: %s\n" % name)
+						report.write("OS: %s\n" % result['os'])
+						report.write("Port: %s\n" % result['port'])
+						report.write("Data: %s\n" % result['data'])
+			except Exception, e:
+				print red("[!] Error: %s" % e)
+				report.write("Error: %s\n" % e)
 
 		# Search for different login/logon/admin/administrator pages
 		report.write("\n--- GOOGLE HACKING LOGIN Results ---\n")
