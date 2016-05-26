@@ -262,11 +262,12 @@ Viper can join multiple .nessus files into one report.
 	3. Provide name for the final .nessus file and report title.
 			""")
 
-			dir = raw_input("Diretory with Nessus files: ")
-			first = raw_input("First Nessus file: ")
+			dir = raw_input("Directory with Nessus files: ")
+			#first = raw_input("First Nessus file: ")
 			output = raw_input("Name for final Nessus file: ")
 			name = raw_input("Name for final report: ")
-			jonessus.joiner(first,dir,output,name)
+			joinessus.joiner(dir,output,name)
+			reportingMenu()
 		elif option == "2":
 			print "Under construction!"
 		elif option == "3":
