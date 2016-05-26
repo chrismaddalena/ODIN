@@ -8,8 +8,8 @@ import urllib2
 import tweepy
 from colors import *
 
-#sys.path.append('lib/theharvester/')
-#from theHarvester import *
+sys.path.append('lib/theharvester/')
+from theHarvester import *
 
 # Try to setup Twitter OAuth
 try:
