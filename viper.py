@@ -112,7 +112,7 @@ Your current targets are %s and %s.
 			scan_tools.searchCymon(infile,outfile)
 			intelMenu()
 		# Change targeted name and domain
-		elif option == "4":
+		elif option == "6":
 			print green("Enter new target information:")
 			client = raw_input("Client's name: ")
 			domain = raw_input("Enter the domain: ")
