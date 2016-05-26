@@ -181,8 +181,8 @@ def collect(client,domain):
 			except shodan.APIError, e:
 				print red("[!] Error: %s" % e)
 				report.write("Error: %s\n" % e)
-			report.write("Client name results found: %s\n" % clientResults['total'])
 			try:
+				report.write("Client name results found: %s\n" % clientResults['total'])
 				# Pull the most interesting information from search results
 				for result in clientResults['matches']:
 						report.write("IP: %s\n" % result['ip_str'])
@@ -195,8 +195,8 @@ def collect(client,domain):
 				print red("[!] Error: %s" % e)
 				report.write("Error: %s\n" % e)
 
-			report.write("Domain results found: %s\n" % domainResults['total'])
 			try:
+				report.write("Domain results found: %s\n" % domainResults['total'])
 				for result in domainResults['matches']:
 						report.write("IP: %s\n" % result['ip_str'])
 						for name in result['hostnames']:
