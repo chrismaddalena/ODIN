@@ -5,10 +5,26 @@ import os
 import pwnedcheck
 import sys
 import urllib2
+import tweepy
 from colors import *
 
-sys.path.append('lib/theharvester/')
-from theHarvester import *
+#sys.path.append('lib/theharvester/')
+#from theHarvester import *
+
+# Try to setup Twitter OAuth
+try:
+	twitter_key_file = open('auth/twitter.txt', 'r')
+	twitter_key_line = twitter_key_file.readlines()
+	consumer_key = twitter_key_line[1].rstrip()
+	consumer_secret = twitter_key_line[2].rstrip()
+	access_token = twitter_key_line[3].rstrip()
+	access_token_secret = twitter_key_line[4].rstrip()
+	twitAuth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+	twitAuth.set_access_token(access_token, access_token_secret)
+	twitAPI = tweepy.API(twitAuth)
+	twitter_key_file.close()
+except:
+	twitAPI = None
 
 # Number of commands
 total = 2 # Tests
@@ -124,12 +140,23 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 		report.write("Names and social media accounts (Twitter and LinkedIn):\n\n")
 		for person in uniquePeople:
 			report.write("%s\n" % person)
-		report.write("\nTwitter handles potentially related to %s:\n\n" % client)
+		report.write("\nTwitter profiles potentially related to %s:\n\n" % client)
+		if twitAPI is None:
+			print red("[!] Twitter API is not setup, so collecting just handles!")
 		for twit in uniqueTwitter:
 			# Drop the lonely @ Harvester often includes and common false positives
 			if twit == '@' or twit == '@-moz-keyframes' or twit == '@keyframes' or twit == '@media':
 				pass
-			else:
+			elif twitAPI is None:
+				print red("[!] Twitter API is not setup, so collecting just handles!")
 				report.write("%s\n" % twit)
-
-	report.close()
+			else:
+				try:
+					user = twitAPI.get_user(twit.strip('@'))
+					report.write("Real Name: %s\n" % user.name)
+					report.write("Screen Name: %s\n" % user.screen_name)
+					report.write("Location: %s\n" % user.location)
+					report.write("Followers: %s\n" % user.followers_count)
+					report.write("User Description: %s\n\n" % user.description)
+				except:
+					print red("[!] Error involving %s. This may not be a real user or there may be an issue with one of the user objects." % twit)

@@ -55,6 +55,23 @@ def urlvoidSetup():
 		f.close()
 	return
 
+def twitterSetup():
+	if os.path.isfile('../auth/twitter.txt'):
+		exit('The Twitter API is already setup!')
+	else:
+		f = open('../auth/'+'twitter.txt', 'w')
+		key = raw_input('Twitter Customer Key: ')
+		keySecret = raw_input('Twitter Customer Secret: ')
+		toke = raw_input('Twitter Access Token: ')
+		tokenSecret = raw_input('Twitter Access Token Secret: ')
+		f.write('#Twitter API business\n')
+		f.write(key+'\n')
+		f.write(keySecret+'\n')
+		f.write(token+'\n')
+		f.write(tokenSecret+'\n')
+		f.close()
+	return
+
 def downloadLibs():
 	# Download theHarvester
 	if not os.path.isfile('../lib/theharvester'):

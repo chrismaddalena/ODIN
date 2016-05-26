@@ -7,3 +7,5 @@ ansicolors
 timeout
 netaddr
 cymon
+tweepy
+twitter
