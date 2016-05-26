@@ -275,5 +275,3 @@ def collect(client,domain):
 			print ("Error: %s" % e)
 			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again.")
 			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: %s \n" % url)
-
-	report.close()
