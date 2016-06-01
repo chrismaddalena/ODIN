@@ -140,6 +140,10 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 		report.write("Names and social media accounts (Twitter and LinkedIn):\n\n")
 		for person in uniquePeople:
 			report.write("%s\n" % person)
+			# We use Bing because you'll get a nice profile snapshot in the results without logging-in
+			url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + person + '"' + ' ' + '"' + client + '"'
+			url = url.replace(' ','%20')
+			report.write("Check profile: %s\n\n" % url)
 		report.write("\nTwitter profiles potentially related to %s:\n\n" % client)
 		if twitAPI is None:
 			print red("[!] Twitter API is not setup, so collecting just handles!")
@@ -148,7 +152,6 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 			if twit == '@' or twit == '@-moz-keyframes' or twit == '@keyframes' or twit == '@media':
 				pass
 			elif twitAPI is None:
-				print red("[!] Twitter API is not setup, so collecting just handles!")
 				report.write("%s\n" % twit)
 			else:
 				try:
@@ -157,6 +160,10 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 					report.write("Screen Name: %s\n" % user.screen_name)
 					report.write("Location: %s\n" % user.location)
 					report.write("Followers: %s\n" % user.followers_count)
-					report.write("User Description: %s\n\n" % user.description)
+					try:
+						report.write("User Description: %s\n\n" % user.description.encode('utf8'))
+					except Exception as e:
+						print red("[!] There was an issue with the description for %s!" % twit)
+						print red("Error: %s" % e)
 				except:
 					print red("[!] Error involving %s. This may not be a real user or there may be an issue with one of the user objects." % twit)
