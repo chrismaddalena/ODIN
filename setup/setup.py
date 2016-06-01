@@ -18,6 +18,7 @@ def setup():
 		shodanSetup()
 		cymonSetup()
 		urlvoidSetup()
+		twitterSetup()
 	else:
 		exit("Could not proceed with setup! Try running as sudo!")
 	print("[+] Setup complete!")
