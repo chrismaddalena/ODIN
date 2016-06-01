@@ -3,17 +3,23 @@
 import os
 from time import sleep
 import sys
+from colors import *
 
 def setup():
-	downloadLibs()
+	print green("[+] Setup will now download TheHarvester from GitHub and walk you through setting up your API keys.")
+	print yellow("[!] Have your API keys ready, including your Twitter app keys and tokens!")
+	#downloadLibs()
 	if not os.path.exists("../auth"):
-		print "Adding the 'auth' directory."
+		print green("[+] Adding the 'auth' directory.")
 		try:
 			os.mkdir("../auth")
 			sleep(2)
 			shodanSetup()
+			cymonSetup()
+			urlvoidSetup()
+			twitterSetup()
 		except:
-			exit("run as sudo!")
+			exit("[!] Could not proceed with setup! Try running as sudo!")
 	elif os.path.exists("../auth"):
 		shodanSetup()
 		cymonSetup()
@@ -21,11 +27,11 @@ def setup():
 		twitterSetup()
 	else:
 		exit("[!] Could not proceed with setup! Try running as sudo!")
-	print("[+] Setup complete!")
+	print green("[+] Setup complete! If you need to re-run setup for a key: Go into /auth and delete the key file(s). Then re-run setup.")
 
 def shodanSetup():
 	if os.path.isfile('../auth/shodankey.txt'):
-		exit('The Shodan API key is already present!')
+		print green('[+] The Shodan API key is already present!')
 	else:
 		f = open('../auth/'+'shodankey.txt', 'w')
 		key = raw_input('Shodan API key: ')
@@ -36,7 +42,7 @@ def shodanSetup():
 
 def cymonSetup():
 	if os.path.isfile('../auth/cymonkey.txt'):
-		exit('The Cymon API key is already present!')
+		print green('[+] The Cymon API key is already present!')
 	else:
 		f = open('../auth/'+'cymonkey.txt', 'w')
 		key = raw_input('Cymon API key: ')
@@ -47,7 +53,7 @@ def cymonSetup():
 
 def urlvoidSetup():
 	if os.path.isfile('../auth/urlvoidkey.txt'):
-		exit('The URLVoid API key is already present!')
+		print green('[+] The URLVoid API key is already present!')
 	else:
 		f = open('../auth/'+'urlvoidkey.txt', 'w')
 		key = raw_input('URLVoid API key: ')
@@ -58,12 +64,12 @@ def urlvoidSetup():
 
 def twitterSetup():
 	if os.path.isfile('../auth/twitter.txt'):
-		exit('The Twitter API is already setup!')
+		print green('[+] The Twitter app keys are already present!')
 	else:
 		f = open('../auth/'+'twitter.txt', 'w')
 		key = raw_input('Twitter Customer Key: ')
 		keySecret = raw_input('Twitter Customer Secret: ')
-		toke = raw_input('Twitter Access Token: ')
+		token = raw_input('Twitter Access Token: ')
 		tokenSecret = raw_input('Twitter Access Token Secret: ')
 		f.write('#Twitter API business\n')
 		f.write(key+'\n')
