@@ -123,8 +123,10 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 					pass
 				else:
 					report.write("%s (Pwned:" % email)
+					pwns = []
 					for pwn in pwned:
-						report.write(' + ' + pwn)
+						pwns.append(pwn)
+					report.write(', '.join(pwns))
 					report.write(")\n")
 				# Check haveibeenpwned for pastes from Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
 				url = "https://haveibeenpwned.com/api/v2/pasteaccount/" + email
@@ -135,16 +137,8 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 					report.write("Pastes: " + source + "\n")
 				except:
 					pass
-
 		report.write("\n---PEOPLE Results---\n")
 		report.write("Names and social media accounts (Twitter and LinkedIn):\n\n")
-		for person in uniquePeople:
-			report.write("%s\n" % person)
-			# We use Bing because you'll get a nice profile snapshot in the results without logging-in
-			url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + person + '"' + ' ' + '"' + client + '"'
-			url = url.replace(' ','%20')
-			report.write("Check profile: %s\n\n" % url)
-		report.write("\nTwitter profiles potentially related to %s:\n\n" % client)
 		if twitAPI is None:
 			print red("[!] Twitter API is not setup, so collecting just handles!")
 		for twit in uniqueTwitter:
@@ -157,13 +151,26 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 				try:
 					user = twitAPI.get_user(twit.strip('@'))
 					report.write("Real Name: %s\n" % user.name)
-					report.write("Screen Name: %s\n" % user.screen_name)
+					report.write("Twitter Handle: %s\n" % user.screen_name)
 					report.write("Location: %s\n" % user.location)
 					report.write("Followers: %s\n" % user.followers_count)
 					try:
-						report.write("User Description: %s\n\n" % user.description.encode('utf8'))
+						report.write("User Description: %s\n" % user.description.encode('utf8'))
 					except Exception as e:
 						print red("[!] There was an issue with the description for %s!" % twit)
 						print red("Error: %s" % e)
+					# Check if the Twitter user's "real" name appears in our list of unique people
+					# If it does, remove them from the list (for later) and create link for their LinkedIn profile
+					if user.name in uniquePeople:
+						url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + user.name + '"' + ' ' + '"' + client + '"'
+						url = url.replace(' ','%20')
+						report.write("LinkedIn Profile: %s\n\n" % url)
+						uniquePeople.remove(user.name)
 				except:
 					print red("[!] Error involving %s. This may not be a real user or there may be an issue with one of the user objects." % twit)
+		for person in uniquePeople:
+			report.write("%s\n" % person)
+			# We use Bing because you'll get a nice profile snapshot in the results without logging-in
+			url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + person + '"' + ' ' + '"' + client + '"'
+			url = url.replace(' ','%20')
+			report.write("LinkedIn: %s\n\n" % url)
