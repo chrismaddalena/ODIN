@@ -7,9 +7,7 @@ import sys
 import urllib2
 import tweepy
 from colors import *
-
-sys.path.append('lib/theharvester/')
-from theHarvester import *
+from theharvester import *
 
 # Try to setup Twitter OAuth
 try:
@@ -43,38 +41,38 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 	harvestLimit = 100
 	harvestStart = 0
 	# Create drectory for client reports and report
-	if not os.path.exists("reports/%s" % client):
+	if not os.path.exists("reports/{}".format(client)):
 		try:
-			os.makedirs("reports/%s" % client)
+			os.makedirs("reports/{}".format(client))
 		except:
 			print red("[!] Could not create reports directory!")
 
-	file = "reports/%s/Email_Report.txt" % client
+	file = "reports/{}/Email_Report.txt".format(client)
 
-	print green("[+] Running The Harvester (1/%s)" % total)
+	print green("[+] Running The Harvester (1/{})".format(total))
 	# Search trhough most of Harvester's supported engines
 	# No Baidu because it always seems to hang or take way too long
-	print "[-] Harvesting Google (1/%s)" % harvesterDomains
+	print "[-] Harvesting Google (1/{})".format(harvesterDomains)
 	search = googlesearch.search_google(domain,harvestLimit,harvestStart)
 	search.process()
 	googleHarvest = search.get_emails()
-	print "[-] Harvesting LinkedIn (2/%s)" % harvesterDomains
+	print "[-] Harvesting LinkedIn (2/{})".format(harvesterDomains)
 	search = linkedinsearch.search_linkedin(domain,harvestLimit)
 	search.process()
 	linkHarvest = search.get_people()
-	print "[-] Harvesting Twitter (3/%s)" % harvesterDomains
+	print "[-] Harvesting Twitter (3/{})".format(harvesterDomains)
 	search = twittersearch.search_twitter(domain,harvestLimit)
 	search.process()
 	twitHarvest = search.get_people()
-	print "[-] Harvesting Yahoo (4/%s)" % harvesterDomains
+	print "[-] Harvesting Yahoo (4/{})".format(harvesterDomains)
 	search = yahoosearch.search_yahoo(domain,harvestLimit)
 	search.process()
 	yahooHarvest = search.get_emails()
-	print "[-] Harvesting Bing (5/%s)" % harvesterDomains
+	print "[-] Harvesting Bing (5/{})".format(harvesterDomains)
 	search = bingsearch.search_bing(domain,harvestLimit,harvestStart)
 	search.process('no')
 	bingHarvest = search.get_emails()
-	print "[-] Harvesting Jigsaw (6/%s)" % harvesterDomains
+	print "[-] Harvesting Jigsaw (6/{})".format(harvesterDomains)
 	search = jigsaw.search_jigsaw(domain,harvestLimit)
 	search.process()
 	jigsawHarvest = search.get_people()
@@ -101,10 +99,10 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 	unique = set(handles)
 	uniqueTwitter = list(unique)
 
-	print green("[+] Harvester found a total of %s emails and %s names across all engines" % (len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter)))
-	print green("[+] Running emails through HaveIBeenPwned and writing report (2/%s)" % total)
+	print green("[+] Harvester found a total of {} emails and {} names across all engines".format(len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter)))
+	print green("[+] Running emails through HaveIBeenPwned and writing report (2/{})".format(total))
 	with open(file, 'w') as report:
-		report.write("### Email & People Report for %s ###\n\n" % domain)
+		report.write("### Email & People Report for {} ###\n\n".format(domain))
 		report.write("---THEHARVESTER Results---\n")
 		report.write("Emails checked with HaveIBeenPwned for breaches and pastes:\n\n")
 		for email in uniqueEmails:
@@ -119,22 +117,22 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 					print red("[!] Could not parse JSON. Moving on...")
 				# If no results for breaches we return None
 				if not pwned:
-					report.write("%s\n" % email)
+					report.write("{}\n".format(email))
 					pass
 				else:
-					report.write("%s (Pwned:" % email)
+					report.write("{} (Pwned:".format(email))
 					pwns = []
 					for pwn in pwned:
 						pwns.append(pwn)
 					report.write(', '.join(pwns))
 					report.write(")\n")
 				# Check haveibeenpwned for pastes from Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
-				url = "https://haveibeenpwned.com/api/v2/pasteaccount/" + email
+				url = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
 				page = urllib2.Request(url, None, headers)
 				# We must use Try because an empty result is like a 404 and causes an error
 				try:
 					source = urllib2.urlopen(page).read()
-					report.write("Pastes: " + source + "\n")
+					report.write("Pastes: {}\n".format(source))
 				except:
 					pass
 		report.write("\n---PEOPLE Results---\n")
@@ -146,31 +144,31 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 			if twit == '@' or twit == '@-moz-keyframes' or twit == '@keyframes' or twit == '@media':
 				pass
 			elif twitAPI is None:
-				report.write("%s\n" % twit)
+				report.write("{}\n".format(twit))
 			else:
 				try:
 					user = twitAPI.get_user(twit.strip('@'))
-					report.write("Real Name: %s\n" % user.name)
-					report.write("Twitter Handle: %s\n" % user.screen_name)
-					report.write("Location: %s\n" % user.location)
-					report.write("Followers: %s\n" % user.followers_count)
+					report.write("Real Name: {}\n".format(user.name))
+					report.write("Twitter Handle: {}\n".format(user.screen_name))
+					report.write("Location: {}\n".format(user.location))
+					report.write("Followers: {}\n".format(user.followers_count))
 					try:
-						report.write("User Description: %s\n" % user.description.encode('utf8'))
+						report.write("User Description: {}\n".format(user.description.encode('utf8')))
 					except Exception as e:
-						print red("[!] There was an issue with the description for %s!" % twit)
-						print red("Error: %s" % e)
+						print red("[!] There was an issue with the description for {}!".format(twit))
+						print red("Error: {}".format(e))
 					# Check if the Twitter user's "real" name appears in our list of unique people
 					# If it does, remove them from the list (for later) and create link for their LinkedIn profile
 					if user.name in uniquePeople:
 						url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + user.name + '"' + ' ' + '"' + client + '"'
 						url = url.replace(' ','%20')
-						report.write("LinkedIn Profile: %s\n\n" % url)
+						report.write("LinkedIn Profile: {}\n\n".format(url))
 						uniquePeople.remove(user.name)
 				except:
-					print red("[!] Error involving %s. This may not be a real user or there may be an issue with one of the user objects." % twit)
+					print red("[!] Error involving {}. This may not be a real user or there may be an issue with one of the user objects.".format(twit))
 		for person in uniquePeople:
-			report.write("%s\n" % person)
+			report.write("{}\n".format(person))
 			# We use Bing because you'll get a nice profile snapshot in the results without logging-in
 			url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + person + '"' + ' ' + '"' + client + '"'
 			url = url.replace(' ','%20')
-			report.write("LinkedIn: %s\n\n" % url)
+			report.write("LinkedIn: {}\n\n".format(url))
