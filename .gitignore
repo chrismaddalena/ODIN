@@ -3,13 +3,7 @@
 
 *.pyc
 *.html
-*.txt
 *.nessus
 
 /auth/*
 /reports/*
-/lib/theharvester/*
-/lib/hostchecker.py
-/lib/htmlExport.py
-/lib/markup.py
-/lib/graphs.py

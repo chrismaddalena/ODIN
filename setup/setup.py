@@ -8,7 +8,6 @@ from colors import *
 def setup():
 	print green("[+] Setup will now download TheHarvester from GitHub and walk you through setting up your API keys.")
 	print yellow("[!] Have your API keys ready, including your Twitter app keys and tokens!")
-	#downloadLibs()
 	if not os.path.exists("../auth"):
 		print green("[+] Adding the 'auth' directory.")
 		try:
@@ -78,20 +77,5 @@ def twitterSetup():
 		f.write(tokenSecret+'\n')
 		f.close()
 	return
-
-def downloadLibs():
-	# Download theHarvester
-	if not os.path.isfile('../lib/theharvester'):
-		print "Downloading theHarvester.py"
-		os.system('wget https://github.com/laramies/theHarvester/archive/master.zip -O ../lib/harvester.zip')
-		os.system('unzip ../lib/harvester.zip -d ../lib/')
-		os.system('mv ../lib/theHarvester-master ../lib/theharvester')
-		os.system('rm ../lib/harvester.zip')
-		os.system('mv ../lib/theharvester/lib/graphs.py ../lib/graphs.py')
-		os.system('mv ../lib/theharvester/lib/hostchecker.py ../lib/hostchecker.py')
-		os.system('mv ../lib/theharvester/lib/htmlExport.py ../lib/htmlExport.py')
-		os.system('mv ../lib/theharvester/lib/markup.py ../lib/markup.py')
-	else:
-		print "TheHarvester is installed."
 
 setup()

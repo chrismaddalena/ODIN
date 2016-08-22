@@ -11,6 +11,8 @@ Ninjasl0th - Creator of the original scope verification script and all around co
 
 0xF1 - Creator of the original JoiNessus tool and a great guy to have on your team!
 
+GRC_Ninja - For providing great feedback regarding HTTP requests and RDAP.
+
 And to these folks who have maintained and offered some of the tools used by Viper:
 
 Laramies - Creator of the awesome TheHarvester (https://github.com/laramies/theHarvester)!
@@ -18,7 +20,7 @@ Laramies - Creator of the awesome TheHarvester (https://github.com/laramies/theH
 TrullJ - For making the slick SSL Labs Scanner module (https://github.com/TrullJ/ssllabs)!
 
 ###Getting Started
-Run the setup.py script in the /setup directory to walk through setup steps, like creation of directories and setup of API keys.
+Run the setup.py script in the /setup directory to setup of API keys.
 
 Then run setup_check.py to make sure everything is in order.
 
