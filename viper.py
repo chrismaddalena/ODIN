@@ -1,11 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
-  _____        __                          _   _________  _______
- / ___/__  ___/ /__ ___  ___ ___ _  ___   | | / /  _/ _ \/ __/ _ \
-/ /__/ _ \/ _  / -_) _ \/ _ `/  ' \/ -_)  | |/ // // ___/ _// , _/
-\___/\___/\_,_/\__/_//_/\_,_/_/_/_/\__/   |___/___/_/  /___/_/|_|
+- - - - - - - CODENAME - - - - - - -
+ :::  === ::: :::====  :::===== :::====
+ :::  === ::: :::  === :::      :::  ===
+ ===  === === =======  ======   =======
+  ======  === ===      ===      === ===
+    ==    === ===      ======== ===  ===
 
 Developer: Chris Maddalena
 """
@@ -14,385 +16,274 @@ import sys
 import os
 from colors import *
 from lib import *
+import click
 
-domain = ""
-client = ""
+# Create drectory for client reports and report
+def setupReports(client):
+	if not os.path.exists("reports/{}".format(client)):
+		try:
+			os.makedirs("reports/{}".format(client))
+		except:
+			print(red("[!] Could not create reports directory!"))
 
-def main():
-	# Clear the terminal window
-	os.system('cls' if os.name == 'nt' else 'clear')
+class AliasedGroup(click.Group):
+	"""Allows commands to be called by their first unique character"""
+
+	def get_command(self, ctx, cmd_name):
+		"""
+		Allows commands to be called by thier first unique character
+		:param ctx: Context information from click
+		:param cmd_name: Calling command name
+		:return:
+		"""
+
+		rv = click.Group.get_command(self, ctx, cmd_name)
+		if rv is not None:
+			return rv
+		matches = [x for x in self.list_commands(ctx)
+					if x.startswith(cmd_name)]
+		if not matches:
+			return None
+		elif len(matches) == 1:
+			return click.Group.get_command(self, ctx, matches[0])
+		ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
+
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+
+@click.group(cls=AliasedGroup, context_settings=CONTEXT_SETTINGS)
+def viper():
+	"""
+	Welcome to Viper! To use Viper, select a module you wish to run. Functions are split into modules for flexibility.\n
+	Run MODULE --help for more information on a speicifc module.\n
+	Warning: Some functions will require running Viper with sudo (e.g. nmap SYN scans)!
+	"""
+	# Everything starts here
+	pass
+
+@viper.command(name='osint', short_help='The full OSINT suite of tools will be run (see below).')
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for Shodan.')
+@click.option('-e', '--email', help='The email domain, such as example.com. Do not include @.')
+@click.option('-sF', '--scoping-file', type=click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-s', '--scoped-ips', help='Scoped IP addresses. Can be used instead of a scoping file.', multiple=True)
+@click.option('--dns/--no-dns', default=False, help='Set option if you do or do not want to brute force DNS. Defaults to no DNS.')
+@click.option('--google/--no-google', default=False, help='Set option if you do or do not want to Google for index pages and admin pages for the domain. Defaults to no Google.')
+@click.option('--files/--no-files', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
+@click.pass_context
+
+def osint(self,client,email,dns,google,files,scoping_file,scoped_ips):
+	"""
+	The Shadow-Viper intelligence gathering toolkit:\n
+	This module runs all OSINT modules together. Viper uses TheHarvester to locate email addresses and social media profiles.
+	Profiles are cross-referenced with HaveIBeenPwned, Twitter's API, and LinkedIn.\n
+	Viper uses various tools and APIs are used to collect domain/IP information on the provided IP addresses and/or domains.\n
+	Several API keys are required for all of the look-ups: Twitter, URLVoid, Cymon, and Shodan
+	"""
+	print(client)
+	print(email)
+	client = client[0]
+	email = email[0]
+	#scoping_file = scoping_file[0]
+
 	asciis.printArt()
-	# Main menu display
-	try:
-		print green("Welcome to Viper!\n")
-		print red("Warning: Some functions will require running Viper with sudo (e.g. nmap SYN scans)!\n")
-		print green("""Please select a job from the options below.
+	print(green("[+] OSINT Module Selected: Viper will run all recon modules."))
+	setupReports(client)
 
-	1. Intelligence Gathering (Passive)	4. Reporting
+	#email_tools.harvest(client,email)
+	#domain_tools.collectDomainInfo(client,email)
+	#domain_tools.shodanLookUp(client,email)
 
-	2. Review IPs and domains		5. Phishing
+	if dns is True:
+		print(green("[+] DNS recon was selected: Viper will brute force DNS with Fierce and DNSRecon."))
+		domain_tools.dnsRecon()
+	else:
+		print(yellow("[+] DNS recon was NOT selected: Viper skipped DNS brute forcing."))
+	if files is True:
+		print(green("[+] File discovery was selected: Viper will perform Google searches to find files for the provided domain."))
+		file_discovery.discover(client,email)
+	else:
+		print(yellow("[+] File discovery was NOT selected: Viper skipped Googling for files."))
+	if google is True:
+		print(green("[+] Google discovery was selected: Viper will perform Google searches to find admin and index pages."))
+		domain_tools.googleFu(client,email)
+	else:
+		print(yellow("[+] Google discovery was NOT selected: Viper skipped Googling for admin and index pages."))
 
-	3. Penetration Testing (Active)
+@viper.command(name='people',
+	short_help='Only email addresses and social media profile recon (email, Twitter, and LinkedIn). Provide an email @domain.')
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for naming reports.')
+@click.option('-e', '--email', help='The email domain, such as example.com. Do not include @.')
 
-	0. Exit
-		""")
-		option = raw_input("Your tool: ")
-		if option == "1":
-			setupTargets()
-			intelMenu()
-		if option == "2":
-			queryMenu()
-		elif option == "3":
-			pentestMenu()
-		elif option == "4":
-			reportingMenu()
-		elif option == "5":
-			phishingMenu()
-		elif option == "0":
-			print "Thank you for using Viper!"
-			sys.exit()
-		else:
-			print red("[!] Invalid option - Select from the menu")
-			main()
-	except (KeyboardInterrupt):
-		main()
+def people(client,email):
+	"""
+	This module uses TheHarvester to locate email addresses and social media profiles. Profiles are cross-referenced with
+	HaveIBeenPwned, Twitter's API, and LinkedIn.\n
+	A Twitter app key is necessary for the Twitter API integration.
+	"""
 
-#Intel menu options
-def setupTargets():
-	global client
-	global domain
-	print green("""
-OSINT requires a client name and domain name. If the client has a generic name (e.g. ABC), try using a complete name for Shodan and Google searches.
-	""")
-	print red("[!] Warning: Apostrophes in the client name may cause issues with Shodan.")
-	client = raw_input("Client's name: ")
-	domain = raw_input("Enter the domain: ")
+	asciis.printArt()
+	print(green("[+] People Module Selected: Viper will run only modules for email addresses and social media."))
+	setupReports(client)
 
-def intelMenu():
-	global domain
-	global client
-	try:
-		print green("""
-The Shadow-Viper intelligence gathering toolkit:
+	email_tools.harvest(client,email)
 
-Your current targets are %s and %s.
+@viper.command(name='domain', short_help='Only domain-related recon will be performed (DNS, Shodan, rep data). Provide a list of IPs and domains.')
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for Shodan.')
+@click.option('-e', '--email', help='The email domain, such as example.com. Do not include @.')
+@click.option('--dns/--no-dns', default=False, help='Set option if you do or do not want to brute force DNS. Defaults to no DNS.')
+@click.option('--google/--no-google', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
 
-	1. Harvest email addresses	4. Check IPs with Shodan
+def domain(client,email):
+	"""
+	This module uses various tools and APIs to collect information on the provided IP addresses and/or domains.\n
+	Several API keys are required for all of the look-ups: URLVoid, Cymon, and Shodan
+	"""
 
-	2. Collect domain information	5. Check IPs with Cymon
+	asciis.printArt()
+	print(green("[+] Domain Module Selected: Viper will run only modules for the provided domains and IPs."))
+	setupReports(client)
 
-	3. Discover files		6. Change targets
+	domain_tools.collect(client,email)
+	if dns is True:
+		print(green("[+] DNS recon was selected: Viper will brute force DNS with Fierce and DNSRecon."))
+		domain_tools.dnsRecon()
+	if google is True:
+		print(green("[+] File discovery was selected: Viper will perform Google searches to find files for the provided domain."))
+		file_discovery.discover(client,email)
 
-	7. Knowing is half the battle
+@viper.command(name='shodan', short_help='Look-up IPs and domains on Shodan using the Shodan API and your API key.')
+@click.option('-iF', '--infile', help='Name fo the file with your IP addresses.',type = click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-oF', '--outfile', help='Name of the output file for the information.')
 
-	0. Return
-""" % (client,domain))
-		option = raw_input("Select a tool: ")
-		# Email tools
-		if option == "1":
-			email_tools.harvest(client,domain)
-			intelMenu()
-		# Domain tools
-		elif option == "2":
-			domain_tools.collect(client,domain)
-			intelMenu()
-		# Find files
-		elif option == "3":
-			file_discovery.discover(client,domain)
-			intelMenu()
-		# Lookup IPs on Shodan
-		elif option == "4":
-			infile = raw_input("File path to your text file of IP addresses: ")
-			scan_tools.shodanIPSearch(infile)
-			intelMenu()
-		# Lookup IPs in Cymon
-		elif option == "5":
-			infile = raw_input("File path to your text file of IP addresses: ")
-			outfile = raw_input("File name for Cymon report: ")
-			scan_tools.searchCymon(infile,outfile)
-			intelMenu()
-		# Change targeted name and domain
-		elif option == "6":
-			print green("Enter new target information:")
-			client = raw_input("Client's name: ")
-			domain = raw_input("Enter the domain: ")
-			intelMenu()
-		# Could be something useful, but Saturday morning cartoon references
-		elif option == "7":
-			print red("G.") + "I." + blue(" Jooooe!")
-			intelMenu()
-		#Exit to main menu
-		elif option == "0":
-			main()
-		else:
-			print red("[!] Invalid option - Select from the menu")
-			intelMenu()
-	except (KeyboardInterrupt):
-		main()
+def shodan(infile, outfile):
+	"""
+	The Range-Viper network data toolkit:\n
+	Look-up information on IP addresses using Shodan's API and your API key.\n
+	You must have a Shodan API key!
+	"""
+	asciis.printArt()
+	setupReports(client)
+	scan_tools.shodanIPSearch(infile)
+	scan_tools.searchCymon(infile,outfile)
 
-# Options for such services as Shodan and Cymon
-def queryMenu():
-	try:
-		print green("""
-The Range-Viper network data toolkit:
+@viper.command(name='scan', short_help='Scan IPs and domains using nmap or MassScan - This is noisy!')
+@click.option('-iF', '--infile', help='Name fo the file with your IP addresses.',type = click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-oF', '--outfile', help='Name of the output file for the results.')
 
-	1. Check IPs with Shodan
+def scan():
+	"""
+	Viper has shortcuts for many of the popular scanners. Select a scanner, provide a text file with IPs, and Viper will take care of the rest.
+	You can run full nmap SYN scans, the same with common scripts, or Masscan with full ports.
+	For custom Masscan scans, edit Viper's masscan.config file.\n
+	SYN scans require sudo! Start Viper with sudo if you want to use them.
+	"""
 
-	2. Check IPs with Cymon
+	asciis.printArt()
+	setupReports(client)
 
-	0. Return
-""")
-		option = raw_input("Select a tool: ")
-		# Lookup IPs on Shodan
-		if option == "1":
-			infile = raw_input("File path to your text file of IP addresses: ")
-			scan_tools.shodanIPSearch(infile)
-			queryMenu()
-		# Lookup IPs in Cymon
-		elif option == "2":
-			infile = raw_input("File path to your text file of IP addresses: ")
-			outfile = raw_input("File name for Cymon report: ")
-			scan_tools.searchCymon(infile,outfile)
-			queryMenu()
-		#Exit to main menu
-		elif option == "0":
-			main()
-		else:
-			print red("[!] Invalid option - Select from the menu")
-			intelMenu()
-	except (KeyboardInterrupt):
-		queryMenu()
+	# 1. Full port nmap SYN scan (-sSV -T4 -p-)
+	scanType = 1
+	scan_tools.runNMAP(scanType)
 
-# Penetration testing menu options
-def pentestMenu():
-	try:
-		print green("\nThe Pit-Viper penetration testing toolkit")
+	# 2. Default 1000 port nmap SYN scan (-sSV -T4)
+	scanType = 2
+	scan_tools.runNMAP(scanType)
 
-		print red("\nSome of these scans require running Viper with sudo!")
+	# 3. Full port masscan (-p0-65535)
+	scanType = 1
+	scan_tools.runMasscan(1)
 
-		print green("""
-	1. Check your scope		5. Check SSL certificate for host
+	# 4. Masscan with conf file (-c)
+	scanType = 2
+	scan_tools.runMasscan(2)
 
-	2. Network Scan options
+@viper.command(name='verify', short_help='Verify an external pen test scope. This returns a csv file with SSL cert, whois, and other data for verification.')
+@click.option('-iF', '--infile', type = click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-oF', '--outfile', help='Scoped IP addresses. Can be used instead of a scoping file.')
+@click.option('-c', '--cidr', default=False, help='Set to True to not run DNS checks (faster).')
 
-	3. New Qualys SSL Labs scan
-
-	4. Cached Qualys SSL Labs scan
-
-	0. Return
-		""")
-		option = raw_input("Select a tool: ")
-
-		# Check scope option
-		if option == "1":
-			print green("""
+def verify(infile, outfile, cidr):
+	"""
+	This module will use reverse DNS, ARIN, and SSL certificate information to try to verify testing scope.
+	"""
+	print(green("""
 Viper will attempt to verify ownership of the provided IP addresses (single or CIDR ranges) using various tools: ARIN, whois, DNS, and SSL cert informaiton.
 Please provide a list of IPs in a text file and Viper will output a CSV of results.
-			""")
-			# initialize our array for IP address storage
-			ips = []
-			# initialize our dict for info storage
-			out = {}
+	"""))
+	# initialize our array for IP address storage
+	ips = []
+	# initialize our dict for info storage
+	out = {}
 
-			infile = raw_input("File path to your text file of IP addresses: ")
-			outfile = raw_input("Output filename for CSV: ")
-			CIDR = raw_input("Is there a CIDR (y/n?): ")
-			try:
-				if CIDR == "y":
-					breakrange = True
-				else:
-					breakrange = False
-				verify.infile(infile, ips, breakrange)
-				verify.who(ips, out)
-				verify.outfile(out, outfile)
-			except Exception as e:
-				print red("[!] Verification failed!")
-				print red("[!] Error: %s" % e)
-			pentestMenu()
-		# Launch network scanning menu
-		elif option == "2":
-			scanMenu()
-		# SSL check with Qualys
-		elif option == "3":
-			testType = 1
-			target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
-			ssllabsscanner.getResults(target,testType)
-			pentestMenu()
-		elif option == "4":
-			testType = 2
-			target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
-			ssllabsscanner.getResults(target,testType)
-			pentestMenu()
-		elif option == "5":
-			host = raw_input("Enter IP or hostname to check: ")
-			scan_tools.checkSSL(host)
-			pentestMenu()
-		elif option == "0":
-			main()
-		else:
-			print red("[!] Invalid option - Select from the menu")
-			pentestMenu()
-	except (KeyboardInterrupt):
-		main()
-
-#Reporting menu options
-def reportingMenu():
 	try:
-		print green("""
-The Ninja-Viper reporting toolkit:
-
-	1. Combine multiple Nessus reports (.nessus)
-
-	2.
-
-	3.
-
-	4.
-
-	0. Return
-""")
-		option = raw_input("Select a tool: ")
-		# Joining Nessus report files
-		if option == "1":
-			print green("""
-Viper can join multiple .nessus files into one report.
-
-	1. Place your files into the same directory.
-	2. Provide the directory and the first .nessus file.
-	3. Provide name for the final .nessus file and report title.
-			""")
-
-			dir = raw_input("Directory with Nessus files: ")
-			#first = raw_input("First Nessus file: ")
-			output = raw_input("Name for final Nessus file: ")
-			name = raw_input("Name for final report: ")
-			joinessus.joiner(dir,output,name)
-			reportingMenu()
-		elif option == "2":
-			print "Under construction!"
-		elif option == "3":
-			print "Under construction!"
-		elif option == "4":
-			print "Under construction!"
-		elif option == "0":
-			main()
+		if CIDR == "y":
+			breakrange = True
 		else:
-			print red("[!] Invalid option - Select from the menu")
-			reportingMenu()
-	except (KeyboardInterrupt):
-		main()
+			breakrange = False
+		verify.infile(infile, ips, breakrange)
+		verify.who(ips, out)
+		verify.outfile(out, outfile)
+	except Exception as e:
+		print(red("[!] Verification failed!"))
+		print(red("[!] Error: %s" % e))
 
-#Phishing menu options
-def phishingMenu():
-	try:
-		print green("""
-The Swamp-Viper phishing toolkit:
+@viper.command(name='knowing', short_help='Saturday Monring Cartoons are a thing I miss.')
 
-	1. Parse list of names into first and last (csv)
+def knowing():
+	print(red("G.") + "I." + blue(" Jooooe!"))
 
-	2. Randomize a list of targets
-
-	3. Run urlcrazy
-
-	4.
-
-	0. Return
-""")
-		option = raw_input("Select a tool: ")
-		# Parse a list of names to create a comma delimited version
-		if option == "1":
-			file = raw_input("Enter name of file with the names: ")
-			phish_tools.parseName(file)
-			phishingMenu()
-		# Randomize the list of targets
-		elif option == "2":
-			file = raw_input("Enter the location of file of targets: ")
-			output = raw_input("Enter a name for the output file (txt): ")
-			try:
-				print green ("[+] Attempting to read %s" % file)
-				with open (file, 'r') as file:
-					names = file.readlines()
-				with open(output, "w") as file:
-					temp = []
-					temp = phish_tools.randomList(names)
-					file.write(''.join(str(i) for i in temp))
-				print green("[+] Successfully created a random list of targets written to %s" % output)
-				phishingMenu()
-			except Exception as e:
-				print red("[!] Failed to open the file!")
-				print red("[!] Error: %s" % e)
-				phishingMenu()
-		# Run urlcrazy
-		elif option == "3":
-			target = raw_input("Enter the domain: ")
-			phish_tools.getURLs(target)
-		elif option == "4":
-			print "Under construction!"
-		elif option == "0":
-			main()
-		else:
-			print red("[!] Invalid option - Select from the menu")
-			phishingMenu()
-	except (KeyboardInterrupt):
-		main()
-
-# Network scanning options
-def scanMenu():
-	try:
-		print green("""
-Viper has shortcuts for many of the popular scanners. Select a scanner, provide a text file with IPs, and Viper will take care of the rest.
-You can run full nmap SYN scans, the same with common scripts, or Masscan with full ports.
-For custom Masscan scans, edit Viper's masscan.config file.
-		""")
-		print red("SYN scans require sudo! Start Viper with sudo if you want to use them.")
-		print green("""
-Select a scan to run:
-
-	1. Full port nmap SYN scan (-sS -T4 -p-)
-
-	2. Default 1000 port nmap SYN scan (-sS -T4)
-
-	3. Full port masscan (-p0-65535)
-
-	4. Masscan with conf file (-c)
-
-	0. Return
-		""")
-		option = raw_input("Select an option: ")
-		# nmap scan options
-		if option == "1":
-			try:
-				scanType = 1
-				scan_tools.runNMAP(scanType)
-				pentestMenu()
-			except Exception as e:
-				print red("[!] The namp scan failed! Remember to use sudo to start Viper.")
-				pentestMenu()
-		elif option == "2":
-			try:
-				scanType = 2
-				scan_tools.runNMAP(scanType)
-				pentestMenu()
-			except:
-				print red("[!] The namp scan failed! Remember to use sudo to start Viper.")
-				pentestMenu()
-		# masscan scan options
-		elif option == "3":
-			scanType = 1
-			scan_tools.runMasscan(1)
-			pentestMenu()
-		elif option == "4":
-			scanType = 2
-			scan_tools.runMasscan(2)
-			pentestMenu()
-		# Return to the pen test menu
-		elif option == "0":
-			pentestMenu()
-		else:
-			print red("[!] Invalid option - Select from the menu")
-			scanMenu()
-	except (KeyboardInterrupt):
-		main()
 
 if __name__ == "__main__":
-	main()
+	viper()
+
+
+
+		#The Pit-Viper penetration testing toolkit
+		#Some of these scans require running Viper with sudo!
+		#nmap stuff
+
+		#SSLLabs
+		#target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
+		#ssllabsscanner.getResults(target,testType)
+		#target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
+		#ssllabsscanner.getResults(target,testType)
+		# host = raw_input("Enter IP or hostname to check: ")
+		# scan_tools.checkSSL(host)
+
+		#Ninja-Viper reporting toolkit
+		# 			print(green("""
+		# Viper can join multiple .nessus files into one report.
+		#
+		# 	1. Place your files into the same directory.
+		# 	2. Provide the directory and the first .nessus file.
+		# 	3. Provide name for the final .nessus file and report title.
+		# 			""")
+		#
+		# 			dir = raw_input("Directory with Nessus files: ")
+		# 			#first = raw_input("First Nessus file: ")
+		# 			output = raw_input("Name for final Nessus file: ")
+		# 			name = raw_input("Name for final report: ")
+		# 			joinessus.joiner(dir,output,name)
+
+
+		#The Swamp-Viper phishing toolkit:
+		# file = raw_input("Enter name of file with the names: ")
+		# phish_tools.parseName(file)
+
+		# # Randomize the list of targets
+		# elif option == "2":
+		# 	file = raw_input("Enter the location of file of targets: ")
+		# 	output = raw_input("Enter a name for the output file (txt): ")
+		# 	try:
+		# 		print(green ("[+] Attempting to read %s" % file))
+		# 		with open (file, 'r') as file:
+		# 			names = file.readlines()
+		# 		with open(output, "w") as file:
+		# 			temp = []
+		# 			temp = phish_tools.randomList(names)
+		# 			file.write(''.join(str(i) for i in temp))
+		# 		print(green("[+] Successfully created a random list of targets written to %s" % output))
+		# 		phishingMenu()
+		# 	except Exception as e:
+		# 		print(red("[!] Failed to open the file!"))
+		# 		print(red("[!] Error: %s" % e))
+		# 		phishingMenu()

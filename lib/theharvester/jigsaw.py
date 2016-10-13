@@ -1,10 +1,8 @@
 import string
-import httplib
+import requests
 import sys
-import myparser
+from . import myparser
 import re
-                # http://www.jigsaw.com/SearchAcrossCompanies.xhtml?opCode=refresh&rpage=4&mode=0&cnCountry=&order=0&orderby=0&cmName=accuvant&cnDead=false&cnExOwned=false&count=0&screenNameType=0&screenName=&omitScreenNameType=0&omitScreenName=&companyId=0&estimatedCount=277&rowsPerPage=50
-
 
 class search_jigsaw:
 
@@ -20,20 +18,21 @@ class search_jigsaw:
         self.counter = 0
 
     def do_search(self):
-        h = httplib.HTTP(self.server)
-        h.putrequest(
-            'GET',
-            "/FreeTextSearch.xhtml?opCode=search&autoSuggested=True&freeText=" +
-            self.word)
-        h.putheader('User-agent', self.userAgent)
-        h.endheaders()
-        returncode, returnmsg, headers = h.getreply()
-        self.results = h.getfile().read()
-        self.totalresults += self.results
+        headers = { 'User-Agent' : self.userAgent }
+        try:
+            urly = "http://" + self.server + "/FreeTextSearch.xhtml?opCode=search&autoSuggested=True&freeText=" + self.word
+        except Exception as e:
+            print(e)
+        try:
+            r = requests.get(urly, headers=headers)
+        except Exception as e:
+            print(e)
+        self.results = r.content
+        self.totalresults += str(self.results)
 
     def check_next(self):
         renext = re.compile('>  Next  <')
-        nextres = renext.findall(self.results)
+        nextres = renext.findall(str(self.results))
         if nextres != []:
             nexty = "1"
         else:

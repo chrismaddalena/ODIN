@@ -1,7 +1,6 @@
 shodan
 python-whois
-BeautifulSoup
-pwnedcheck
+bs4
 python-nmap
 ansicolors
 timeout
@@ -10,3 +9,4 @@ cymon
 tweepy
 twitter
 ipwhois
+pyopenssl

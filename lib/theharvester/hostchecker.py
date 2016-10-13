@@ -7,7 +7,6 @@ Created by laramies on 2008-08-21.
 import sys
 import socket
 
-
 class Checker():
 
     def __init__(self, hosts):

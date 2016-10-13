@@ -6,9 +6,9 @@ import subprocess
 import shodan
 import whois
 from ipwhois import IPWhois
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 import requests
-from xml.etree import ElementTree as ET
+from xml.etree import ElementTree  as eT
 import time
 from colors import *
 import socket
@@ -32,38 +32,25 @@ try:
 except:
 	URLVOID_API_KEY = None
 
-# Number of commands
-total = 8 # Tests
-def collect(client,domain):
-	print green("Viper will now attempt to gather information from DNS records and other sources.")
+my_headers = {'User-agent' : '(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6'} # Google-friendly user-agent
+sleep = 10 # Sleep time for Google
 
-	client = client
-	domain = domain
-	my_headers = {'User-agent' : '(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6'} # Google-friendly user-agent
-	sleep = 10
+def collectDomainInfo(client,domain):
+	print(green("Viper will now attempt to gather information from DNS records and other sources."))
 
-	# Create directory for client reports and report
-	if not os.path.exists("reports/{}".format(client)):
-		try:
-			os.makedirs("reports/{}".format(client))
-		except Exception as e:
-			print red("[!] Could not create reports directory! Terminating and returning...")
-			print red("[!] Error: {}".format(e))
-			return
+	f = "reports/{}/Domain_Report.txt".format(client)
 
-	file = "reports/{}/Domain_Report.txt".format(client)
-
-	with open(file, 'w') as report:
+	with open(f, 'w') as report:
 		# Create the Domain Report
 		try:
 			report.write("### Domain Report for {} ###\n".format(domain))
-		except Exception as e:
-			print red("[!] Failed to create new report file!")
-			print red("[!] Error: {}".format(e))
+		except Exception  as e:
+			print(red("[!] Failed to create new report file!"))
+			print(red("[!] Error: {}".format(e)))
 
 		# Run whois
 		try:
-			print green("[+] Running whois (1/{})".format(total))
+			print(green("[+] Running whois"))
 			report.write("\n---WHOIS Results---\n")
 			who = whois.whois(domain)
 			report.write("Registrant: {}\n".format(who.name))
@@ -75,15 +62,15 @@ def collect(client,domain):
 				report.write("DNS: {}\n".format(server))
 			report.write("DNSSEC: {}\n".format(who.dnssec))
 			report.write("Status: {}\n".format(who.status))
-		except Exception as e:
+		except Exception  as e:
 			report.write("The whois lookup failed!\n")
-			print red("[!] Failed to collect whois informatio!.")
-			print red("[!] Error: {}".format(e))
+			print(red("[!] Failed to collect whois information!"))
+			print(red("[!] Error: {}".format(e)))
 
 		# Run RDAP lookup
 		# Special thanks to GRC_Ninja for reccomending this!
 		try:
-			print green("[+] Running RDAP lookup (2/{})".format(total))
+			print(green("[+] Running RDAP lookup"))
 			report.write("\n---RDAP LOOKUP Results---\n")
 			domainIP = socket.gethostbyname(domain)
 			rdapwho = IPWhois(domainIP)
@@ -122,16 +109,15 @@ def collect(client,domain):
 						address = results['objects'][item]['contact']['address']
 						if address is not None:
 							report.write("Address: {}\n\n".format(address[0]['value']))
-
-		except Exception as e:
+		except Exception  as e:
 			report.write("The RDAP lookup failed!")
-			print red("[!] The RDAP lookup failed!")
-			print red("[!] Error: {}".format(e))
+			print(red("[!] The RDAP lookup failed!"))
+			print(red("[!] Error: {}".format(e)))
 
 		# Check reputation with URLVoid
 		try:
 			if URLVOID_API_KEY is not None:
-				print green("[+] Checking reputation with URLVoid (3/{})".format(total))
+				print(green("[+] Checking reputation with URLVoid"))
 				report.write("\n---URLVOID Results---\n")
 				url = "http://api.urlvoid.com/api1000/{}/host/{}".format(URLVOID_API_KEY,domain)
 				response = requests.get(url)
@@ -145,9 +131,9 @@ def collect(client,domain):
 						detected = 0
 
 				if detected == 1:
-					print red("[+] URLVoid found malicious activity reported for this domain!")
+					print(red("[+] URLVoid found malicious activity reported for this domain!"))
 				else:
-					print green("[+] URLVoid found no malicious activity reported for this domain.")
+					print(green("[+] URLVoid found no malicious activity reported for this domain."))
 
 				repData = tree[0]
 				ipData = repData[11]
@@ -166,13 +152,19 @@ def collect(client,domain):
 				report.write("City: {}\n\n".format(ET.tostring(ipData[7], method='text').rstrip()))
 			else:
 				report.write("No URLVoid API key, so skipping test.")
-				print green("[-] No URLVoid API key, so skipping this test.")
+				print(green("[-] No URLVoid API key, so skipping this test."))
 				pass
-		except:
-			print red("[!] Could not load URLVoid for reputation check!")
+		except Exception  as e:
+			report.write("Could not load URLVoid for reputation check!")
+			print(red("[!] Could not load URLVoid for reputation check!"))
+			print(red("[!] Error: {}".format(e)))
 
+def dnsRecon(client,domain):
+	f = "reports/{}/DNS_Report.txt".format(client)
+
+	with open(f, 'w') as report:
 		# Run dnsrecon for several different lookups
-		print green("[+] Running dnsrecon (4/{})".format(total))
+		print(green("[+] Running dnsrecon"))
 		report.write("\n---DNSRECON Results---\n")
 		# Standard lookup for records
 		try:
@@ -180,7 +172,7 @@ def collect(client,domain):
 			result = subprocess.check_output(cmd,shell=True)
 			report.write(result)
 		except:
-			print red("[!] Execution of dnsrecon -t std failed!")
+			print(red("[!] Execution of dnsrecon -t std failed!"))
 			report.write("Execution of dnsrecon -t stdfailed!\n")
 		# Google for sub-domains
 		try:
@@ -188,7 +180,7 @@ def collect(client,domain):
 			result = subprocess.check_output(cmd,shell=True)
 			report.write(result)
 		except:
-			print red("[!] Execution of dnsrecon -t goo failed!")
+			print(red("[!] Execution of dnsrecon -t goo failed!"))
 			report.write("Execution of dnsrecon -t goo failed!\n")
 		# Zone Transfers
 		try:
@@ -196,7 +188,7 @@ def collect(client,domain):
 			result = subprocess.check_output(cmd,shell=True)
 			report.write(result)
 		except:
-			print red("[!] Execution of dnsrecon -t axfr failed!")
+			print(red("[!] Execution of dnsrecon -t axfr failed!"))
 			report.write("Execution of dnsrecon -t axfr failed!\n")
 		# Brute force sub-domains
 		try:
@@ -204,11 +196,11 @@ def collect(client,domain):
 			result = subprocess.check_output(cmd,shell=True)
 			report.write(result)
 		except:
-			print red("[!] Execution of dnsrecon -t brt failed!")
+			print(red("[!] Execution of dnsrecon -t brt failed!"))
 			report.write("Execution of dnsrecon -t brt failed!\n")
 
 		# Run firece
-		print green("[+] Running fierce (5/{})".format(total))
+		print(green("[+] Running fierce"))
 		report.write("\n---FIERCE Results---\n")
 		# The wordlist location is the default location for fierce's hosts.txt on Kali 2
 		try:
@@ -216,27 +208,31 @@ def collect(client,domain):
 			result = subprocess.check_output(cmd,shell=True)
 			report.write(result)
 		except:
-			print red("[!] Execution of fierce failed!")
+			print(red("[!] Execution of fierce failed!"))
 			report.write("Execution of fierce failed!\n")
 
+def shodanLookUp(client,domain):
+	f = "reports/{}/Shodan_Report.txt".format(client)
+
+	with open(f, 'w') as report:
 		# Perform Shodan searches
-		print green("[+] Checking Shodan (6/{})".format(total))
+		print(green("[+] Checking Shodan"))
 		if shoAPI is None:
-			print red("[!] No Shodan API key, so skipping Shodan searches")
+			print(red("[!] No Shodan API key, so skipping Shodan searches"))
 		else:
 			report.write("\n---SHODAN Results---\n")
 			# Use API key to search Shodan for client name and client domain
-			print green("[+] Performing Shodan search for {}".format(client))
+			print(green("[+] Performing Shodan search for {}".format(client)))
 			try:
 				clientResults = shoAPI.search(client)
-			except shodan.APIError, e:
-				print red("[!] Error: {}".format(e))
+			except shodan.APIError as e:
+				print(red("[!] Error: {}".format(e)))
 				report.write("Error: {}\n".format(e))
-			print green("[+] Performing Shodan search for {}".format(domain))
+			print(green("[+] Performing Shodan search for {}".format(domain)))
 			try:
 				domainResults = shoAPI.search(domain)
-			except shodan.APIError, e:
-				print red("[!] Error: {}".format(e))
+			except shodan.APIError as e:
+				print(red("[!] Error: {}".format(e)))
 				report.write("Error: {}\n".format(e))
 			try:
 				report.write("Client name results found: {}\n".format(clientResults['total']))
@@ -248,8 +244,8 @@ def collect(client,domain):
 						report.write("OS: {}\n".format(result['os']))
 						report.write("Port: {}\n".format(result['port']))
 						report.write("Data: {}\n".format(result['data']))
-			except Exception, e:
-				print red("[!] Error: {}".format(e))
+			except Exception as e:
+				print(red("[!] Error: {}".format(e)))
 				report.write("Error: {}\n".format(e))
 
 			try:
@@ -261,15 +257,19 @@ def collect(client,domain):
 						report.write("OS: {}\n".format(result['os']))
 						report.write("Port: {}\n".format(result['port']))
 						report.write("Data: {}\n".format(result['data']))
-			except Exception, e:
-				print red("[!] Error: {}".format(e))
-				report.write("Error: {}\n".format(e))
+			except Exception as e:
+				print(red("[!] Error: {}".format(e)))
+			report.write("Error: {}\n".format(e))
 
+def googleFu(client,domain):
+	f = "reports/{}/Gooogle_Report.txt".format(client)
+
+	with open(f, 'w') as report:
 		# Search for different login/logon/admin/administrator pages
 		report.write("\n--- GOOGLE HACKING LOGIN Results ---\n")
-		print green("[+] Beginning Google queries...")
-		print yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy.")
-		print green("[+] Checking Google for login pages (7/{})".format(total))
+		print(green("[+] Beginning Google queries..."))
+		print(yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy."))
+		print(green("[+] Checking Google for login pages"))
 		try:
 			# Login Logon Admin and administrator
 			# Edit setup/google_strings.txt to customize your search terms
@@ -299,13 +299,13 @@ def collect(client,domain):
 
 				# Take a break to avoid Google blocking our IP
 				time.sleep(sleep)
-		except Exception as e:
+		except Exception  as e:
 			print ("Error: {}".format(e))
-			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again later.")
+			print(red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again later."))
 			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: {}\n".format(url))
 
 		report.write("\n--- GOOGLE HACKING INDEX OF Results ---\n")
-		print green("[+] Checking Google for pages offering file indexes (8/{})".format(total))
+		print(green("[+] Checking Google for pages offering file indexes"))
 		try:
 			# Look for "index of"
 			for start in range(0,10):
@@ -328,7 +328,7 @@ def collect(client,domain):
 
 				# Take a break to avoid Google blocking our IP
 				time.sleep(sleep)
-		except Exception as e:
+		except Exception  as e:
 			print ("Error: {}".format(e))
-			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again.")
+			print(red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again."))
 			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: {}\n".format(url))

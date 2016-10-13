@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 import requests
 import time
 from colors import red, green, yellow
@@ -11,8 +11,8 @@ from colors import red, green, yellow
 total = 9 # Tests
 
 def discover(client,domain):
-	print green("""Viper will now perform  variety of Google searches to try to find publicly files. If this breaks, you might be blocked by Google with a CAPTCHA. They do that sometimes when their keywords are used.
-	""")
+	print(green("""Viper will now perform  variety of Google searches to try to find publicly files. If this breaks, you might be blocked by Google with a CAPTCHA. They do that sometimes when their keywords are used.
+	"""))
 	file = 'reports/%s/File_Report.txt' % client
 	client = client
 	domain = domain
@@ -23,15 +23,15 @@ def discover(client,domain):
 		try:
 			os.makedirs("reports/%s" % client)
 		except:
-			print "[!] Could not create reports directory!"
+			print("[!] Could not create reports directory!")
 
 	file = 'reports/%s/File_Report.txt' % client
 	with open(file,'w') as report:
 		# Create File Report in client folder
 		report.write("### File Discovery Report for %s ###\n" % domain)
 		# Use Google Hacking queries
-		print green("[+] Using Google to find documents")
-		print yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy.")
+		print(green("[+] Using Google to find documents"))
+		print(yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy."))
 		report.write("\n--- GOOGLE HACKING Results ---\n")
 		# Perform search and grab just the URLs for each result
 		# 'Start' is used here to allow for iterating through X pages
@@ -62,6 +62,6 @@ def discover(client,domain):
 				# Take a break to avoid Google blocking our IP
 				time.sleep(10)
 		except Exception as e:
-			print ("Error: %s" % e)
-			print red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again later.")
+			print("Error: %s" % e)
+			print(red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again later."))
 			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: %s \n" % url)

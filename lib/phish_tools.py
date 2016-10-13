@@ -9,7 +9,7 @@ def parseName(file):
 	outputFile = "ParsedNames.txt"
 	# Read all of the names line by line
 	with open(file,"r") as f:
-		print green("[+] Parsing names and outputting to %s" % outputFile)
+		print(green("[+] Parsing names and outputting to %s" % outputFile))
 		names = [line.rstrip('\n').split(" ") for line in f]
 		output = open(outputFile,"w")
 		for name in names:
@@ -19,7 +19,7 @@ def parseName(file):
 
 # Ingest a list of names/emails and return a randomized version
 def randomList(listA):
-	print green("[+] Creating a random list of targets...")
+	print(green("[+] Creating a random list of targets..."))
 	listB = []
 	for i in range(len(listA)):
 		element = random.choice(listA)
@@ -28,10 +28,10 @@ def randomList(listA):
 	return listB
 
 def getURLs(domain):
-	print green("[+] Running urlcrazy on %s" % domain)
+	print(green("[+] Running urlcrazy on %s" % domain))
 	try:
 		cmd = "urlcrazy %s -f csv | sed 1d | cut -d , -f 2-5" % domain
 		result = subprocess.check_output(cmd,shell=True)
-		print result
+		print(result)
 	except:
-		print red("[!] Execution of urlcrazy failed!")
+		print(red("[!] Execution of urlcrazy failed!"))

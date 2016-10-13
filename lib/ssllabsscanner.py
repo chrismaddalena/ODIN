@@ -22,7 +22,7 @@ def requestAPI(path, payload={}):
 	try:
 		response = requests.get(url, params=payload)
 	except requests.exception.RequestException as e:
-		print e
+		print(e)
 		sys.exit(1)
 
 	data = response.json()
@@ -55,10 +55,10 @@ def getResults(target,type):
 	# Create scanner based on type - new or cached results
 	if testType == 1:
 		data = newScan(target)
-		print green("[+] Running a new SSL Labs scan - this will take some time...")
+		print(green("[+] Running a new SSL Labs scan - this will take some time..."))
 	if testType == 2:
 		data = resultsFromCache(target)
-		print green("[+] Getting results from SSL Labs's cache (if there is a cached test)...")
+		print(green("[+] Getting results from SSL Labs's cache (if there is a cached test)..."))
 	# Sorting through the LOADS of information returned by the scanner
 	# We need individual try/excepts in case one piece of information is unavailable for some reason
 	# This avoids the whole thing failing because of one litte variable
@@ -66,96 +66,96 @@ def getResults(target,type):
 
 	# Server name
 	try:
-		print green("Server Name: %s" % data['endpoints'][0]['serverName'])
+		print(green("Server Name: %s" % data['endpoints'][0]['serverName']))
 	except:
-		print red("Server Name: Unavailable")
+		print(red("Server Name: Unavailable"))
 
 	# IP Address
 	try:
-		print green("IP Address: %s" % data['endpoints'][0]['ipAddress'])
+		print(green("IP Address: %s" % data['endpoints'][0]['ipAddress']))
 	except:
-		print red("[!] IP Address: Unavailable!")
+		print(red("[!] IP Address: Unavailable!"))
 
 	# SSL Labs Grades
 	try:
-		print green("Grade: %s" % data['endpoints'][0]['grade'])
+		print(green("Grade: %s" % data['endpoints'][0]['grade']))
 	except Exception as e:
-		print red("Grade: Unavailable")
+		print(red("Grade: Unavailable"))
 	try:
-		print green("SGrade: %s" % data['endpoints'][0]['gradeTrustIgnored'])
+		print(green("SGrade: %s" % data['endpoints'][0]['gradeTrustIgnored']))
 	except:
-		print red("SGrade: Unavailable")
+		print(red("SGrade: Unavailable"))
 
 	# CRIME
 	try:
 		crime = "No"
 		if data['endpoints'][0]['details']['compressionMethods']!= 0 and result['endpoints'][0]['details']['supportsNpn'] == False:
 			crime ="Yes"
-			print green("CRIME: %s" % crime)
+			print(green("CRIME: %s" % crime))
 		else:
-			print green("CRIME: %s" % crime)
+			print(green("CRIME: %s" % crime))
 	except:
-		print red("CRIME: Status unavailable")
+		print(red("CRIME: Status unavailable"))
 
 	# FREAK
 	try:
-		print green("FREAK: %s" % data['endpoints'][0]['details']['freak'])
+		print(green("FREAK: %s" % data['endpoints'][0]['details']['freak']))
 	except:
-		print red("FREAK: Status unavailable")
+		print(red("FREAK: Status unavailable"))
 
 	# POODLE SSL
 	try:
 		poodleSSL = "No"
 		if data['endpoints'][0]['details']['poodle'] == True:
 			poodleSSL = "Yes"
-		print green("POODLE SSL: %s" % poodleSSL)
+		print(green("POODLE SSL: %s" % poodleSSL))
 		poodleTLS = data['endpoints'][0]['details']['poodleTls']
 		if poodleTLS == 1:
-			print green("POODLE TLS: No")
+			print(green("POODLE TLS: No"))
 		if poodleTLS == 2:
-			print green("POODLE TLS: Yes")
+			print(green("POODLE TLS: Yes"))
 	except:
-		print red("POODLE SSL: Status unavailable")
+		print(red("POODLE SSL: Status unavailable"))
 
 	# POODLE TLS
 	try:
 		poodleTLS = data['endpoints'][0]['details']['poodleTls']
 		if poodleTLS == 2:
-			print green("POODLE TLS: Yes")
+			print(green("POODLE TLS: Yes"))
 		elif poodleTLS == 1:
-			print green("POODLE TLS: No")
+			print(green("POODLE TLS: No"))
 		else:
-			print green("POODLE TLS: Failed check")
+			print(green("POODLE TLS: Failed check"))
 	except:
-		print red("POODLE TLS: Status unavailable")
+		print(red("POODLE TLS: Status unavailable"))
 
 	# Heartbleed
 	try:
-		print green("Heartbleed: %s" % data['endpoints'][0]['details']['heartbleed'])
+		print(green("Heartbleed: %s" % data['endpoints'][0]['details']['heartbleed']))
 	except:
-		print red("Heartbleed: Status unavailable")
+		print(red("Heartbleed: Status unavailable"))
 
 	# Renegotiation Support
 	try:
 		reneg = data['endpoints'][0]['details']['renegSupport']
 		if reneg != 0:
-			print green("Renegotiation: Yes")
+			print(green("Renegotiation: Yes"))
 		else:
-			print green("Renegotiation: No")
+			print(green("Renegotiation: No"))
 	except:
-		print red("Renegotiation: Status unavailable")
+		print(red("Renegotiation: Status unavailable"))
 
 	# OpenSSL CCS Injection
 	try:
 		ccs = data['endpoints'][0]['details']['openSslCcs']
 		if ccs == 1:
-			print green("OpenSSL CCS Injection: No")
+			print(green("OpenSSL CCS Injection: No"))
 		elif ccs == 3:
-			print green("OpenSSL CCS Injection: Yes")
+			print(green("OpenSSL CCS Injection: Yes"))
 		else:
-			print green("OpenSSL CCS Injection: No")
+			print(green("OpenSSL CCS Injection: No"))
 	except:
-		print red("OpenSSL CCS Injection: Status unavailable")
+		print(red("OpenSSL CCS Injection: Status unavailable"))
 
 	# DHE suites
 	try:
@@ -166,13 +166,13 @@ def getResults(target,type):
 					try:
 						if suite['q'] == 0:
 							dhe = "Yes"
-							print green("Possible Insecure DHE: %s" % suite['name'])
+							print(green("Possible Insecure DHE: %s" % suite['name']))
 					except:
-						print green("Secure Suite: %s" % suite['name'])
+						print(green("Secure Suite: %s" % suite['name']))
 			except:
-					print red("DHE Suites: DHE suite information unavailable")
+					print(red("DHE Suites: DHE suite information unavailable"))
 	except:
-		print red("DHE Suites: DHE suite information unavailable")
+		print(red("DHE Suites: DHE suite information unavailable"))
 
 	# SSL versions
 	ssl2 = "No"
@@ -183,10 +183,10 @@ def getResults(target,type):
 				ssl2 = "Yes"
 			if "SSL" in proto['name'] and proto['version'] == "3.0":
 				ssl3 = "Yes"
-		print green("SSLv2: %s" % ssl2)
-		print green("SSLv3: %s" % ssl3)
+		print(green("SSLv2: %s" % ssl2))
+		print(green("SSLv3: %s" % ssl3))
 	except:
-		print red("SSLv2/3: SSL version support information unavailable")
+		print(red("SSLv2/3: SSL version support information unavailable"))
 
 	# RC4
 	try:
@@ -195,6 +195,6 @@ def getResults(target,type):
 				rc4 ="Yes"
 			else:
 				rc4 = "No"
-			print green("RC4: %s" % rc4)
+			print(green("RC4: %s" % rc4))
 	except:
-		print red("RC4: Status unavailable")
+		print(red("RC4: Status unavailable"))

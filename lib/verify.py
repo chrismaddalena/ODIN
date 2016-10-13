@@ -11,8 +11,7 @@ from socket import socket
 import OpenSSL
 import ssl
 import csv
-from timeout import timeout
-import thread
+import _thread
 
 def upprogress(progress):
 
@@ -66,7 +65,6 @@ def infile(ifile, ips, breakrange):
         else:
             ips.append(i.rstrip())
 
-@timeout(3)
 def reverse(z):
     """Get reverse dns entry..GO DNS!"""
     # Check if the ip is a CIDR value because we can't navigate to a CIDR val, silly.
@@ -80,11 +78,9 @@ def reverse(z):
             # Try and get the hostname via sockets :D
             chk = socket.gethostbyaddr(ip)
             return chk[0]
-        except Exception, e:
+        except Exception as e:
             return None
 
-
-@timeout(5)
 def getcert(a):
     """Get SSL Cert CN"""
     # Return None becasue we can't navigate to a CIDR for ssl.
@@ -95,7 +91,7 @@ def getcert(a):
     try:
         # Connect over port 443.
         cert = ssl.get_server_certificate((a, 443))
-    except Exception, e:
+    except Exception as e:
         # If it can't connect, return nothing/fail
         return None
     try:
@@ -110,7 +106,7 @@ def getcert(a):
                 continue
             else:
                 return None
-    except Exception,e:
+    except Exception as e:
         # if openssl fails to get information, return nothing/fail
         return None
 
