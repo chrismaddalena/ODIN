@@ -7,7 +7,7 @@
  :::  === ::: :::  === :::      :::  ===
  ===  === === =======  ======   =======
   ======  === ===      ===      === ===
-    ==    === ===      ======== ===  ===
+	==    === ===      ======== ===  ===
 
 Developer: Chris Maddalena
 """
@@ -60,17 +60,18 @@ def viper():
 	# Everything starts here
 	pass
 
-@viper.command(name='osint', short_help='The full OSINT suite of tools will be run (see below).')
-@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for Shodan.')
-@click.option('-e', '--email', help='The email domain, such as example.com. Do not include @.')
-@click.option('-sF', '--scoping-file', type=click.Path(exists=True, readable=True, resolve_path=True))
+
+@viper.command(name='osint', short_help='The full OSINT suite of tools will be run (domain, people, Shodan).')
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for Shodan.', required=True)
+@click.option('-d', '--domain', help='The email domain, such as example.com. Do not include @.', required=True)
+@click.option('-sF', '--scope-file', type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.option('-s', '--scoped-ips', help='Scoped IP addresses. Can be used instead of a scoping file.', multiple=True)
 @click.option('--dns/--no-dns', default=False, help='Set option if you do or do not want to brute force DNS. Defaults to no DNS.')
 @click.option('--google/--no-google', default=False, help='Set option if you do or do not want to Google for index pages and admin pages for the domain. Defaults to no Google.')
 @click.option('--files/--no-files', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
 @click.pass_context
 
-def osint(self,client,email,dns,google,files,scoping_file,scoped_ips):
+def osint(self,client,domain,dns,google,files,scope_file,scoped_ips):
 	"""
 	The Shadow-Viper intelligence gathering toolkit:\n
 	This module runs all OSINT modules together. Viper uses TheHarvester to locate email addresses and social media profiles.
@@ -78,42 +79,62 @@ def osint(self,client,email,dns,google,files,scoping_file,scoped_ips):
 	Viper uses various tools and APIs are used to collect domain/IP information on the provided IP addresses and/or domains.\n
 	Several API keys are required for all of the look-ups: Twitter, URLVoid, Cymon, and Shodan
 	"""
-	print(client)
-	print(email)
-	client = client[0]
-	email = email[0]
-	#scoping_file = scoping_file[0]
 
 	asciis.printArt()
 	print(green("[+] OSINT Module Selected: Viper will run all recon modules."))
 	setupReports(client)
+	f = "reports/{}/Domain_Report.txt".format(client)
+	report = open(f, 'w')
 
-	#email_tools.harvest(client,email)
-	#domain_tools.collectDomainInfo(client,email)
-	#domain_tools.shodanLookUp(client,email)
+	email_tools.harvest(client,domain)
+
+	try:
+		report.write("### Domain Report for {} ###\n".format(client))
+	except Exception  as e:
+		print(red("[!] Failed to create new report file!"))
+		print(red("[!] Error: {}".format(e)))
+
+	if scope_file:
+		scope = domain_tools.genScope(scope_file)
+		for i in scope:
+			domain_tools.collectDomainInfo(i,report)
+			domain_tools.shodanLookUp(i,report)
+	else:
+		domain_tools.collectDomainInfo(domain,report)
+		domain_tools.shodanSearch(domain,report)
 
 	if dns is True:
 		print(green("[+] DNS recon was selected: Viper will brute force DNS with Fierce and DNSRecon."))
-		domain_tools.dnsRecon()
+		if scope_file:
+			for ip in scope:
+				if not domain_tools.isip(ip):
+					domain_tools.dnsRecon(ip,client)
+		else:
+			domain_tools.dnsRecon(domain,client)
 	else:
 		print(yellow("[+] DNS recon was NOT selected: Viper skipped DNS brute forcing."))
+
 	if files is True:
 		print(green("[+] File discovery was selected: Viper will perform Google searches to find files for the provided domain."))
-		file_discovery.discover(client,email)
+		file_discovery.discover(client,domain)
 	else:
 		print(yellow("[+] File discovery was NOT selected: Viper skipped Googling for files."))
+
 	if google is True:
 		print(green("[+] Google discovery was selected: Viper will perform Google searches to find admin and index pages."))
-		domain_tools.googleFu(client,email)
+		domain_tools.googleFu(client,domain)
 	else:
 		print(yellow("[+] Google discovery was NOT selected: Viper skipped Googling for admin and index pages."))
 
+	report.close()
+
+
 @viper.command(name='people',
 	short_help='Only email addresses and social media profile recon (email, Twitter, and LinkedIn). Provide an email @domain.')
-@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for naming reports.')
-@click.option('-e', '--email', help='The email domain, such as example.com. Do not include @.')
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for naming reports.', required=True)
+@click.option('-d', '--domain', help='The email domain, such as example.com. Do not include @.', required=True)
 
-def people(client,email):
+def people(client,domain):
 	"""
 	This module uses TheHarvester to locate email addresses and social media profiles. Profiles are cross-referenced with
 	HaveIBeenPwned, Twitter's API, and LinkedIn.\n
@@ -124,46 +145,102 @@ def people(client,email):
 	print(green("[+] People Module Selected: Viper will run only modules for email addresses and social media."))
 	setupReports(client)
 
-	email_tools.harvest(client,email)
+	email_tools.harvest(client,domain)
+
 
 @viper.command(name='domain', short_help='Only domain-related recon will be performed (DNS, Shodan, rep data). Provide a list of IPs and domains.')
-@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for Shodan.')
-@click.option('-e', '--email', help='The email domain, such as example.com. Do not include @.')
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for Shodan.', required=True)
+@click.option('-d', '--domain', help='The email domain, such as example.com. Do not include @.', required=True)
+@click.option('-sF', '--scope-file', type=click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-s', '--scoped-ips', help='Scoped IP addresses. Can be used instead of a scoping file.', multiple=True)
 @click.option('--dns/--no-dns', default=False, help='Set option if you do or do not want to brute force DNS. Defaults to no DNS.')
-@click.option('--google/--no-google', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
+@click.option('--google/--no-google', default=False, help='Set option if you do or do not want to Google for index pages and admin pages for the domain. Defaults to no Google.')
+@click.option('--files/--no-files', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
 
-def domain(client,email):
+def domain(self,client,domain,dns,google,files,scope_file,scoped_ips):
 	"""
 	This module uses various tools and APIs to collect information on the provided IP addresses and/or domains.\n
 	Several API keys are required for all of the look-ups: URLVoid, Cymon, and Shodan
 	"""
 
 	asciis.printArt()
-	print(green("[+] Domain Module Selected: Viper will run only modules for the provided domains and IPs."))
+	print(green("[+] Domain Module Selected: Viper will run only domain and IP-related modules."))
 	setupReports(client)
+	f = "reports/{}/Domain_Report.txt".format(client)
+	report = open(f, 'w')
 
-	domain_tools.collect(client,email)
+	try:
+		report.write("### Domain Report for {} ###\n".format(client))
+	except Exception  as e:
+		print(red("[!] Failed to create new report file!"))
+		print(red("[!] Error: {}".format(e)))
+
+	if scope_file:
+		scope = domain_tools.genScope(scope_file)
+		for i in scope:
+			domain_tools.collectDomainInfo(i,report)
+			domain_tools.shodanLookUp(i,report)
+	else:
+		domain_tools.collectDomainInfo(domain,report)
+		domain_tools.shodanSearch(domain,report)
+
 	if dns is True:
 		print(green("[+] DNS recon was selected: Viper will brute force DNS with Fierce and DNSRecon."))
-		domain_tools.dnsRecon()
-	if google is True:
+		if scope_file:
+			for ip in scope:
+				if not domain_tools.isip(ip):
+					domain_tools.dnsRecon(ip,client)
+		else:
+			domain_tools.dnsRecon(domain,client)
+	else:
+		print(yellow("[+] DNS recon was NOT selected: Viper skipped DNS brute forcing."))
+
+	if files is True:
 		print(green("[+] File discovery was selected: Viper will perform Google searches to find files for the provided domain."))
-		file_discovery.discover(client,email)
+		file_discovery.discover(client,domain)
+	else:
+		print(yellow("[+] File discovery was NOT selected: Viper skipped Googling for files."))
+
+	if google is True:
+		print(green("[+] Google discovery was selected: Viper will perform Google searches to find admin and index pages."))
+		domain_tools.googleFu(client,domain)
+	else:
+		print(yellow("[+] Google discovery was NOT selected: Viper skipped Googling for admin and index pages."))
+
+	report.close()
+
 
 @viper.command(name='shodan', short_help='Look-up IPs and domains on Shodan using the Shodan API and your API key.')
-@click.option('-iF', '--infile', help='Name fo the file with your IP addresses.',type = click.Path(exists=True, readable=True, resolve_path=True))
-@click.option('-oF', '--outfile', help='Name of the output file for the information.')
+@click.option('-sF', '--scope-file', help='Name fo the file with your IP addresses.', type = click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-s', '--scope-ips', help='Scoped IP addresses. Can be used instead of a scoping file.', multiple=True)
+@click.option('-o', '--output', default='Shodan_Report.txt', help='Name of the output file for the information.')
 
-def shodan(infile, outfile):
+def shodan(scope_file,scope_ips,output):
 	"""
 	The Range-Viper network data toolkit:\n
 	Look-up information on IP addresses using Shodan's API and your API key.\n
 	You must have a Shodan API key!
 	"""
+
+	report = open(output, 'w')
+
 	asciis.printArt()
-	setupReports(client)
-	scan_tools.shodanIPSearch(infile)
-	scan_tools.searchCymon(infile,outfile)
+	print(green("[+] Shodan Module Selected: Viper will check Shodan for the provided domains and IPs."))
+	if scope_ips == () and scope_file is None:
+		print(red("[!] No targets provided! Use -s or -sF"))
+	if scope_file:
+		scope = domain_tools.genScope(scope_file)
+		for i in scope:
+			report.write("---SHODAN RESULTS for {}---\n".format(i))
+			domain_tools.shodanSearch(i,report)
+
+	if scope_ips:
+		for ip in scope_ips:
+			report.write("---SHODAN RESULTS for {}---\n".format(ip))
+			domain_tools.shodanSearch(ip,report)
+
+	report.close()
+
 
 @viper.command(name='scan', short_help='Scan IPs and domains using nmap or MassScan - This is noisy!')
 @click.option('-iF', '--infile', help='Name fo the file with your IP addresses.',type = click.Path(exists=True, readable=True, resolve_path=True))
@@ -226,7 +303,7 @@ Please provide a list of IPs in a text file and Viper will output a CSV of resul
 		print(red("[!] Verification failed!"))
 		print(red("[!] Error: %s" % e))
 
-@viper.command(name='knowing', short_help='Saturday Monring Cartoons are a thing I miss.')
+@viper.command(name='knowing', short_help='Saturday Morning Cartoons are a thing I miss.')
 
 def knowing():
 	print(red("G.") + "I." + blue(" Jooooe!"))

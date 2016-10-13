@@ -47,37 +47,35 @@ def harvest(client,domain):
 Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. (Thanks, Troy Hunt!) This may take a few minutes.
 	"""))
 
-	client = client
-	domain = domain
 	harvestLimit = 100
 	harvestStart = 0
 
-	file = "reports/{}/Email_Report.txt".format(client)
+	f = "reports/{}/Email_Report.txt".format(client)
 
 	print(green("[+] Running The Harvester"))
 	# Search trhough most of Harvester's supported engines
 	# No Baidu because it always seems to hang or take way too long
-	print("[-] Harvesting Google")
+	print(green("[-] Harvesting Google"))
 	search = googlesearch.search_google(domain,harvestLimit,harvestStart)
 	search.process()
 	googleHarvest = search.get_emails()
-	print("[-] Harvesting LinkedIn")
+	print(green("[-] Harvesting LinkedIn"))
 	search = linkedinsearch.search_linkedin(domain,harvestLimit)
 	search.process()
 	linkHarvest = search.get_people()
-	print("[-] Harvesting Twitter")
+	print(green("[-] Harvesting Twitter"))
 	search = twittersearch.search_twitter(domain,harvestLimit)
 	search.process()
 	twitHarvest = search.get_people()
-	print("[-] Harvesting Yahoo")
+	print(green("[-] Harvesting Yahoo"))
 	search = yahoosearch.search_yahoo(domain,harvestLimit)
 	search.process()
 	yahooHarvest = search.get_emails()
-	print("[-] Harvesting Bing")
+	print(green("[-] Harvesting Bing"))
 	search = bingsearch.search_bing(domain,harvestLimit,harvestStart)
 	search.process('no')
 	bingHarvest = search.get_emails()
-	print("[-] Harvesting Jigsaw")
+	print(green("[-] Harvesting Jigsaw"))
 	search = jigsaw.search_jigsaw(domain,harvestLimit)
 	search.process()
 	jigsawHarvest = search.get_people()
@@ -106,7 +104,7 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 
 	print(green("[+] Harvester found a total of {} emails and {} names across all engines".format(len(uniqueEmails),len(uniquePeople) + len(uniqueTwitter))))
 	print(green("[+] Running emails through HaveIBeenPwned and writing report"))
-	with open(file, 'w') as report:
+	with open(f, 'w') as report:
 		report.write("### Email & People Report for {} ###\n\n".format(domain))
 		report.write("---THEHARVESTER Results---\n")
 		report.write("Emails checked with HaveIBeenPwned for breaches and pastes:\n\n")
@@ -140,7 +138,7 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 					report.write("Pastes: {}\n".format(source))
 				except:
 					pass
-				time.sleep(2)
+				time.sleep(3)
 
 		report.write("\n---PEOPLE Results---\n")
 		report.write("Names and social media accounts (Twitter and LinkedIn):\n\n")

@@ -66,31 +66,7 @@ def searchCymon(infile,outfile):
 				print(green("[+] Cymon searches completed and report has been written to %s" % outfile))
 	except:
 		print(red("[!] Could not open %s" % infile))
-
-# Shodan - Find what Shodan knows about your list of IPs
-def shodanIPSearch(infile):
-	print(green("[+] Checking Shodan"))
-	api = shodan.Shodan(SHODAN_API_KEY)
-	# Use API key to search Shodan for each IP
-	with open(infile, 'r') as list:
-		for ip in list:
-			print(green("[+] Performing Shodan search for %s" % ip))
-			try:
-				host = shoAPI.host(ip)
-				print("""
-					IP: %s
-					Organization: %s
-					OS: %s
-				""" % (host['ip_str'], host.get('org', 'n/a'), host.get('os','n/a'))
-)
-				for item in host['data']:
-					print("""
-						Port: %s
-						Banner: %s
-					""" % (item['port'], item['data']))
-
-			except shodan.APIError as e:
-				print(red("[!] Error: %s\n" % e))
+		
 
 # NMAP scans - it accepts the type of scan from pentestMenu()
 def runNMAP(type):
