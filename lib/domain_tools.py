@@ -106,7 +106,7 @@ def genScope(scope_file):
 	return scope
 
 
-def collectDomainInfo(domain,report):
+def collectDomainInfo(domain,report,verbose):
 	# Run whois
 	try:
 		report.write("\n---Info for {}---\n".format(domain))
@@ -118,13 +118,14 @@ def collectDomainInfo(domain,report):
 			who = whois.whois(domain)
 			report.write("Registrant: {}\n".format(who.name))
 			report.write("Organization: {}\n".format(who.org))
-			for email in who.emails:
-				report.write("Email: {}\n".format(email))
-			report.write("Address: {}, {}{}, {}, {}\n".format(who.address,who.city,who.zipcode,who.state,who.country))
-			for server in who.name_servers:
-				report.write("DNS: {}\n".format(server))
-			report.write("DNSSEC: {}\n".format(who.dnssec))
-			report.write("Status: {}\n".format(who.status))
+			if verbose:
+				for email in who.emails:
+					report.write("Email: {}\n".format(email))
+				report.write("Address: {}, {}{}, {}, {}\n".format(who.address,who.city,who.zipcode,who.state,who.country))
+				for server in who.name_servers:
+					report.write("DNS: {}\n".format(server))
+				report.write("DNSSEC: {}\n".format(who.dnssec))
+				report.write("Status: {}\n".format(who.status))
 			domain = socket.gethostbyname(domain)
 			report.write("Domain IP (see RDAP below): {}\n\n".format(domain))
 			print(green("[+] IP is {} - using this for RDAP.".format(domain)))
@@ -132,13 +133,14 @@ def collectDomainInfo(domain,report):
 		who = whois.whois(domain)
 		report.write("Registrant: {}\n".format(who.name))
 		report.write("Organization: {}\n".format(who.org))
-		for email in who.emails:
-			report.write("Email: {}\n".format(email))
-		report.write("Address: {}, {}{}, {}, {}\n".format(who.address,who.city,who.zipcode,who.state,who.country))
-		for server in who.name_servers:
-			report.write("DNS: {}\n".format(server))
-		report.write("DNSSEC: {}\n".format(who.dnssec))
-		report.write("Status: {}\n".format(who.status))
+		if verbose:
+			for email in who.emails:
+				report.write("Email: {}\n".format(email))
+			report.write("Address: {}, {}{}, {}, {}\n".format(who.address,who.city,who.zipcode,who.state,who.country))
+			for server in who.name_servers:
+				report.write("DNS: {}\n".format(server))
+			report.write("DNSSEC: {}\n".format(who.dnssec))
+			report.write("Status: {}\n".format(who.status))
 	except Exception  as e:
 		report.write("The whois lookup failed for {}!\n\n".format(domain))
 		print(red("[!] Failed to collect whois information for {}!").format(domain))
@@ -156,34 +158,34 @@ def collectDomainInfo(domain,report):
 		report.write("ASN Country Code: {}\n".format(asn_country_code))
 		network_cidr = results['network']['cidr']
 		report.write("Network CIDR: {}\n\n".format(network_cidr))
+		if verbose:
+			for object_key, object_dict in results['objects'].items():
+				handle = str(object_key)
+				if results['objects'] is not None:
+					for item in results['objects']:
+						name = results['objects'][item]['contact']['name']
+						if name is not None:
+							report.write("Name: {}\n".format(name))
 
-		for object_key, object_dict in results['objects'].items():
-			handle = str(object_key)
-			if results['objects'] is not None:
-				for item in results['objects']:
-					name = results['objects'][item]['contact']['name']
-					if name is not None:
-						report.write("Name: {}\n".format(name))
+						title = results['objects'][item]['contact']['title']
+						if title is not None:
+							report.write("Title: {}\n".format(title))
 
-					title = results['objects'][item]['contact']['title']
-					if title is not None:
-						report.write("Title: {}\n".format(title))
+						role = results['objects'][item]['contact']['role']
+						if role is not None:
+							report.write("Role: {}\n".format(role))
 
-					role = results['objects'][item]['contact']['role']
-					if role is not None:
-						report.write("Role: {}\n".format(role))
+						email = results['objects'][item]['contact']['email']
+						if email is not None:
+							report.write("Email: {}\n".format(email[0]['value']))
 
-					email = results['objects'][item]['contact']['email']
-					if email is not None:
-						report.write("Email: {}\n".format(email[0]['value']))
+						phone = results['objects'][item]['contact']['phone']
+						if phone is not None:
+							report.write("Phone: {}\n".format(phone[0]['value']))
 
-					phone = results['objects'][item]['contact']['phone']
-					if phone is not None:
-						report.write("Phone: {}\n".format(phone[0]['value']))
-
-					address = results['objects'][item]['contact']['address']
-					if address is not None:
-						report.write("Address: {}\n\n".format(address[0]['value']))
+						address = results['objects'][item]['contact']['address']
+						if address is not None:
+							report.write("Address: {}\n\n".format(address[0]['value']))
 	except Exception  as e:
 		report.write("The RDAP lookup failed for {}!\n\n".format(domain))
 		print(red("[!] Failed to collect RDAP information for {}!").format(domain))

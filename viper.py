@@ -62,16 +62,17 @@ def viper():
 
 
 @viper.command(name='osint', short_help='The full OSINT suite of tools will be run (domain, people, Shodan).')
-@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for Shodan.', required=True)
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used for report titles.', required=True)
 @click.option('-d', '--domain', help='The email domain, such as example.com. Do not include @.', required=True)
 @click.option('-sF', '--scope-file', type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.option('-s', '--scoped-ips', help='Scoped IP addresses. Can be used instead of a scoping file.', multiple=True)
 @click.option('--dns/--no-dns', default=False, help='Set option if you do or do not want to brute force DNS. Defaults to no DNS.')
 @click.option('--google/--no-google', default=False, help='Set option if you do or do not want to Google for index pages and admin pages for the domain. Defaults to no Google.')
 @click.option('--files/--no-files', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
+@click.option('-v', '--verbose', is_flag=True, help='With verbose enabled, more domain information is collected.')
 @click.pass_context
 
-def osint(self,client,domain,dns,google,files,scope_file,scoped_ips):
+def osint(self,client,domain,dns,google,files,scope_file,scoped_ips,verbose):
 	"""
 	The Shadow-Viper intelligence gathering toolkit:\n
 	This module runs all OSINT modules together. Viper uses TheHarvester to locate email addresses and social media profiles.
@@ -97,10 +98,10 @@ def osint(self,client,domain,dns,google,files,scope_file,scoped_ips):
 	if scope_file:
 		scope = domain_tools.genScope(scope_file)
 		for i in scope:
-			domain_tools.collectDomainInfo(i,report)
+			domain_tools.collectDomainInfo(i,report,verbose)
 			domain_tools.shodanLookUp(i,report)
 	else:
-		domain_tools.collectDomainInfo(domain,report)
+		domain_tools.collectDomainInfo(domain,report,verbose)
 		domain_tools.shodanSearch(domain,report)
 
 	if dns is True:
@@ -156,8 +157,9 @@ def people(client,domain):
 @click.option('--dns/--no-dns', default=False, help='Set option if you do or do not want to brute force DNS. Defaults to no DNS.')
 @click.option('--google/--no-google', default=False, help='Set option if you do or do not want to Google for index pages and admin pages for the domain. Defaults to no Google.')
 @click.option('--files/--no-files', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
+@click.option('-v', '--verbose', is_flag=True, help='With verbose enabled, more domain information is collected.')
 
-def domain(self,client,domain,dns,google,files,scope_file,scoped_ips):
+def domain(self,client,domain,dns,google,files,scope_file,scoped_ips,verbose):
 	"""
 	This module uses various tools and APIs to collect information on the provided IP addresses and/or domains.\n
 	Several API keys are required for all of the look-ups: URLVoid, Cymon, and Shodan
@@ -178,10 +180,10 @@ def domain(self,client,domain,dns,google,files,scope_file,scoped_ips):
 	if scope_file:
 		scope = domain_tools.genScope(scope_file)
 		for i in scope:
-			domain_tools.collectDomainInfo(i,report)
+			domain_tools.collectDomainInfo(i,report,verbose)
 			domain_tools.shodanLookUp(i,report)
 	else:
-		domain_tools.collectDomainInfo(domain,report)
+		domain_tools.collectDomainInfo(domain,report,verbose)
 		domain_tools.shodanSearch(domain,report)
 
 	if dns is True:
