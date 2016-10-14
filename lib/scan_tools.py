@@ -5,125 +5,64 @@ import os
 import sys
 import socket
 import nmap
-import time
 import OpenSSL
 import ssl
-import shodan
-import requests
-from cymon import Cymon
+import time
 from colors import *
 
-# Try to get the user's API keys
-try:
-	shodan_key_file = open('auth/shodankey.txt', 'r')
-	shodan_key_line = shodan_key_file.readlines()
-	SHODAN_API_KEY = shodan_key_line[1].rstrip()
-	shoAPI = shodan.Shodan(SHODAN_API_KEY)
-	shodan_key_file.close()
-except:
-	shoAPI = None
-
-try:
-	cymon_key_file = open('auth/cymonkey.txt', 'r')
-	cymon_key_line = cymon_key_file.readlines()
-	CYMON_API_KEY = cymon_key_line[1].rstrip()
-	cyAPI = Cymon(CYMON_API_KEY)
-	cymon_key_file.close()
-except:
-	CYMON_API_KEY = None
-
-headers = ""
-
-# Cymon - Provides URLs associated with an IP
-def searchCymon(infile,outfile):
-	print(green("[+] Checking Cymon for domains associated with the provided list of IPs"))
-	try:
-		with open(outfile, 'w') as report:
-			with open(infile, 'r') as list:
-				for ip in list:
-					try:
-						# Search for domains tied to the IP
-						data = cyAPI.ip_domains(ip.rstrip())
-						results = data['results']
-						report.write("\n--- The following data is for IP: %s ---\n" % ip.rstrip())
-						report.write("DOMAIN search results:\n")
-						for result in results:
-							report.write("\nURL: %s\n" % result['name'])
-							report.write("Created: %s\n" % result['created'])
-							report.write("Updated: %s\n" % result['updated'])
-						# Search for security events for the IP
-						data = cyAPI.ip_events(ip.rstrip())
-						results = data['results']
-						report.write("\nEVENT results:\n")
-						for result in results:
-							report.write("\nTitle: %s\n" % result['title'])
-							report.write("Description: %s\n" % result['description'])
-							report.write("Created: %s\n" % result['created'])
-							report.write("Updated: %s\n" % result['updated'])
-							report.write("Details: %s\n" % result['details_url'])
-					except:
-						print(red("[!] Could not load Cymon.io! Check your connection to Cymon."))
-				print(green("[+] Cymon searches completed and report has been written to %s" % outfile))
-	except:
-		print(red("[!] Could not open %s" % infile))
-		
 
 # NMAP scans - it accepts the type of scan from pentestMenu()
-def runNMAP(type):
-	scanType = type
-	infile = raw_input("Name of IP file: ")
-	outfile = raw_input("Name for output: ")
+def runNMAP(ip,ports,args,report):
 	scanner = nmap.PortScanner()
 	temp = []
 
-	if scanType == 1:
-		print(green("[+] Running full port scan with nmap - this will take a while"))
-	if scanType == 2:
-		print(green("[+] Running default port scan with nmap - take a break"))
+	try:
+		scanner.scan(hosts=ip,ports=ports,arguments=args)
+		print(green("[+] Scan completed using - {}").format(scanner.command_line()))
+	except Exception as e:
+		print(red("[!] The nmap scan failed!"))
+		print(red("[!] Error: {}").format(e))
 
-	with open(infile, 'r') as ips:
-		for ip in ips:
-			# Different scan types for nmap
-			if scanType == 1:
-				scanner.scan(hosts=ip,ports="0-65535",arguments="-sSV -T4 --open")
-			if scanType == 2:
-				scanner.scan(hosts=ip,arguments="-sSV -T4 --open")
-			for host in scanner.all_hosts():
-				print('\nHost: %s (%s)' % (host, scanner[host].hostname()))
-				print('State: %s' % scanner[host].state())
+	for host in scanner.all_hosts():
+		print('\nHost: %s (%s)' % (host, scanner[host].hostname()))
+		print('State: %s' % scanner[host].state())
 
-				for proto in scanner[host].all_protocols():
-					print('----------')
-					print('Protocol: %s' % proto)
-					lport = scanner[host][proto].keys()
-					lport.sort()
-					for port in lport:
-						print('Port: %s\tstate: %s' % (port, scanner[host][proto][port]['state']))
-						print('Name: %s' % (scanner[host][proto][port]['name']))
-						print('Product: %s' % (scanner[host][proto][port]['product']))
-						print('Version: %s' % (scanner[host][proto][port]['version']))
-						banner = retBanner(host,port)
-						try:
-							print('Banner: %s\n' % banner.rstrip('\n'))
-						except:
-							print('Banner: Unknown\n')
-						# Check if port is a known web port, then add IP to target list for Eye Witness
-						try:
-							with open("Web_Hosts.txt","w") as output:
-								with open("setup/web_ports.txt","r") as file:
-									for line in file:
-										if str(line.rstrip()) == str(port):
-											temp.append("%s:%s" % (host.rstrip(), port))
-								output.write('\n'.join(temp))
-						except:
-							pass
+		for proto in scanner[host].all_protocols():
+			print('----------')
+			print('Protocol: %s' % proto)
+			lport = sorted(scanner[host][proto])
+			#lport = scanner[host][proto].keys()
+			#lport.sort()
+			for port in lport:
+				print('Port: %s\tstate: %s' % (port, scanner[host][proto][port]['state']))
+				print('Name: %s' % (scanner[host][proto][port]['name']))
+				print('Product: %s' % (scanner[host][proto][port]['product']))
+				print('Version: %s' % (scanner[host][proto][port]['version']))
+				banner = retBanner(host,port)
+				try:
+					print('Banner: %s\n' % banner.rstrip('\n'))
+				except:
+					print('Banner: Unknown\n')
+				# Check if port is a known web port, then add IP to target list for Eye Witness
+				try:
+					with open("setup/web_ports.txt","r") as file:
+						for line in file:
+							if str(line.rstrip()) == str(port):
+								temp.append("%s:%s" % (host.rstrip(), port))
+				except:
+					pass
 
-	print(green("[+] Creating %s to hold results" % outfile))
-	with open(outfile,'w') as results:
-		results.write(scanner.csv())
+	web = "EyeWitness_Targets.txt"
+	with open(web, 'a') as webports:
+		for i in temp:
+			webports.write("{}\n".format(i))
+			
+	print(green("[+] Scan complete for {} and moving to next item...".format(ip)))
+	report.write(scanner.csv())
+
 
 # Perform banner grabbing for discovered open ports
-def retBanner(ip, port):
+def retBanner(ip,port):
 	try:
 		socket.setdefaulttimeout(2)
 		s = socket.socket()
@@ -133,26 +72,6 @@ def retBanner(ip, port):
 	except:
 		return
 
-# Masscan - it accepts the type of scan from pentestMenu()
-def runMasscan(type):
-	scanType = type
-	infile = raw_input("Name of IP file: ")
-	outfile = raw_input("Name for output: ")
-
-	with open(infile,'r') as ips:
-		for ip in ips:
-			if scanType == 1:
-				print(green("[+] Running full port scan with masscan"))
-				command = "masscan -p0-65535 --rate 50000 --banners %s -oX %s" % (ip.rstrip(),outfile)
-				os.system(command)
-			if scanType == 2:
-				print(green("""This option requires a configuration file for masscan. Provide yours if you have one. If you don't, go back.
-If you've never setup one, you can dump a configuration using this command:"""))
-				print(red("masscan -p80,8000-8100 10.0.0.0/8 --echo > xxx.conf"))
-				conf = raw_input("Name of Masscan conf file: ")
-				print(green("[+] Running masscan with %s" % conf))
-				command = "masscan -p0-65535 --rate 50000 --banners %s -oX %s" % (ip.rstrip(),outfile)
-				os.system(command)
 
 # Check SSL on provided port
 def checkSSL(a):
@@ -169,6 +88,8 @@ def checkSSL(a):
 			port = 443
 		next
 	try:
+		print(ip)
+		print(port)
 		# Connect over port port
 		cert = ssl.get_server_certificate((ip, port))
 	except Exception as e:

@@ -4,6 +4,7 @@
 import os
 import subprocess
 import shodan
+from cymon import Cymon
 import whois
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
@@ -29,6 +30,14 @@ try:
 except:
 	shoAPI = None
 
+try:
+	cymon_key_file = open('auth/cymonkey.txt', 'r')
+	cymon_key_line = cymon_key_file.readlines()
+	CYMON_API_KEY = cymon_key_line[1].rstrip()
+	cyAPI = Cymon(CYMON_API_KEY)
+	cymon_key_file.close()
+except:
+	CYMON_API_KEY = None
 
 # Try to get the user's URLVoid API key
 try:
@@ -192,7 +201,7 @@ def collectDomainInfo(domain,report,verbose):
 		print(red("[!] Error: {}".format(e)))
 
 
-def urlVoidLookup(domain):
+def urlVoidLookup(domain,report):
 	# Check reputation with URLVoid
 	try:
 		if URLVOID_API_KEY is not None:
@@ -233,7 +242,7 @@ def urlVoidLookup(domain):
 			report.write("No URLVoid API key, so skipping test.")
 			print(green("[-] No URLVoid API key, so skipping this test."))
 			pass
-	except Exception  as e:
+	except Exception as e:
 		report.write("Could not load URLVoid for reputation check!")
 		print(red("[!] Could not load URLVoid for reputation check!"))
 		print(red("[!] Error: {}".format(e)))
@@ -406,3 +415,31 @@ def googleFu(client,target):
 			print ("Error: {}".format(e))
 			print(red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again."))
 			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: {}\n".format(url))
+
+
+# Cymon - Provides URLs associated with an IP
+def searchCymon(target,report):
+	print(green("[+] Checking Cymon for domains associated with the provided list of IPs"))
+	try:
+		# Search for domains tied to the IP
+		data = cyAPI.ip_domains(target)
+		results = data['results']
+		report.write("\n--- The following data is for IP: {}---\n".format(target))
+		report.write("DOMAIN search results:\n")
+		for result in results:
+			report.write("\nURL: %s\n" % result['name'])
+			report.write("Created: %s\n" % result['created'])
+			report.write("Updated: %s\n" % result['updated'])
+		# Search for security events for the IP
+		data = cyAPI.ip_events(target)
+		results = data['results']
+		report.write("\nEVENT results:\n")
+		for result in results:
+			report.write("\nTitle: %s\n" % result['title'])
+			report.write("Description: %s\n" % result['description'])
+			report.write("Created: %s\n" % result['created'])
+			report.write("Updated: %s\n" % result['updated'])
+			report.write("Details: %s\n" % result['details_url'])
+		print(green("[+] Cymon search completed!"))
+	except:
+		print(red("[!] Could not load Cymon.io! Check your connection to Cymon."))
