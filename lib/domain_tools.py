@@ -361,7 +361,7 @@ def googleFu(client,target):
 
 	with open(f, 'w') as report:
 		# Search for different login/logon/admin/administrator pages
-		report.write("\n### GOOGLE HACKING Report for {} ###\n".fomrat(target))
+		report.write("\n### GOOGLE HACKING Report for {} ###\n".format(target))
 		report.write("---GOOGLE LOGIN PAGE Results---\n")
 		print(green("[+] Beginning Google queries..."))
 		print(yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy."))

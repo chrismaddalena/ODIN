@@ -36,7 +36,7 @@ def discover(client,target):
 
 				r = requests.get(url, headers = my_headers)
 				status = r.status_code
-				soup = BeautifulSoup(r.text)
+				soup = BeautifulSoup(r.text, "html.parser")
 
 				for cite in soup.findAll('cite'):
 					try:
