@@ -125,7 +125,9 @@ def collectDomainInfo(domain,report,verbose):
 			print(green("[+] {} is (probably) not an IP address, so running whois and looking up IP for RDAP.".format(domain)))
 			print(green("[+] Running whois for {}".format(domain)))
 			who = whois.whois(domain)
-			report.write("Registrant: {}\n".format(who.name))
+			report.write("Domain Name: {}\n".format(who.domain_name))
+			for name in who.registrant_name:
+				report.write("Registrant: {}\n".format(name))
 			report.write("Organization: {}\n".format(who.org))
 			if verbose:
 				for email in who.emails:
@@ -140,7 +142,12 @@ def collectDomainInfo(domain,report,verbose):
 			print(green("[+] IP is {} - using this for RDAP.".format(domain)))
 
 		who = whois.whois(domain)
-		report.write("Registrant: {}\n".format(who.name))
+		report.write("Domain Name: {}\n".format(who.domain_name))
+		try:
+			for name in who.registrant_name:
+				report.write("Registrant: {}\n".format(name))
+		except:
+			pass # No registrant names, so we pass - can happen when IP points to a subdomain like server.domain.com
 		report.write("Organization: {}\n".format(who.org))
 		if verbose:
 			for email in who.emails:

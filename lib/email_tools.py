@@ -29,18 +29,23 @@ except:
 user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
 headers = { 'User-Agent' : user_agent }
 
-class InvalidEmail(Exception):
-	pass
-
 def pwnCheck(email):
-	PWNED_API_URL = "https://haveibeenpwned.com/api/breachedaccount/%s"
+	PWNED_API_URL = "https://haveibeenpwned.com/api/breachedaccount/{}".format(email)
 	try:
-		r = requests.get(PWNED_API_URL % email)
-		return r.json
-	except HTTPError as e:
-		if e.code == 400:
-			raise InvalidEmail("Email address does not appear to be a valid email")
+		r = requests.get(PWNED_API_URL)
+		return r.json()
+	except:
 		return []
+
+
+def pasteCheck(email):
+	PASTE_API_URL = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
+	try:
+		r = requests.get(PASTE_API_URL)
+		return r.text
+	except:
+		return []
+
 
 def harvest(client,domain):
 	print(green("""
@@ -114,30 +119,31 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 				pass
 			else:
 				# Check haveibeenpwned data breaches
-				try:
-					pwned = pwnCheck(email)
-				except:
-					print(red("[!] Could not parse JSON. Moving on..."))
-				# If no results for breaches we return None
-				if not pwned:
-					report.write("{}\n".format(email))
-					pass
-				else:
-					report.write("{} (Pwned:".format(email))
-					pwns = []
-					for pwn in pwned:
-						pwns.append(pwn)
-					report.write(', '.join(pwns))
-					report.write(")\n")
-				# Check haveibeenpwned for pastes from Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
-				url = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
-				page = requests.get(url, headers=headers)
 				# We must use Try because an empty result is like a 404 and causes an error
 				try:
-					source = page.text
-					report.write("Pastes: {}\n".format(source))
-				except:
-					pass
+					pwned = pwnCheck(email)
+					# If no results for breaches we return None
+					if not pwned:
+						report.write("{}\n".format(email))
+						pass
+					else:
+						report.write("{} (Pwned:".format(email))
+						pwns = []
+						for pwn in pwned:
+							pwns.append(pwn)
+						report.write(', '.join(pwns))
+						report.write(")\n")
+				except Exception as e:
+					print(red("[!] Error involving {}!").format(email))
+					print(red("[!] Error: {}".format(e)))
+				# Check haveibeenpwned for pastes from Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
+				try:
+					pastes = pasteCheck(email)
+					if pastes:
+						report.write("Pastes: {}\n".format(pastes))
+				except Exception as e:
+					print(red("[!] Error involving {}!").format(email))
+					print(red("[!] Error: {}".format(e)))
 				time.sleep(3)
 
 		report.write("\n---PEOPLE Results---\n")

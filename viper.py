@@ -166,7 +166,7 @@ def people(client,domain):
 @click.option('--files/--no-files', default=False, help='Set option if you do or do not want to Google for files on the domain. Defaults to no Google.')
 @click.option('-v', '--verbose', is_flag=True, help='With verbose enabled, more domain information is collected.')
 
-def domain(self,client,domain,dns,google,files,scope_file,verbose):
+def domain(client,domain,dns,google,files,scope_file,verbose):
 	"""
 	This module uses various tools and APIs to collect information on the provided IP addresses and/or domains.\n
 	Several API keys are required for all of the look-ups: URLVoid, Cymon, and Shodan
