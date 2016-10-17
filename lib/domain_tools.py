@@ -126,8 +126,11 @@ def collectDomainInfo(domain,report,verbose):
 			print(green("[+] Running whois for {}".format(domain)))
 			who = whois.whois(domain)
 			report.write("Domain Name: {}\n".format(who.domain_name))
-			for name in who.registrant_name:
-				report.write("Registrant: {}\n".format(name))
+			try:
+				for name in who.registrant_name:
+					report.write("Registrant: {}\n".format(name))
+			except:
+				pass # No registrant names, so we pass - can happen when IP points to a subdomain like server.domain.com
 			report.write("Organization: {}\n".format(who.org))
 			if verbose:
 				for email in who.emails:
@@ -316,6 +319,8 @@ def shodanSearch(target,report):
 	# Perform Shodan searches
 	if shoAPI is None:
 		print(red("[!] No Shodan API key, so skipping Shodan searches"))
+	elif not isip(target):
+		print(red("[!] {} is not an IP address, so skipping Shodan query.").format(target))
 	else:
 		if not isip(target):
 			try:
@@ -347,7 +352,8 @@ def shodanSearch(target,report):
 					report.write("Port: {}\n".format(item['port']))
 					report.write("Banner: {}\n".format(item['data']))
 			except shodan.APIError as e:
-				print(red("[!] Error: %s\n" % e))
+				print(red("[!] Error: %s" % e))
+				report.write("[!] Error: %s" % e)
 
 
 def googleFu(client,target):
