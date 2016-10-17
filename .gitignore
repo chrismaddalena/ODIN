@@ -4,6 +4,7 @@
 *.pyc
 *.html
 *.nessus
+*.txt
 
 /auth/*
 /reports/*
