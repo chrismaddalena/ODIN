@@ -107,7 +107,7 @@ def osint(self,client,domain,dns,google,files,scope_file,verbose):
 		scope.append(domain)
 		for i in scope:
 			domain_tools.collectDomainInfo(i,report,verbose)
-			domain_tools.shodanLookUp(i,report)
+			domain_tools.shodanSearch(i,report)
 	else:
 		domain_tools.collectDomainInfo(domain,report,verbose)
 		domain_tools.shodanSearch(domain,report)
@@ -190,7 +190,7 @@ def domain(client,domain,dns,google,files,scope_file,verbose):
 		scope.append(domain)
 		for i in scope:
 			domain_tools.collectDomainInfo(i,report,verbose)
-			domain_tools.shodanLookUp(i,report)
+			domain_tools.shodanSearch(i,report)
 	else:
 		domain_tools.collectDomainInfo(domain,report,verbose)
 		domain_tools.shodanSearch(domain,report)
