@@ -180,7 +180,7 @@ def collectDomainInfo(domain, report, verbose):
 				for i in ns_records:
 					report.write(i + "\n")
 			except:
-				report.write("No NS records found... what?")
+				report.write("No NS records found... what?\n")
 
 			report.write("SOA Records:\n")
 			try:
@@ -188,7 +188,7 @@ def collectDomainInfo(domain, report, verbose):
 				for i in soa_records:
 					report.write(i + "\n")
 			except:
-				report.write("No SOA records found")
+				report.write("No SOA records found\n")
 
 			report.write("TXT Records:\n")
 			try:
@@ -196,7 +196,7 @@ def collectDomainInfo(domain, report, verbose):
 				for i in txt_records:
 					report.write(i + "\n")
 			except:
-				report.write("No TXT records found")
+				report.write("No TXT records found\n")
 
 			report.write("A Records:\n")
 			try:
@@ -204,7 +204,7 @@ def collectDomainInfo(domain, report, verbose):
 				for i in a_records:
 					report.write(i + "\n")
 			except:
-				report.write("No MX records found")
+				report.write("No MX records found\n")
 
 			print(green("[+] Running whois for {}".format(domain)))
 			who = whois.whois(domain)
@@ -247,9 +247,6 @@ def collectDomainInfo(domain, report, verbose):
 		report.write("The whois lookup failed for {}!\n\n".format(domain))
 		print(red("[!] Failed to collect whois information for {}!").format(domain))
 		print(red("[!] Error: {}".format(e)))
-
-	shodanSearch(domain, report)
-	censysSearch(domain, report)
 
 	# Run RDAP lookup
 	# Special thanks to GRC_Ninja for reccomending this!
@@ -296,6 +293,9 @@ def collectDomainInfo(domain, report, verbose):
 		print(red("[!] Failed to collect RDAP information for {}!").format(domain))
 		print(red("[!] Error: {}".format(e)))
 
+	shodanSearch(domain, report)
+	censysSearch(domain, report)
+	
 
 def urlVoidLookup(domain, report):
 	# Check reputation with URLVoid
