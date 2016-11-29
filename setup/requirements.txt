@@ -11,3 +11,5 @@ twitter
 ipwhois
 pyopenssl
 IPy
+dnspython
+censys

@@ -25,9 +25,19 @@ try:
 except:
 	twitAPI = None
 
+# Try to get the user's Full Contact API key
+try:
+	contact_key_file = open('auth/fullcontactkey.txt', 'r')
+	contact_key_line = contactn_key_file.readlines()
+	CONTACT_API_KEY = contact_key_line[1].rstrip()
+	contact_key_file.close()
+except:
+	CONTACT_API_KEY = None
+
 # Headers for use with requests
 user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
 headers = { 'User-Agent' : user_agent }
+
 
 def pwnCheck(email):
 	PWNED_API_URL = "https://haveibeenpwned.com/api/breachedaccount/{}".format(email)
@@ -45,6 +55,15 @@ def pasteCheck(email):
 		return r.text
 	except:
 		return []
+
+
+def fullContactEmail(email):
+	if CONTACT_API_KEY is None:
+		print(red("[!] No Full Contact API key, so skipping these searches."))
+	else:
+		base_url = 'https://api.fullcontact.com/v2/person.json'
+		payload = {'email':email, 'apiKey':CONTACT_API_KEY}
+		resp = requests.get(base_url, params=payload)
 
 
 def harvest(client,domain):

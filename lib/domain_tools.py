@@ -4,6 +4,7 @@
 import os
 import subprocess
 import shodan
+import censys.certificates
 from cymon import Cymon
 import whois
 from ipwhois import IPWhois
@@ -30,6 +31,7 @@ try:
 except:
 	shoAPI = None
 
+# Try to get the user's Cymon API key
 try:
 	cymon_key_file = open('auth/cymonkey.txt', 'r')
 	cymon_key_line = cymon_key_file.readlines()
@@ -37,7 +39,7 @@ try:
 	cyAPI = Cymon(CYMON_API_KEY)
 	cymon_key_file.close()
 except:
-	CYMON_API_KEY = None
+	cyAPI = None
 
 # Try to get the user's URLVoid API key
 try:
@@ -47,6 +49,28 @@ try:
 	urlvoid_key_file.close()
 except:
 	URLVOID_API_KEY = None
+
+# Try to get the user's Full Contact API key
+try:
+	contact_key_file = open('auth/fullcontactkey.txt', 'r')
+	contact_key_line = contact_key_file.readlines()
+	CONTACT_API_KEY = contact_key_line[1].rstrip()
+	contact_key_file.close()
+except:
+	CONTACT_API_KEY = None
+
+# Try to get the user's Censys API key
+try:
+	censys_key_file = open('auth/censyskey.txt', 'r')
+	censys_key_line = censys_key_file.readlines()
+	CENSYS_API_ID = censys_key_line[1].rstrip()
+	CENSYS_API_SECRET = censys_key_line[2].rstrip()
+	cenCertAPI = censys.certificates.CensysCertificates(api_id=CENSYS_API_ID, api_secret=CENSYS_API_SECRET)
+	cenAddAPI = censys.ipv4.CensysIPv4(api_id=CENSYS_API_ID, api_secret=CENSYS_API_SECRET)
+	censys_key_file.close()
+except:
+	cenCertAPI = None
+	cenAddAPI = None
 
 
 # Check if string is an IP address or not - will assume it is a domain otherwise
@@ -58,10 +82,26 @@ def isip(str):
 	return True
 
 
+def fullContactDomain(domain, report):
+	if CONTACT_API_KEY is None:
+		print(red("[!] No Full Contact API key, so skipping these searches."))
+	else:
+		base_url = 'https://api.fullcontact.com/v2/company/lookup.json'
+		payload = {'domain':domain, 'apiKey':CONTACT_API_KEY}
+		resp = requests.get(base_url, params=payload)
+
+		if resp.status_code == 200:
+			print(resp.text.encode('ascii', 'ignore'))
+
+
+def getDNSRecord(domain, recordType):
+	answer = dns.resolver.query(domain, recordType)
+	return answer
+
+
 def genScope(scope_file):
 	"""Parse scope to expand IP ranges"""
 	scope = []
-
 	try:
 		with open(scope_file, 'r') as preparse:
 			for i in preparse:
@@ -115,14 +155,57 @@ def genScope(scope_file):
 	return scope
 
 
-def collectDomainInfo(domain,report,verbose):
+def collectDomainInfo(domain, report, verbose):
 	# Run whois
 	try:
 		report.write("\n---Info for {}---\n".format(domain))
 		# If entry is a domain, then run whois and try to get the IP address
 		# Note: IP may return different results because domain may resolve to a load balancer, DDoS service, etc.
 		if not isip(domain):
-			print(green("[+] {} is (probably) not an IP address, so running whois and looking up IP for RDAP.".format(domain)))
+			print(green("[+] {} is (probably) not an IP address, so treating it as a domain name. Running whois and looking up IP for RDAP.".format(domain)))
+			# Collect DNS records using PyDNS
+			print(green("[+] Collecting DNS records for {}".format(domain)))
+			report.write("DNS Records\n")
+			report.write("MX Records:\n")
+			try:
+				mx_records = getDNSRecord(domain, "MX")
+				for i in mx_records:
+					report.write(i + "\n")
+			except:
+				report.write("No MX records found\n")
+			report.write("NS Records:\n")
+
+			try:
+				ns_records = getDNSRecord(domain, "NS")
+				for i in ns_records:
+					report.write(i + "\n")
+			except:
+				report.write("No NS records found... what?")
+
+			report.write("SOA Records:\n")
+			try:
+				soa_records = getDNSRecord(domain, "SOA")
+				for i in soa_records:
+					report.write(i + "\n")
+			except:
+				report.write("No SOA records found")
+
+			report.write("TXT Records:\n")
+			try:
+				txt_records = getDNSRecord(domain, "TXT")
+				for i in txt_records:
+					report.write(i + "\n")
+			except:
+				report.write("No TXT records found")
+
+			report.write("A Records:\n")
+			try:
+				a_records = getDNSRecord(domain, "A")
+				for i in a_records:
+					report.write(i + "\n")
+			except:
+				report.write("No MX records found")
+
 			print(green("[+] Running whois for {}".format(domain)))
 			who = whois.whois(domain)
 			report.write("Domain Name: {}\n".format(who.domain_name))
@@ -164,6 +247,9 @@ def collectDomainInfo(domain,report,verbose):
 		report.write("The whois lookup failed for {}!\n\n".format(domain))
 		print(red("[!] Failed to collect whois information for {}!").format(domain))
 		print(red("[!] Error: {}".format(e)))
+
+	shodanSearch(domain, report)
+	censysSearch(domain, report)
 
 	# Run RDAP lookup
 	# Special thanks to GRC_Ninja for reccomending this!
@@ -211,7 +297,7 @@ def collectDomainInfo(domain,report,verbose):
 		print(red("[!] Error: {}".format(e)))
 
 
-def urlVoidLookup(domain,report):
+def urlVoidLookup(domain, report):
 	# Check reputation with URLVoid
 	try:
 		if URLVOID_API_KEY is not None:
@@ -258,69 +344,70 @@ def urlVoidLookup(domain,report):
 		print(red("[!] Error: {}".format(e)))
 
 
-def dnsRecon(target,client):
+def dnsRecon(target, client, brute):
 	f = "reports/{}/DNS_Report - {}.txt".format(client,target)
 	with open(f, 'w') as report:
 		report.write("### DNS Report for {} ###\n\n".format(target))
-
 		# Run dnsrecon for several different lookups
 		print(green("[+] Running dnsrecon for {}".format(target)))
 		# Standard lookup for records
 		try:
 			cmd = "dnsrecon -d {} -t std | cut -b 5-".format(target)
-			result = subprocess.check_output(cmd,shell=True)
-			report.write("---DNSRecon -t std Results---\n")
-			report.write(result)
+			result = subprocess.check_output(cmd, shell=True)
+			report.write("\n---DNSRecon -t std Results---\n")
+			report.write(result.decode())
 		except:
 			print(red("[!] Execution of dnsrecon -t std failed!"))
 			report.write("Execution of dnsrecon -t stdfailed!\n")
 		# Google for sub-domains
 		try:
 			cmd = "dnsrecon -d {} -t goo | cut -b 5-".format(target)
-			result = subprocess.check_output(cmd,shell=True)
-			report.write("---DNSRecon -t goo Results---\n")
-			report.write(result)
+			result = subprocess.check_output(cmd, shell=True)
+			report.write("\n---DNSRecon -t goo Results---\n")
+			report.write(result.decode())
 		except:
 			print(red("[!] Execution of dnsrecon -t goo failed!"))
 			report.write("Execution of dnsrecon -t goo failed!\n")
 		# Zone Transfers
 		try:
 			cmd = "dnsrecon -d {} -t axfr | cut -b 5-".format(target)
-			result = subprocess.check_output(cmd,shell=True)
-			report.write("---DNSRecon -t axfr Results---\n")
-			report.write(result)
+			result = subprocess.check_output(cmd, shell=True)
+			report.write("\n---DNSRecon -t axfr Results---\n")
+			report.write(result.decode())
 		except:
 			print(red("[!] Execution of dnsrecon -t axfr failed!"))
 			report.write("Execution of dnsrecon -t axfr failed!\n")
-		# Brute force sub-domains
-		try:
-			cmd = "dnsrecon -d {} -t brt -D /usr/share/dnsrecon/namelist.txt --iw -f | cut -b 5-".format(target)
-			result = subprocess.check_output(cmd,shell=True)
-			report.write("---DNSRecon -t brt Results---\n")
-			report.write(result)
-		except:
-			print(red("[!] Execution of dnsrecon -t brt failed!"))
-			report.write("Execution of dnsrecon -t brt failed!\n")
 
-		# Run firece
-		print(green("[+] Running fierce for {}".format(target)))
-		# The wordlist location is the default location for fierce's hosts.txt on Kali 2
-		try:
-			cmd = "fierce -dns {} -wordlist /usr/share/fierce/hosts.txt | head -n -2".format(target)
-			result = subprocess.check_output(cmd,shell=True)
-			report.write("---Fierce DNS Results---\n")
-			report.write(result)
-		except:
-			print(red("[!] Execution of fierce failed!"))
-			report.write("Execution of fierce failed!\n")
+		if brute:
+			print(green("[+] Brute forcing was selected, so starting those tests. This will take a while -- you brought this on yourself."))
+			# Brute force sub-domains
+			try:
+				cmd = "dnsrecon -d {} -t brt -D /usr/share/dnsrecon/namelist.txt --iw -f | cut -b 5-".format(target)
+				result = subprocess.check_output(cmd, shell=True)
+				report.write("\n---DNSRecon -t brt Results---\n")
+				report.write(result.decode())
+			except:
+				print(red("[!] Execution of dnsrecon -t brt failed!"))
+				report.write("Execution of dnsrecon -t brt failed!\n")
+			# Run Firece
+			print(green("[+] Running fierce for {}".format(target)))
+			# The wordlist location is the default location for fierce's hosts.txt on Kali 2
+			try:
+				cmd = "fierce -dns {} -wordlist /usr/share/fierce/hosts.txt | head -n -2".format(target)
+				result = subprocess.check_output(cmd, shell=True)
+				report.write("---Fierce DNS Results---\n")
+				report.write(result.decode())
+			except:
+				print(red("[!] Execution of Fierce failed!"))
+				report.write("Execution of Fierce failed!\n")
+		else:
+			print(green("[+] Brute forcing was not selected, so skipping test."))
 
 
-def shodanSearch(target,report):
+def shodanSearch(target, report):
 	# Perform Shodan searches
 	if shoAPI is None:
-		print(red("[!] No Shodan API key, so skipping Shodan searches"))
-	elif not isip(target):
-		print(red("[!] {} is not an IP address, so skipping Shodan query.").format(target))
+		pass
 	else:
 		if not isip(target):
 			try:
@@ -356,7 +443,33 @@ def shodanSearch(target,report):
 				report.write("[!] Error: %s" % e)
 
 
-def googleFu(client,target):
+def censysSearch(target, report):
+	if cenCertAPI is None:
+		pass
+	else:
+		print(green("[+] Performing Censys search for {}".format(target)))
+		if not isip(target):
+			report.write("Censys certificate results for {}\n".format(target))
+			try:
+				fields = ["parsed.subject_dn", "parsed.issuer_dn"]
+				for cert in cenCertAPI.search(target, fields=fields):
+					report.write(cert["parsed.subject_dn"] + "\n")
+					report.write(cert["parsed.issuer_dn"] + "\n")
+			except Exception as e:
+				print(red("[!] Error: {}".format(e)))
+				report.write("Error: {}\n".format(e))
+		else:
+			report.write("Censys IPv4 results for {}\n".format(target))
+			try:
+				for i in cenAddAPI.search(target):
+					for prot in i["protocols"]:
+						report.write(prot + "\n")
+			except Exception as e:
+				print(red("[!] Error: %s" % e))
+				report.write("[!] Error: %s" % e)
+
+
+def googleFu(client, target):
 	f = "reports/{}/Gooogle_Report - {}.txt".format(client,target)
 
 	with open(f, 'w') as report:
@@ -431,7 +544,7 @@ def googleFu(client,target):
 
 
 # Cymon - Provides URLs associated with an IP
-def searchCymon(target,report):
+def searchCymon(target, report):
 	print(green("[+] Checking Cymon for domains associated with the provided list of IPs"))
 	try:
 		# Search for domains tied to the IP

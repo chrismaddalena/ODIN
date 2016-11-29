@@ -6,7 +6,7 @@ import sys
 from colors import *
 
 def setup():
-	print green("[+] Setup will now download TheHarvester from GitHub and walk you through setting up your API keys.")
+	print green("[+] Setup will walk you through setting up your API keys.")
 	print yellow("[!] Have your API keys ready, including your Twitter app keys and tokens!")
 	if not os.path.exists("../auth"):
 		print green("[+] Adding the 'auth' directory.")
@@ -75,6 +75,17 @@ def twitterSetup():
 		f.write(keySecret+'\n')
 		f.write(token+'\n')
 		f.write(tokenSecret+'\n')
+		f.close()
+	return
+
+def fullcontactSetup():
+	if os.path.isfile('../auth/fullcontactkey.txt'):
+		print green('[+] The Full Contact API key is already present!')
+	else:
+		f = open('../auth/'+'fullcontactkey.txt', 'w')
+		key = raw_input('Full Contact API key: ')
+		f.write('#Full Contact API key\n')
+		f.write(key+'\n')
 		f.close()
 	return
 
