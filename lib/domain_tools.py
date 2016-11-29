@@ -5,6 +5,7 @@ import os
 import subprocess
 import shodan
 import censys.certificates
+import censys.ipv4
 from cymon import Cymon
 import whois
 from ipwhois import IPWhois
@@ -17,6 +18,7 @@ import socket
 from IPy import IP
 import socket
 from netaddr import *
+import dns.resolver
 
 my_headers = {'User-agent' : '(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6'} # Google-friendly user-agent
 sleep = 10 # Sleep time for Google
@@ -157,12 +159,14 @@ def genScope(scope_file):
 
 def collectDomainInfo(domain, report, verbose):
 	# Run whois
+	domain_name = domain
+	domain_ip = socket.gethostbyname(domain)
 	try:
 		report.write("\n---Info for {}---\n".format(domain))
 		# If entry is a domain, then run whois and try to get the IP address
 		# Note: IP may return different results because domain may resolve to a load balancer, DDoS service, etc.
 		if not isip(domain):
-			print(green("[+] {} is (probably) not an IP address, so treating it as a domain name. Running whois and looking up IP for RDAP.".format(domain)))
+			print(green("[+] {} is (probably) not an IP address, so treating it as a domain name. Running whois and using associated IP address for RDAP.".format(domain)))
 			# Collect DNS records using PyDNS
 			print(green("[+] Collecting DNS records for {}".format(domain)))
 			report.write("DNS Records\n")
@@ -170,44 +174,45 @@ def collectDomainInfo(domain, report, verbose):
 			try:
 				mx_records = getDNSRecord(domain, "MX")
 				for i in mx_records:
-					report.write(i + "\n")
+					report.write("{}\n".format(i))
 			except:
 				report.write("No MX records found\n")
-			report.write("NS Records:\n")
 
+			report.write("\nNS Records:\n")
 			try:
 				ns_records = getDNSRecord(domain, "NS")
 				for i in ns_records:
-					report.write(i + "\n")
+					report.write("{}\n".format(i))
 			except:
 				report.write("No NS records found... what?\n")
 
-			report.write("SOA Records:\n")
+			report.write("\nSOA Records:\n")
 			try:
 				soa_records = getDNSRecord(domain, "SOA")
 				for i in soa_records:
-					report.write(i + "\n")
+					report.write("{}\n".format(i))
 			except:
 				report.write("No SOA records found\n")
 
-			report.write("TXT Records:\n")
+			report.write("\nTXT Records:\n")
 			try:
 				txt_records = getDNSRecord(domain, "TXT")
 				for i in txt_records:
-					report.write(i + "\n")
+					report.write("{}\n".format(i))
 			except:
 				report.write("No TXT records found\n")
 
-			report.write("A Records:\n")
+			report.write("\nA Records:\n")
 			try:
 				a_records = getDNSRecord(domain, "A")
 				for i in a_records:
-					report.write(i + "\n")
+					report.write("{}\n".format(i))
 			except:
 				report.write("No MX records found\n")
 
 			print(green("[+] Running whois for {}".format(domain)))
 			who = whois.whois(domain)
+			report.write("\nWhois results for {}\n".format(domain))
 			report.write("Domain Name: {}\n".format(who.domain_name))
 			try:
 				for name in who.registrant_name:
@@ -223,18 +228,18 @@ def collectDomainInfo(domain, report, verbose):
 					report.write("DNS: {}\n".format(server))
 				report.write("DNSSEC: {}\n".format(who.dnssec))
 				report.write("Status: {}\n".format(who.status))
-			domain = socket.gethostbyname(domain)
-			report.write("Domain IP (see RDAP below): {}\n\n".format(domain))
-			print(green("[+] IP is {} - using this for RDAP.".format(domain)))
-
-		who = whois.whois(domain)
-		report.write("Domain Name: {}\n".format(who.domain_name))
-		try:
-			for name in who.registrant_name:
-				report.write("Registrant: {}\n".format(name))
-		except:
-			pass # No registrant names, so we pass - can happen when IP points to a subdomain like server.domain.com
-		report.write("Organization: {}\n".format(who.org))
+			report.write("Domain IP (see RDAP below): {}\n\n".format(domain_ip))
+			print(green("[+] IP is {} - using this for RDAP.".format(domain_ip)))
+		else:
+			who = whois.whois(domain)
+			report.write("\nWhois results for {}\n".format(domain))
+			report.write("Domain Name: {}\n".format(who.domain_name))
+			try:
+				for name in who.registrant_name:
+					report.write("Registrant: {}\n".format(name))
+			except:
+				pass # No registrant names, so we pass - can happen when IP points to a subdomain like server.domain.com
+			report.write("Organization: {}\n".format(who.org))
 		if verbose:
 			for email in who.emails:
 				report.write("Email: {}\n".format(email))
@@ -249,10 +254,10 @@ def collectDomainInfo(domain, report, verbose):
 		print(red("[!] Error: {}".format(e)))
 
 	# Run RDAP lookup
-	# Special thanks to GRC_Ninja for reccomending this!
+	# Special thanks to GRC_Ninja for recommending this!
 	try:
 		print(green("[+] Running RDAP lookup for {}".format(domain)))
-		rdapwho = IPWhois(domain)
+		rdapwho = IPWhois(domain_ip)
 		results = rdapwho.lookup_rdap(depth=1)
 		asn = results['asn']
 		report.write("ASN: {}\n".format(asn))
@@ -289,13 +294,21 @@ def collectDomainInfo(domain, report, verbose):
 						if address is not None:
 							report.write("Address: {}\n\n".format(address[0]['value']))
 	except Exception  as e:
-		report.write("The RDAP lookup failed for {}!\n\n".format(domain))
-		print(red("[!] Failed to collect RDAP information for {}!").format(domain))
+		report.write("The RDAP lookup failed for {}!\n\n".format(domain_ip))
+		print(red("[!] Failed to collect RDAP information for {}!").format(domain_ip))
 		print(red("[!] Error: {}".format(e)))
 
-	shodanSearch(domain, report)
-	censysSearch(domain, report)
-	
+	shodanSearch(domain_name, report)
+	censysSearch(domain_name, report)
+	# If the name and IP are the same, then we have an IP and don't want to search twice
+	if domain_name == domain_ip:
+		print(green("[!] Skipping, check worked"))
+	else:
+		shodanSearch(domain_ip, report)
+		censysSearch(domain_ip, report)
+
+
+
 
 def urlVoidLookup(domain, report):
 	# Check reputation with URLVoid
@@ -410,14 +423,14 @@ def shodanSearch(target, report):
 		pass
 	else:
 		if not isip(target):
+			print(green("[+] Performing Shodan search for {}".format(target)))
 			try:
-				print(green("[+] Performing Shodan search for {}".format(target)))
 				targetResults = shoAPI.search(target)
 			except shodan.APIError as e:
 				print(red("[!] Error: {}".format(e)))
 				report.write("Error: {}\n".format(e))
 			try:
-				report.write("Shodan results found for {}: {}\n".format(target,targetResults['total']))
+				report.write("Shodan results found for {}: {}\n\n".format(target, targetResults['total']))
 				for result in targetResults['matches']:
 						report.write("IP: {}\n".format(result['ip_str']))
 						for name in result['hostnames']:
@@ -432,15 +445,22 @@ def shodanSearch(target, report):
 			print(green("[+] Performing Shodan lookup for {}".format(target)))
 			try:
 				host = shoAPI.host(target)
+			except shodan.APIError as e:
+				print(red("[!] Error: {}"(e)))
+				report.write("[!] Error: {}"(e))
+			try:
+				report.write("Shodan results found for {}:\n\n".format(target))
+				print(red("{}".format(host)))
 				report.write("IP: {}\n".format(host['ip_str']))
 				report.write("Organization: {}\n".format(host.get('org', 'n/a')))
 				report.write("OS: {}\n".format(host.get('os', 'n/a')))
 				for item in host['data']:
 					report.write("Port: {}\n".format(item['port']))
 					report.write("Banner: {}\n".format(item['data']))
-			except shodan.APIError as e:
-				print(red("[!] Error: %s" % e))
-				report.write("[!] Error: %s" % e)
+			except Exception as e:
+				print(red("[!] Error: {}".format(e)))
+				report.write("Error: {}\n".format(e))
+
 
 
 def censysSearch(target, report):
@@ -449,24 +469,24 @@ def censysSearch(target, report):
 	else:
 		print(green("[+] Performing Censys search for {}".format(target)))
 		if not isip(target):
-			report.write("Censys certificate results for {}\n".format(target))
+			report.write("Censys certificate results for {}:\n\n".format(target))
 			try:
 				fields = ["parsed.subject_dn", "parsed.issuer_dn"]
 				for cert in cenCertAPI.search(target, fields=fields):
-					report.write(cert["parsed.subject_dn"] + "\n")
-					report.write(cert["parsed.issuer_dn"] + "\n")
+					report.write("{}\n".format(cert["parsed.subject_dn"]))
+					report.write("{}\n\n".format(cert["parsed.issuer_dn"]))
 			except Exception as e:
 				print(red("[!] Error: {}".format(e)))
 				report.write("Error: {}\n".format(e))
 		else:
-			report.write("Censys IPv4 results for {}\n".format(target))
+			report.write("Censys IPv4 results for {}:\n\n".format(target))
 			try:
 				for i in cenAddAPI.search(target):
 					for prot in i["protocols"]:
-						report.write(prot + "\n")
+						report.write("{}\n".format(prot))
 			except Exception as e:
-				print(red("[!] Error: %s" % e))
-				report.write("[!] Error: %s" % e)
+				print(red("[!] Error: {}".format(e)))
+				report.write("[!] Error: {}".format(e))
 
 
 def googleFu(client, target):

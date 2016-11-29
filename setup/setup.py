@@ -14,16 +14,20 @@ def setup():
 			os.mkdir("../auth")
 			sleep(2)
 			shodanSetup()
+			censysSetup()
 			cymonSetup()
 			urlvoidSetup()
 			twitterSetup()
+			fullcontactSetup()
 		except:
 			exit("[!] Could not proceed with setup! Try running as sudo!")
 	elif os.path.exists("../auth"):
 		shodanSetup()
+		censysSetup()
 		cymonSetup()
 		urlvoidSetup()
 		twitterSetup()
+		fullcontactSetup()
 	else:
 		exit("[!] Could not proceed with setup! Try running as sudo!")
 	print green("[+] Setup complete! If you need to re-run setup for a key: Go into /auth and delete the key file(s). Then re-run setup.")
@@ -38,6 +42,21 @@ def shodanSetup():
 		f.write(key+'\n')
 		f.close()
 	return
+
+
+def censysSetup():
+	if os.path.isfile('../auth/censyskey.txt'):
+		print green('[+] The Censys API key is already present!')
+	else:
+		f = open('../auth/'+'censyskey.txt', 'w')
+		key = raw_input('Censys API key: ')
+		secret = raw_input('Censys API secret: ')
+		f.write('#Censys API key\n')
+		f.write(key+'\n')
+		f.write(secret+'\n')
+		f.close()
+	return
+
 
 def cymonSetup():
 	if os.path.isfile('../auth/cymonkey.txt'):
