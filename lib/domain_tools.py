@@ -11,7 +11,7 @@ import whois
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
 import requests
-from xml.etree import ElementTree  as eT
+from xml.etree import ElementTree  as ET
 import time
 from colors import *
 import socket
@@ -308,53 +308,54 @@ def collectDomainInfo(domain, report, verbose):
 		censysSearch(domain_ip, report)
 
 
-
-
 def urlVoidLookup(domain, report):
 	# Check reputation with URLVoid
-	try:
-		if URLVOID_API_KEY is not None:
-			print(green("[+] Checking reputation with URLVoid"))
-			report.write("\n---URLVOID Results---\n")
-			url = "http://api.urlvoid.com/api1000/{}/host/{}".format(URLVOID_API_KEY,domain)
-			response = requests.get(url)
-			tree = ET.fromstring(response.content)
+	if not isip(domain):
+		try:
+			if URLVOID_API_KEY is not None:
+				print(green("[+] Checking reputation with URLVoid"))
+				report.write("\n---URLVOID Results---\n")
+				url = "http://api.urlvoid.com/api1000/{}/host/{}".format(URLVOID_API_KEY,domain)
+				response = requests.get(url)
+				tree = ET.fromstring(response.content)
 
-			for child in tree:
-				maliciousCheck = child.tag
-				if maliciousCheck == "detections":
-					detected = 1
+				for child in tree:
+					maliciousCheck = child.tag
+					if maliciousCheck == "detections":
+						detected = 1
+					else:
+						detected = 0
+
+				if detected == 1:
+					print(red("[+] URLVoid found malicious activity reported for this domain!"))
 				else:
-					detected = 0
+					print(green("[+] URLVoid found no malicious activity reported for this domain."))
 
-			if detected == 1:
-				print(red("[+] URLVoid found malicious activity reported for this domain!"))
+				repData = tree[0]
+				ipData = repData[11]
+
+				report.write("Host: {}\n".format(ET.tostring(repData[0], method='text').rstrip().decode('ascii')))
+				report.write("Domain Age: {}\n".format(ET.tostring(repData[3], method='text').rstrip().decode('ascii')))
+				report.write("Google Rank: {}\n".format(ET.tostring(repData[4], method='text').rstrip().decode('ascii')))
+				report.write("Alexa Rank: {}\n".format(ET.tostring(repData[5], method='text').rstrip().decode('ascii')))
+
+				report.write("Address: {}\n".format(ET.tostring(ipData[0], method='text').rstrip().decode('ascii')))
+				report.write("Hostname: {}\n".format(ET.tostring(ipData[1], method='text').rstrip().decode('ascii')))
+				report.write("ASN: {}\n".format(ET.tostring(ipData[2], method='text').rstrip().decode('ascii')))
+				report.write("ASName: {}\n".format(ET.tostring(ipData[3], method='text').rstrip().decode('ascii')))
+				report.write("Country: {}\n".format(ET.tostring(ipData[5], method='text').rstrip().decode('ascii')))
+				report.write("Region: {}\n".format(ET.tostring(ipData[6], method='text').rstrip().decode('ascii')))
+				report.write("City: {}\n\n".format(ET.tostring(ipData[7], method='text').rstrip().decode('ascii')))
 			else:
-				print(green("[+] URLVoid found no malicious activity reported for this domain."))
-
-			repData = tree[0]
-			ipData = repData[11]
-
-			report.write("Host: {}\n".format(ET.tostring(repData[0], method='text').rstrip()))
-			report.write("Domain Age: {}\n".format(ET.tostring(repData[3], method='text').rstrip()))
-			report.write("Google Rank: {}\n".format(ET.tostring(repData[4], method='text').rstrip()))
-			report.write("Alexa Rank: {}\n".format(ET.tostring(repData[5], method='text').rstrip()))
-
-			report.write("Address: {}\n".format(ET.tostring(ipData[0], method='text').rstrip()))
-			report.write("Hostname: {}\n".format(ET.tostring(ipData[1], method='text').rstrip()))
-			report.write("ASN: {}\n".format(ET.tostring(ipData[2], method='text').rstrip()))
-			report.write("ASName: {}\n".format(ET.tostring(ipData[3], method='text').rstrip()))
-			report.write("Country: {}\n".format(ET.tostring(ipData[5], method='text').rstrip()))
-			report.write("Region: {}\n".format(ET.tostring(ipData[6], method='text').rstrip()))
-			report.write("City: {}\n\n".format(ET.tostring(ipData[7], method='text').rstrip()))
-		else:
-			report.write("No URLVoid API key, so skipping test.")
-			print(green("[-] No URLVoid API key, so skipping this test."))
-			pass
-	except Exception as e:
-		report.write("Could not load URLVoid for reputation check!")
-		print(red("[!] Could not load URLVoid for reputation check!"))
-		print(red("[!] Error: {}".format(e)))
+				report.write("No URLVoid API key, so skipping test.")
+				print(green("[-] No URLVoid API key, so skipping this test."))
+				pass
+		except Exception as e:
+			report.write("Could not load URLVoid for reputation check!")
+			print(red("[!] Could not load URLVoid for reputation check!"))
+			print(red("[!] Error: {}".format(e)))
+	else:
+		print(red("[!] Target is not a domain, so skipping URLVoid queries."))
 
 
 def dnsRecon(target, client, brute):
@@ -450,7 +451,6 @@ def shodanSearch(target, report):
 				report.write("[!] Error: {}"(e))
 			try:
 				report.write("Shodan results found for {}:\n\n".format(target))
-				print(red("{}".format(host)))
 				report.write("IP: {}\n".format(host['ip_str']))
 				report.write("Organization: {}\n".format(host.get('org', 'n/a')))
 				report.write("OS: {}\n".format(host.get('os', 'n/a')))
@@ -565,27 +565,41 @@ def googleFu(client, target):
 
 # Cymon - Provides URLs associated with an IP
 def searchCymon(target, report):
-	print(green("[+] Checking Cymon for domains associated with the provided list of IPs"))
+	print(green("[+] Checking Cymon for domains associated with the provided list of IPs."))
 	try:
-		# Search for domains tied to the IP
-		data = cyAPI.ip_domains(target)
-		results = data['results']
-		report.write("\n--- The following data is for IP: {}---\n".format(target))
-		report.write("DOMAIN search results:\n")
-		for result in results:
-			report.write("\nURL: %s\n" % result['name'])
-			report.write("Created: %s\n" % result['created'])
-			report.write("Updated: %s\n" % result['updated'])
-		# Search for security events for the IP
-		data = cyAPI.ip_events(target)
-		results = data['results']
-		report.write("\nEVENT results:\n")
-		for result in results:
-			report.write("\nTitle: %s\n" % result['title'])
-			report.write("Description: %s\n" % result['description'])
-			report.write("Created: %s\n" % result['created'])
-			report.write("Updated: %s\n" % result['updated'])
-			report.write("Details: %s\n" % result['details_url'])
-		print(green("[+] Cymon search completed!"))
+		if isip(target):
+			# Search for domains tied to the IP
+			data = cyAPI.ip_domains(target)
+			results = data['results']
+			report.write("\n--- The following data is for IP: {}---\n".format(target))
+			report.write("DOMAIN search results:\n")
+			for result in results:
+				report.write("\nURL: %s\n" % result['name'])
+				report.write("Created: %s\n" % result['created'])
+				report.write("Updated: %s\n" % result['updated'])
+			# Search for security events for the IP
+			data = cyAPI.ip_events(target)
+			results = data['results']
+			report.write("\nEVENT results:\n")
+			for result in results:
+				report.write("\nTitle: %s\n" % result['title'])
+				report.write("Description: %s\n" % result['description'])
+				report.write("Created: %s\n" % result['created'])
+				report.write("Updated: %s\n" % result['updated'])
+				report.write("Details: %s\n" % result['details_url'])
+			print(green("[+] Cymon search completed!"))
+		else:
+			# Search for domains tied to the IP
+			results = cyAPI.domain_lookup(target)
+			report.write("\n--- The following data is for domain: {}---\n".format(target))
+			report.write("DOMAIN search results:\n")
+			report.write("\nURL: %s\n" % results['name'])
+			report.write("Created: %s\n" % results['created'])
+			report.write("Updated: %s\n" % results['updated'])
+			for source in results['sources']:
+				report.write("Source: {}\n".format(source))
+			for ip in results['ips']:
+				report.write("IP: {}\n".format(ip))
+			print(green("[+] Cymon search completed!"))
 	except:
-		print(red("[!] Could not load Cymon.io! Check your connection to Cymon."))
+		print(red("[!] Cymon.io returned a 404 indicating no results."))

@@ -12,12 +12,12 @@ from colors import *
 
 
 # NMAP scans - it accepts the type of scan from pentestMenu()
-def runNMAP(ip,ports,args,report):
+def runNMAP(ip, ports, args, report):
 	scanner = nmap.PortScanner()
 	temp = []
 
 	try:
-		scanner.scan(hosts=ip,ports=ports,arguments=args)
+		scanner.scan(hosts=ip, ports=ports, arguments=args)
 		print(green("[+] Scan completed using - {}").format(scanner.command_line()))
 	except Exception as e:
 		print(red("[!] The nmap scan failed!"))
@@ -53,16 +53,16 @@ def runNMAP(ip,ports,args,report):
 					pass
 
 	web = "EyeWitness_Targets.txt"
-	with open(web, 'a') as webports:
+	with open(web, 'a'	) as webports:
 		for i in temp:
 			webports.write("{}\n".format(i))
-			
+
 	print(green("[+] Scan complete for {} and moving to next item...".format(ip)))
 	report.write(scanner.csv())
 
 
 # Perform banner grabbing for discovered open ports
-def retBanner(ip,port):
+def retBanner(ip, port):
 	try:
 		socket.setdefaulttimeout(2)
 		s = socket.socket()
@@ -88,8 +88,8 @@ def checkSSL(a):
 			port = 443
 		next
 	try:
-		print(ip)
-		print(port)
+		print(yellow("Target: {}".format(ip)))
+		print(yellow("Port: {}".format(port)))
 		# Connect over port port
 		cert = ssl.get_server_certificate((ip, port))
 	except Exception as e:
@@ -102,14 +102,8 @@ def checkSSL(a):
 		c = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
 		subj = c.get_subject()
 		comp = subj.get_components()
-		print(comp)
 		for i in comp:
-			if 'CN' in i:
-				print(i[1])
-			elif 'CN' not in i:
-				continue
-			else:
-				return None
+			print(yellow("{}: {}".format(i[0].decode('ascii'), i[1].decode('ascii'))))
 	except Exception as e:
 		# if openssl fails to get information, return nothing/fail
 		print(red("[!] Viper failed to get the certfication information!"))

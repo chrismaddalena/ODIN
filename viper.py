@@ -284,7 +284,7 @@ def scan(ports, args, scope_file, scope_ips, output):
 		with open(scope_file, 'r') as scope:
 			for i in scope:
 				print(green("[+] Running nmap againts {}".format(i.rstrip())))
-				scan_tools.runNMAP(i.rstrip(),ports,args,report)
+				scan_tools.runNMAP(i.rstrip(), ports, args, report)
 
 	if scope_ips:
 		for ip in scope_ips:
@@ -326,9 +326,10 @@ def verify(scope_file, output, cidr, client):
 
 
 @viper.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
-@click.option('-i', '--ip', help='IP address with the certificate. Include the port if it is not 443, e.g. IP:8080')
+@click.option('-t', '--target', help='IP address with the certificate. Include the port if it is not 443, e.g. IP:8080', required=True)
+@click.option('--labs', is_flag=True, help='Query Qualys SSL Labs in addition to pulling the certificate.')
 
-def ssl(ip):
+def ssl(target, labs):
 	"""
 	This module can be used to quickly pull an SSL certificate's information for easy reference.
 	It can also be used to run an SSLLabs scan on the target (coming soon).
@@ -336,35 +337,27 @@ def ssl(ip):
 
 	asciis.printArt()
 	print(green("[+] SSL Module Selected: Viper will pull SSL certificate information for the provided IP and port."))
-
-	scan_tools.checkSSL(ip)
-
-	#SSLLabs
-	#target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
-	#ssllabsscanner.getResults(target,testType)
-	#target = raw_input("Enter full target URL for scan (e.g. www.google.com): ")
-	#ssllabsscanner.getResults(target,testType)
-	# host = raw_input("Enter IP or hostname to check: ")
-	# scan_tools.checkSSL(host)
+	scan_tools.checkSSL(target)
+	if labs:
+		ssllabsscanner.getResults(target, 1)
 
 
-@viper.command(name='rep', short_help='Check SSL cert for provided IP or domain.')
-@click.option('-i', '--ip', help='IP address with the certificate. Include the port if it is not 443, e.g. IP:8080')
+@viper.command(name='rep', short_help='Check reputation of provided IP or domain.')
+@click.option('-t', '--target', help='The target IP address or domain.', required=True)
 @click.option('-o', '--output', default='Reputation_Report.txt', help='Name of the output file for the search results.')
 
-def rep(ip, output):
+def rep(target, output):
 	"""
-	This module can be used to quickly collect reputation data for the provided IP address. Viper will query eSentire's Cymon
-	and URLVoid.\n
+	This module can be used to quickly collect reputation data for the provided IP address. Viper will query URLVoid and eSentire's Cymon.\n
 	API keys for URLVoid and Cymon are required!
 	"""
 
 	report = open(output, 'w')
 
 	asciis.printArt()
-	print(green("[+] Reputation Module Selected: Viper will reputation data for the provided IP address."))
-	domain_tools.searchCymon(ip, report)
-	domain_tools.urlVoidLookup(ip, report)
+	print(green("[+] Reputation Module Selected: Viper will reputation data for the provided IP address or domain name."))
+	domain_tools.searchCymon(target, report)
+	domain_tools.urlVoidLookup(target, report)
 
 
 @viper.command(name='knowing', short_help='Saturday Morning Cartoons are a thing I miss.')
@@ -376,23 +369,6 @@ def knowing():
 
 if __name__ == "__main__":
 	viper()
-
-
-
-#Ninja-Viper reporting toolkit
-# 			print(green("""
-# Viper can join multiple .nessus files into one report.
-#
-# 	1. Place your files into the same directory.
-# 	2. Provide the directory and the first .nessus file.
-# 	3. Provide name for the final .nessus file and report title.
-# 			""")
-#
-# 			dir = raw_input("Directory with Nessus files: ")
-# 			#first = raw_input("First Nessus file: ")
-# 			output = raw_input("Name for final Nessus file: ")
-# 			name = raw_input("Name for final report: ")
-# 			joinessus.joiner(dir,output,name)
 
 
 #The Swamp-Viper phishing toolkit:
