@@ -8,7 +8,11 @@ import time
 from colors import red, green, yellow
 
 
-def discover(client,target):
+def discover(client, target):
+	"""Discover files available on the target domain
+	The 'Start' parameter is used here to allow for iterating through X pages
+	Edit setup/google_filetypes.txt to customize your search terms
+	"""
 	print(green("""Viper will now perform  variety of Google searches to try to find publicly files. If this breaks, you might be blocked by Google with a CAPTCHA. They do that sometimes when their keywords are used.
 	"""))
 	f = 'reports/{}/File_Report - {}.txt'.format(client,target)
@@ -22,8 +26,6 @@ def discover(client,target):
 		print(yellow("[-] Warning: Google sometimes blocks automated queries like this by using a CAPTCHA. This may fail. If it does, try again later or use a VPN/proxy."))
 		report.write("\n--- GOOGLE HACKING Results ---\n")
 		# Perform search and grab just the URLs for each result
-		# 'Start' is used here to allow for iterating through X pages
-		# Edit setup/google_filetypes.txt to customize your search terms
 		try:
 			for start in range(0,10):
 				with open('setup/google_filetypes.txt') as googles:

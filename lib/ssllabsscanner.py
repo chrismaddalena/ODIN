@@ -11,12 +11,10 @@ API = "https://api.ssllabs.com/api/v2/"
 
 
 def requestAPI(path, payload={}):
-	"""This is a helper method that takes the path to the relevant
-		API call and the user-defined payload and requests the
-		data/server test from Qualys SSL Labs.
-
-		Returns JSON formatted data"""
-
+	"""This is a helper method that takes the path to the relevant API call and
+	the user-defined payload and requests the data/server test from Qualys SSL Labs.
+	Returns JSON formatted data
+	"""
 	url = API + path
 
 	try:
@@ -30,6 +28,8 @@ def requestAPI(path, payload={}):
 
 
 def resultsFromCache(host, publish = "off", startNew = "off", fromCache = "on", all = "done"):
+	"""This function returns results from SSL Labs' cache (previously run scans)
+	"""
 	path = "analyze"
 	payload = {'host': host, 'publish': publish, 'startNew': startNew, 'fromCache': fromCache, 'all': all}
 	data = requestAPI(path, payload)
@@ -37,6 +37,8 @@ def resultsFromCache(host, publish = "off", startNew = "off", fromCache = "on", 
 
 
 def newScan(host, publish = "off", startNew = "on", all = "done", ignoreMismatch = "on"):
+	"""This function requests SSL Labs to run new scan for the target domain
+	"""
 	path = "analyze"
 	payload = {'host': host, 'publish': publish, 'startNew': startNew, 'all': all, 'ignoreMismatch': ignoreMismatch}
 	results = requestAPI(path, payload)
@@ -50,7 +52,14 @@ def newScan(host, publish = "off", startNew = "on", all = "done", ignoreMismatch
 
 	return results
 
+
 def getResults(target, type):
+	"""Function to run a new scan or request information from SSL Labs' cahce (old scans)
+	This sorts through the LOADS of information returned by the scanner
+	We need individual try/excepts in case one piece of information is unavailable for some reason
+	This avoids the whole thing failing because of one litte variable
+	Docs - https://github.com/ssllabs/ssllabs-scan/blob/stable/ssllabs-api-docs.md
+	"""
 	testType = type
 	# Create scanner based on type - new or cached results
 	if testType == 1:
@@ -59,10 +68,6 @@ def getResults(target, type):
 	if testType == 2:
 		data = resultsFromCache(target)
 		print(green("[+] Getting results from SSL Labs's cache (if there is a cached test)..."))
-	# Sorting through the LOADS of information returned by the scanner
-	# We need individual try/excepts in case one piece of information is unavailable for some reason
-	# This avoids the whole thing failing because of one litte variable
-	# Docs - https://github.com/ssllabs/ssllabs-scan/blob/stable/ssllabs-api-docs.md
 
 	# Server name
 	try:
@@ -70,7 +75,7 @@ def getResults(target, type):
 	except:
 		print(red("Server Name: Unavailable"))
 
-	# IP Address
+	# IP address
 	try:
 		print(green("IP Address: %s" % data['endpoints'][0]['ipAddress']))
 	except:
@@ -85,6 +90,20 @@ def getResults(target, type):
 		print(green("SGrade: %s" % data['endpoints'][0]['gradeTrustIgnored']))
 	except:
 		print(red("SGrade: Unavailable"))
+
+	# SSL versions
+	ssl2 = "No"
+	ssl3 = "No"
+	try:
+		for proto in data['endpoints'][0]['details']['protocols']:
+			if "SSL" in proto['name'] and proto['version'] == "2.0":
+				ssl2 = "Yes"
+			if "SSL" in proto['name'] and proto['version'] == "3.0":
+				ssl3 = "Yes"
+		print(green("SSLv2: %s" % ssl2))
+		print(green("SSLv3: %s" % ssl3))
+	except:
+		print(red("SSLv2/3: SSL version support information unavailable"))
 
 	# CRIME
 	try:
@@ -173,20 +192,6 @@ def getResults(target, type):
 					print(red("DHE Suites: DHE suite information unavailable"))
 	except:
 		print(red("DHE Suites: DHE suite information unavailable"))
-
-	# SSL versions
-	ssl2 = "No"
-	ssl3 = "No"
-	try:
-		for proto in data['endpoints'][0]['details']['protocols']:
-			if "SSL" in proto['name'] and proto['version'] == "2.0":
-				ssl2 = "Yes"
-			if "SSL" in proto['name'] and proto['version'] == "3.0":
-				ssl3 = "Yes"
-		print(green("SSLv2: %s" % ssl2))
-		print(green("SSLv3: %s" % ssl3))
-	except:
-		print(red("SSLv2/3: SSL version support information unavailable"))
 
 	# RC4
 	try:

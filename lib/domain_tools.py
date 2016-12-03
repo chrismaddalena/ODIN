@@ -19,6 +19,7 @@ from IPy import IP
 import socket
 from netaddr import *
 import dns.resolver
+import csv
 
 my_headers = {'User-agent' : '(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6'} # Google-friendly user-agent
 sleep = 10 # Sleep time for Google
@@ -75,8 +76,9 @@ except:
 	cenAddAPI = None
 
 
-# Check if string is an IP address or not - will assume it is a domain otherwise
 def isip(str):
+	"""Check if string is an IP address or not - will assume it is a domain otherwise.
+	"""
 	try:
 		IP(str)
 	except ValueError:
@@ -85,6 +87,8 @@ def isip(str):
 
 
 def fullContactDomain(domain, report):
+	"""Use Full Contact API to collect social media info -- API key required
+	"""
 	if CONTACT_API_KEY is None:
 		print(red("[!] No Full Contact API key, so skipping these searches."))
 	else:
@@ -97,12 +101,15 @@ def fullContactDomain(domain, report):
 
 
 def getDNSRecord(domain, recordType):
+	"""Simple function to get the target domain;s DNS records
+	"""
 	answer = dns.resolver.query(domain, recordType)
 	return answer
 
 
 def genScope(scope_file):
-	"""Parse scope to expand IP ranges"""
+	"""Parse scope to expand IP ranges
+	"""
 	scope = []
 	try:
 		with open(scope_file, 'r') as preparse:
@@ -157,8 +164,87 @@ def genScope(scope_file):
 	return scope
 
 
+def runWhois(domain):
+	"""Perform a whois lookup for the provided target
+	"""
+	try:
+		who = whois.whois(domain)
+		results = {}
+		results['domain_name'] = who.domain_name
+		results['registrar'] = who.registrar
+		results['expiration_date'] = who.expiration_date
+		results['registrant'] = who.name
+		results['org'] = who.org
+		results['admin_email'] = who.emails[0]
+		results['tech_email'] = who.emails[1]
+		results['address'] = "{}, {}{}, {}, {}\n".format(who.address, who.city, who.zipcode, who.state, who.country)
+		results['dnssec'] = who.dnssec
+
+		return results
+	except Exception as e:
+		print(red("[!] Failed to collect domain information for {}!").format(domain))
+		print(red("[!] Error: {}".format(e)))
+
+
+def runRDAP(domain_ip):
+	"""Perform an RDAP lookup for an IP address
+	From IPWhois: IPWhois.lookup_rdap() is now the recommended lookup method.
+	RDAP provides a far better data structure than legacy whois and REST lookups
+	(previous implementation). RDAP queries allow for parsing of contact information
+	and details for users, organizations, and groups. RDAP also provides more
+	detailed network information.
+	"""
+	try:
+		rdapwho = IPWhois(domain_ip)
+		results = rdapwho.lookup_rdap(depth=1)
+
+		return results
+	except Exception as e:
+		print(red("[!] Failed to collect RDAP information for {}!").format(domain_ip))
+		print(red("[!] Error: {}".format(e)))
+
+
+def goCrazy(client, target):
+	"""Run urlcrazy to locate typosquatted domains related to the targte domain
+	"""
+	f = "reports/{}/Typosquatting_Report - {}.txt".format(client, target)
+	outfile = "reports/{}/crazy_temp.csv".format(client)
+	finalCSV = "reports/{}/{}_urlcrazy.csv".format(client, target)
+	domains = []
+	a_records = []
+	mx_records = []
+	squatted = {}
+	print(green("[+] Running urlcrazy for {}".format(target)))
+	with open(f, 'w') as report:
+		try:
+			report.write("### URLCRAZY Typosquatting Report for {} ###\n\n".format(target))
+			#cmd = "urlcrazy {} -f csv -o crazy_temp.csv".format(target)
+			#subprocess.call(cmd, shell=True)
+			with open(outfile, 'r') as results:
+				reader = csv.DictReader(row.replace('\0', '') for row in results)
+				for row in reader:
+					if len(row) != 0:
+						if row['CC-A'] != "?":
+							domains.append(row['Typo'])
+							a_records.append(row['DNS-A'])
+							mx_records.append(row['DNS-MX'])
+
+			squatted = zip(domains, a_records, mx_records)
+
+			for d in squatted:
+				report.write("Domain \t DNS-A \t DNS-MX\n")
+				report.write("{}\t{}\t{}\n".format(d[0], d[1], d[2]))
+				print("{}\t{}\t{}\n".format(d[0], d[1], d[2]))
+
+			os.rename(outfile, finalCSV)
+		except:
+			print(red("[!] Execution of urlcrazy failed!"))
+			report.write("Execution of urlcrazy failed!\n")
+
+
 def collectDomainInfo(domain, report, verbose):
-	# Run whois
+	"""Collect various domain information (whois, DNS, RDAP) for the target domain.
+	"""
 	domain_name = domain
 	domain_ip = socket.gethostbyname(domain)
 	try:
@@ -169,7 +255,7 @@ def collectDomainInfo(domain, report, verbose):
 			print(green("[+] {} is (probably) not an IP address, so treating it as a domain name. Running whois and using associated IP address for RDAP.".format(domain)))
 			# Collect DNS records using PyDNS
 			print(green("[+] Collecting DNS records for {}".format(domain)))
-			report.write("DNS Records\n")
+			report.write("DNS Records for {}\n".format(domain))
 			report.write("MX Records:\n")
 			try:
 				mx_records = getDNSRecord(domain, "MX")
@@ -210,61 +296,53 @@ def collectDomainInfo(domain, report, verbose):
 			except:
 				report.write("No MX records found\n")
 
+			# Run whois lookup
 			print(green("[+] Running whois for {}".format(domain)))
-			who = whois.whois(domain)
-			report.write("\nWhois results for {}\n".format(domain))
-			report.write("Domain Name: {}\n".format(who.domain_name))
-			try:
-				for name in who.registrant_name:
-					report.write("Registrant: {}\n".format(name))
-			except:
-				pass # No registrant names, so we pass - can happen when IP points to a subdomain like server.domain.com
-			report.write("Organization: {}\n".format(who.org))
-			if verbose:
-				for email in who.emails:
-					report.write("Email: {}\n".format(email))
-				report.write("Address: {}, {}{}, {}, {}\n".format(who.address,who.city,who.zipcode,who.state,who.country))
-				for server in who.name_servers:
-					report.write("DNS: {}\n".format(server))
-				report.write("DNSSEC: {}\n".format(who.dnssec))
-				report.write("Status: {}\n".format(who.status))
+			results = runWhois(domain)
+
+			# Log whois results to domain report
+			report.write("\nDomain Name:\t{}\n".format(results['domain_name'][0].lower()))
+			report.write("Registrar:\t{}\n".format(results['registrar']))
+			report.write("Expiration:\t{}\n".format(results['expiration_date'][0]))
+			report.write("Organization:\t{}\n".format(results['org']))
+			report.write("Registrant:\t{}\n".format(results['registrant']))
+			report.write("Admin Contact:\t{}\n".format(results['admin_email']))
+			report.write("Tech Contact:\t{}\n".format(results['tech_email']))
+			report.write("Address:\t{}\n".format(results['address'].rstrip()))
+			report.write("DNSSEC:\t\t{}\n\n".format(results['dnssec']))
+
+			# Output some useful domain information for immediate review
+			print(yellow("\nDomain \t Registrar \t Expiration"))
+			print(yellow("{} \t {} \t {}\n".format(results['domain_name'][0].lower(), results['registrar'], results['expiration_date'][0])))
+
+			print(yellow("Domain \t Admin Contact \t Tech Contact"))
+			print(yellow("{} \t {} \t {}\n".format(results['domain_name'][0].lower(), results['admin_email'], results['tech_email'])))
+
 			report.write("Domain IP (see RDAP below): {}\n\n".format(domain_ip))
 			print(green("[+] IP is {} - using this for RDAP.".format(domain_ip)))
-		else:
-			who = whois.whois(domain)
-			report.write("\nWhois results for {}\n".format(domain))
-			report.write("Domain Name: {}\n".format(who.domain_name))
-			try:
-				for name in who.registrant_name:
-					report.write("Registrant: {}\n".format(name))
-			except:
-				pass # No registrant names, so we pass - can happen when IP points to a subdomain like server.domain.com
-			report.write("Organization: {}\n".format(who.org))
-		if verbose:
-			for email in who.emails:
-				report.write("Email: {}\n".format(email))
-			report.write("Address: {}, {}{}, {}, {}\n".format(who.address,who.city,who.zipcode,who.state,who.country))
-			for server in who.name_servers:
-				report.write("DNS: {}\n".format(server))
-			report.write("DNSSEC: {}\n".format(who.dnssec))
-			report.write("Status: {}\n".format(who.status))
-	except Exception  as e:
-		report.write("The whois lookup failed for {}!\n\n".format(domain))
-		print(red("[!] Failed to collect whois information for {}!").format(domain))
-		print(red("[!] Error: {}".format(e)))
+	except Exception as e:
+		report.write("Failed to collect domain information for {}!\n\n".format(domain))
 
 	# Run RDAP lookup
 	# Special thanks to GRC_Ninja for recommending this!
 	try:
 		print(green("[+] Running RDAP lookup for {}".format(domain)))
-		rdapwho = IPWhois(domain_ip)
-		results = rdapwho.lookup_rdap(depth=1)
-		asn = results['asn']
-		report.write("ASN: {}\n".format(asn))
-		asn_country_code = results['asn_country_code']
-		report.write("ASN Country Code: {}\n".format(asn_country_code))
+		results = runRDAP(domain_ip)
+
+		# Output some useful domain information for immediate review
+		print(yellow("\nNet Range \t Organization \t Source"))
+		print(yellow("{} \t {} \t {}\n".format(results['network']['cidr'], results['network']['name'], results['asn_registry'])))
+
+		report.write("RDAP information from {}\n".format(results['asn_registry']))
+		organization = results['network']['name']
+		report.write("Organization:\t{}\n".format(organization))
 		network_cidr = results['network']['cidr']
-		report.write("Network CIDR: {}\n\n".format(network_cidr))
+		report.write("Network CIDR:\t{}\n".format(network_cidr))
+		asn = results['asn']
+		report.write("ASN:\t\t{}\n".format(asn))
+		asn_country_code = results['asn_country_code']
+		report.write("ASN Country:\t{}\n".format(asn_country_code))
+		# Verbose mode is optional to allow users to NOT
 		if verbose:
 			for object_key, object_dict in results['objects'].items():
 				handle = str(object_key)
@@ -293,10 +371,10 @@ def collectDomainInfo(domain, report, verbose):
 						address = results['objects'][item]['contact']['address']
 						if address is not None:
 							report.write("Address: {}\n\n".format(address[0]['value']))
+		else:
+				report.write("\nEnumeration of contact information was skipped because Verbose mode was not enabled.\n\n")
 	except Exception  as e:
 		report.write("The RDAP lookup failed for {}!\n\n".format(domain_ip))
-		print(red("[!] Failed to collect RDAP information for {}!").format(domain_ip))
-		print(red("[!] Error: {}".format(e)))
 
 	shodanSearch(domain_name, report)
 	censysSearch(domain_name, report)
@@ -309,7 +387,8 @@ def collectDomainInfo(domain, report, verbose):
 
 
 def urlVoidLookup(domain, report):
-	# Check reputation with URLVoid
+	"""Collect reputation data from URLVoid for target domain -- API key required
+	"""
 	if not isip(domain):
 		try:
 			if URLVOID_API_KEY is not None:
@@ -358,8 +437,51 @@ def urlVoidLookup(domain, report):
 		print(red("[!] Target is not a domain, so skipping URLVoid queries."))
 
 
+def searchCymon(target, report):
+	"""Get reputation data for target from Cymon.io -- API key required
+	"""
+	print(green("[+] Checking Cymon for domains associated with the provided list of IPs."))
+	try:
+		if isip(target):
+			# Search for IP and domains tied to the IP
+			data = cyAPI.ip_domains(target)
+			results = data['results']
+			report.write("\n--- The following data is for IP: {}---\n".format(target))
+			for result in results:
+				report.write("\nURL: %s\n" % result['name'])
+				report.write("Created: %s\n" % result['created'])
+				report.write("Updated: %s\n" % result['updated'])
+			# Search for security events for the IP
+			data = cyAPI.ip_events(target)
+			results = data['results']
+			report.write("\nEVENT results:\n")
+			for result in results:
+				report.write("\nTitle: %s\n" % result['title'])
+				report.write("Description: %s\n" % result['description'])
+				report.write("Created: %s\n" % result['created'])
+				report.write("Updated: %s\n" % result['updated'])
+				report.write("Details: %s\n" % result['details_url'])
+		else:
+			# Search for domains and IP addresses tied to the domain
+			results = cyAPI.domain_lookup(target)
+			report.write("\n--- The following data is for domain: {}---\n".format(target))
+			report.write("\nURL: %s\n" % results['name'])
+			report.write("Created: %s\n" % results['created'])
+			report.write("Updated: %s\n" % results['updated'])
+			for source in results['sources']:
+				report.write("Source: {}\n".format(source))
+			for ip in results['ips']:
+				report.write("IP: {}\n".format(ip))
+
+		print(green("[+] Cymon search completed!"))
+	except:
+		print(red("[!] Cymon.io returned a 404 indicating no results."))
+
+
 def dnsRecon(target, client, brute):
-	f = "reports/{}/DNS_Report - {}.txt".format(client,target)
+	"""Additional DNS information collection using DNSRecon
+	"""
+	f = "reports/{}/DNS_Report - {}.txt".format(client, target)
 	with open(f, 'w') as report:
 		report.write("### DNS Report for {} ###\n\n".format(target))
 		# Run dnsrecon for several different lookups
@@ -372,7 +494,7 @@ def dnsRecon(target, client, brute):
 			report.write(result.decode())
 		except:
 			print(red("[!] Execution of dnsrecon -t std failed!"))
-			report.write("Execution of dnsrecon -t stdfailed!\n")
+			report.write("Execution of dnsrecon -t std failed!\n")
 		# Google for sub-domains
 		try:
 			cmd = "dnsrecon -d {} -t goo | cut -b 5-".format(target)
@@ -419,7 +541,8 @@ def dnsRecon(target, client, brute):
 
 
 def shodanSearch(target, report):
-	# Perform Shodan searches
+	"""Collect information Shodan has for target IP or domain name -- API key required
+	"""
 	if shoAPI is None:
 		pass
 	else:
@@ -462,8 +585,9 @@ def shodanSearch(target, report):
 				report.write("Error: {}\n".format(e))
 
 
-
 def censysSearch(target, report):
+	"""Collect information Censys has for target IP or domain name -- API key required
+	"""
 	if cenCertAPI is None:
 		pass
 	else:
@@ -479,7 +603,7 @@ def censysSearch(target, report):
 				print(red("[!] Error: {}".format(e)))
 				report.write("Error: {}\n".format(e))
 		else:
-			report.write("Censys IPv4 results for {}:\n\n".format(target))
+			report.write("\nCensys IPv4 results for {}:\n\n".format(target))
 			try:
 				for i in cenAddAPI.search(target):
 					for prot in i["protocols"]:
@@ -490,6 +614,8 @@ def censysSearch(target, report):
 
 
 def googleFu(client, target):
+	"""Use Google to find pages with login forms and "index of" pages
+	"""
 	f = "reports/{}/Gooogle_Report - {}.txt".format(client,target)
 
 	with open(f, 'w') as report:
@@ -561,45 +687,3 @@ def googleFu(client, target):
 			print ("Error: {}".format(e))
 			print(red("[!] Requests failed! It could be the internet connection or a CAPTCHA. Try again."))
 			report.write("Search failed due to a bad connection or a CAPTCHA. You can try manually running this search: {}\n".format(url))
-
-
-# Cymon - Provides URLs associated with an IP
-def searchCymon(target, report):
-	print(green("[+] Checking Cymon for domains associated with the provided list of IPs."))
-	try:
-		if isip(target):
-			# Search for domains tied to the IP
-			data = cyAPI.ip_domains(target)
-			results = data['results']
-			report.write("\n--- The following data is for IP: {}---\n".format(target))
-			report.write("DOMAIN search results:\n")
-			for result in results:
-				report.write("\nURL: %s\n" % result['name'])
-				report.write("Created: %s\n" % result['created'])
-				report.write("Updated: %s\n" % result['updated'])
-			# Search for security events for the IP
-			data = cyAPI.ip_events(target)
-			results = data['results']
-			report.write("\nEVENT results:\n")
-			for result in results:
-				report.write("\nTitle: %s\n" % result['title'])
-				report.write("Description: %s\n" % result['description'])
-				report.write("Created: %s\n" % result['created'])
-				report.write("Updated: %s\n" % result['updated'])
-				report.write("Details: %s\n" % result['details_url'])
-			print(green("[+] Cymon search completed!"))
-		else:
-			# Search for domains tied to the IP
-			results = cyAPI.domain_lookup(target)
-			report.write("\n--- The following data is for domain: {}---\n".format(target))
-			report.write("DOMAIN search results:\n")
-			report.write("\nURL: %s\n" % results['name'])
-			report.write("Created: %s\n" % results['created'])
-			report.write("Updated: %s\n" % results['updated'])
-			for source in results['sources']:
-				report.write("Source: {}\n".format(source))
-			for ip in results['ips']:
-				report.write("IP: {}\n".format(ip))
-			print(green("[+] Cymon search completed!"))
-	except:
-		print(red("[!] Cymon.io returned a 404 indicating no results."))

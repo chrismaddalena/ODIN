@@ -8,7 +8,7 @@ import tweepy
 from colors import *
 from lib.theharvester import *
 import time
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup as BS
 
 # Try to setup Twitter OAuth
 try:
@@ -28,7 +28,7 @@ except:
 # Try to get the user's Full Contact API key
 try:
 	contact_key_file = open('auth/fullcontactkey.txt', 'r')
-	contact_key_line = contactn_key_file.readlines()
+	contact_key_line = contact_key_file.readlines()
 	CONTACT_API_KEY = contact_key_line[1].rstrip()
 	contact_key_file.close()
 except:
@@ -40,6 +40,8 @@ headers = { 'User-Agent' : user_agent }
 
 
 def pwnCheck(email):
+	"""Use HIBP's API to check for the target's email in security breaches
+	"""
 	PWNED_API_URL = "https://haveibeenpwned.com/api/breachedaccount/{}".format(email)
 	try:
 		r = requests.get(PWNED_API_URL)
@@ -49,6 +51,9 @@ def pwnCheck(email):
 
 
 def pasteCheck(email):
+	"""Use HIBP's API to check for the target's email in pastes across multiple
+	paste websites, e.g. slexy, ghostbin, pastebin
+	"""
 	PASTE_API_URL = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
 	try:
 		r = requests.get(PASTE_API_URL)
@@ -58,23 +63,29 @@ def pasteCheck(email):
 
 
 def fullContactEmail(email):
+	"""Use the Full Contact API to collect social information for the target
+	"""
 	if CONTACT_API_KEY is None:
 		print(red("[!] No Full Contact API key, so skipping these searches."))
 	else:
 		base_url = 'https://api.fullcontact.com/v2/person.json'
 		payload = {'email':email, 'apiKey':CONTACT_API_KEY}
 		resp = requests.get(base_url, params=payload)
+		if resp.status_code == 200:
+			return resp.json()
 
 
-def harvest(client,domain):
-	print(green("""
-Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. (Thanks, Troy Hunt!) This may take a few minutes.
+def harvest(client, domain):
+	"""Use TheHarvester to discover email addresses and employee names and
+	pull-in information from HIBP and Twitter
+	"""
+
+	print(green("""Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. (Thanks, Troy Hunt!) This may take a few minutes.
 	"""))
 
 	harvestLimit = 100
 	harvestStart = 0
-
-	f = "reports/{}/Email_Report.txt".format(client)
+	f = "reports/{}/People_Report.txt".format(client)
 
 	print(green("[+] Running The Harvester"))
 	# Search trhough most of Harvester's supported engines
@@ -190,15 +201,38 @@ Viper will now attempt to find email addresses and potentially vulnerable accoun
 					# Check if the Twitter user's "real" name appears in our list of unique people
 					# If it does, remove them from the list (for later) and create link for their LinkedIn profile
 					if user.name in uniquePeople:
-						url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + user.name + '"' + ' ' + '"' + client + '"'
-						url = url.replace(' ','%20')
-						report.write("LinkedIn Profile: {}\n\n".format(url))
+						links = getLinked(user.name, client)
+						report.write("Related LinkedIn Links:\n")
+						for link in links:
+							report.write("{}\n".format(link))
+						report.write("\n")
 						uniquePeople.remove(user.name)
 				except:
 					print(red("[!] Error involving {}. This may not be a real user or there may be an issue with one of the user objects.".format(twit)))
 		for person in uniquePeople:
 			report.write("{}\n".format(person))
-			# We use Bing because you'll get a nice profile snapshot in the results without logging-in
-			url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + person + '"' + ' ' + '"' + client + '"'
-			url = url.replace(' ','%20')
-			report.write("LinkedIn: {}\n\n".format(url))
+			links = getLinked(person, client)
+			report.write("Related LinkedIn Links:\n")
+			for link in links:
+				report.write("{}\n".format(link))
+			report.write("\n")
+
+
+def getLinked(target, company):
+	"""Construct a Bing search URL and scrape for LinkedIn profile links related to the target's name.
+	"""
+	url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + target + '"' + ' ' + '"' + company + '"'
+	html = requests.get(url)
+	soup = BS(html.text, "html.parser")
+	result = soup.findAll('li', {'class': 'b_algo'})
+	name = target.split(" ")
+	refs = []
+	for i in result:
+		link = i.a['href']  # Get Hrefs from bing's source
+		if '/dir/' in link or '/title/' in link or 'groupItem' in link or not 'linkedin.com' in link:
+			continue
+		else:
+			if name[0].lower() in link or name[1].lower() in link:
+				refs.append(link)
+	nodupLinks = set(refs)  # try and remove duplicates
+	return nodupLinks

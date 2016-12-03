@@ -14,18 +14,19 @@ import csv
 import _thread
 
 def upprogress(progress):
-
 	sys.stdout.write('\r[{0}] {1}%'.format('#' * (progress / 10), progress))
 	sys.stdout.flush()
 
+
 def infile(ifile, ips, breakrange):
-	"""Get the ips from the file and put them in our array"""
-	# open the file and readlines so each line is separate
+	"""Get the IPs from the file and put them in our array
+	"""
+	# Open the file and readlines so each line is separate
 	preParse = open(ifile, 'r').readlines()
-	# start iterating through each line
+	# Start iterating through each line
 	for i in preParse:
-		# check is a range consists of a -
-		# example 192.168.1.1-50 becomes 192.168.1.1,192.168.1.50
+		# Check is a range consists of a -
+		# eExample 192.168.1.1-50 becomes 192.168.1.1,192.168.1.50
 		if "-" in i:
 			i = i.rstrip()
 			a = i.split("-")
@@ -33,18 +34,18 @@ def infile(ifile, ips, breakrange):
 			b = a[0]
 			dotSplit = b.split(".")
 			j = "."
-			# join the values using a "." so it makes a valid IP
+			# Join the values using a "." so it makes a valid IP
 			combine = dotSplit[0], dotSplit[1], dotSplit[2], a[1]
 			endrange = j.join(combine)
-			# calculate the ip range. useful. :P
+			# Calculate the IP range
 			ip_list = list(iter_iprange(startrange, endrange))
-			# iterate through the range and remobe the stupid IPList(blahblahblah)
+			# Iterate through the range and remove the IPList
 			for i in ip_list:
 				a = str(i)
 				# Append the ips
 				ips.append(a)
-		# check is a range consists of a "_"
-		# range like 192.168.1.2_192.168.1.155 will have all ips between it and append it.
+		# Check is a range consists of a "_"
+		# Ranges like 192.168.1.2_192.168.1.155 will have all IPs between it and append it.
 		elif "_" in i:
 			i = i.rstrip()
 			a = i.split("_")
@@ -69,14 +70,15 @@ def infile(ifile, ips, breakrange):
 
 
 def reverse(z):
-	"""Get reverse dns entry..GO DNS!"""
-	# Check if the ip is a CIDR value because we can't navigate to a CIDR val, silly.
+	"""Get reverse DNS information
+	"""
+	# Check if the IP is a CIDR value because we can't navigate to a CIDR value
 	if "/" in z:
 		# Return None so that we at least fill some data to see there is nothing.
 		return None
 	else:
 		ip = z
-		# try to resolve.
+		# Try to resolve.
 		try:
 			# Try and get the hostname via sockets :D
 			chk = socket.gethostbyaddr(ip)
@@ -84,21 +86,22 @@ def reverse(z):
 		except Exception as e:
 			return None
 
+
 def getcert(a):
-	"""Get SSL Cert CN"""
-	# Return None becasue we can't navigate to a CIDR for ssl.
+	"""Get SSL certificate information"""
+	# Return None becasue we can't navigate to a CIDR for SSL
 	if "/" in a:
 		return None
 	else:
 		next
 	try:
-		# Connect over port 443.
+		# Connect over port 443
 		cert = ssl.get_server_certificate((a, 443))
 	except Exception as e:
 		# If it can't connect, return nothing/fail
 		return None
 	try:
-		# use openssl to pull cert information
+		# Use OpenSSL to pull cert information
 		c = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
 		subj = c.get_subject()
 		comp = subj.get_components()
@@ -110,11 +113,12 @@ def getcert(a):
 			else:
 				return None
 	except Exception as e:
-		# if openssl fails to get information, return nothing/fail
+		# If OpenSSL fails to get information, return nothing/fail
 		return None
 
 def who(ips, out):
-	"""Lookup ip/ip+cidr in ARIN db"""
+	"""Lookup IP or CIDR in ARIN DB
+	"""
 	#upprogress(0)
 	total = len(ips)
 	prog = 0.0
@@ -130,19 +134,16 @@ def who(ips, out):
 			except:
 				# Die, because we can't connect
 				exit('Cannot connect to ARIN!')
-			# print r
 			tmp = r.json()
 			if "orgRef" not in tmp:
 				name = 'None'
 			else:
 				name = tmp['net']['orgRef']['@name']
-			# print name
 			start = tmp['net']['netBlocks']['netBlock']['startAddress']['$']
 			end = tmp['net']['netBlocks']['netBlock']['endAddress']['$']
 			hostname = reverse(i)
 			cn = getcert(i)
 			out[i] = i, name, start, end, hostname, cn
-			# print name,start,end
 
 		else:
 			try:
@@ -173,7 +174,8 @@ def who(ips, out):
 
 
 def outfile(out, ofile):
-	"""Output dict to csv"""
+	"""Output dict to csv
+	"""
 	writer = csv.writer(open(ofile, 'w'))
 	a = list(out.values())
 	for i in a:

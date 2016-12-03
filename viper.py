@@ -27,8 +27,10 @@ def setupReports(client):
 		except:
 			print(red("[!] Could not create reports directory!"))
 
+
 class AliasedGroup(click.Group):
-	"""Allows commands to be called by their first unique character"""
+	"""Allows commands to be called by their first unique character
+	"""
 
 	def get_command(self, ctx, cmd_name):
 		"""
@@ -37,7 +39,6 @@ class AliasedGroup(click.Group):
 		:param cmd_name: Calling command name
 		:return:
 		"""
-
 		rv = click.Group.get_command(self, ctx, cmd_name)
 		if rv is not None:
 			return rv
@@ -95,6 +96,7 @@ def osint(self, client, domain, dns, google, files, scope_file, verbose, brute):
 	report = open(f, 'w')
 
 	email_tools.harvest(client, domain)
+	domain_tools.goCrazy(client, domain)
 
 	try:
 		report.write("### Domain Report for {} ###\n".format(client))
@@ -177,6 +179,8 @@ def domain(client, domain, dns, google, files, scope_file, verbose, brute):
 	setupReports(client)
 	f = "reports/{}/Domain_Report.txt".format(client)
 	report = open(f, 'w')
+
+	domain_tools.goCrazy(client, domain)
 
 	try:
 		report.write("### Domain Report for {} ###\n".format(client))
@@ -369,27 +373,3 @@ def knowing():
 
 if __name__ == "__main__":
 	viper()
-
-
-#The Swamp-Viper phishing toolkit:
-# file = raw_input("Enter name of file with the names: ")
-# phish_tools.parseName(file)
-
-# # Randomize the list of targets
-# elif option == "2":
-# 	file = raw_input("Enter the location of file of targets: ")
-# 	output = raw_input("Enter a name for the output file (txt): ")
-# 	try:
-# 		print(green ("[+] Attempting to read %s" % file))
-# 		with open (file, 'r') as file:
-# 			names = file.readlines()
-# 		with open(output, "w") as file:
-# 			temp = []
-# 			temp = phish_tools.randomList(names)
-# 			file.write(''.join(str(i) for i in temp))
-# 		print(green("[+] Successfully created a random list of targets written to %s" % output))
-# 		phishingMenu()
-# 	except Exception as e:
-# 		print(red("[!] Failed to open the file!"))
-# 		print(red("[!] Error: %s" % e))
-# 		phishingMenu()
