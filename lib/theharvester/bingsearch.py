@@ -1,10 +1,9 @@
 import string
-import httplib
+import requests
 import sys
-import myparser
+from . import myparser
 import re
 import time
-
 
 class search_bing:
 
@@ -22,42 +21,44 @@ class search_bing:
         self.counter = start
 
     def do_search(self):
-        h = httplib.HTTP(self.server)
-        h.putrequest('GET', "/search?q=%40" + self.word +
-                     "&count=50&first=" + str(self.counter))
-        h.putheader('Host', self.hostname)
-        h.putheader('Cookie', 'SRCHHPGUSR=ADLT=DEMOTE&NRSLT=50')
-        h.putheader('Accept-Language', 'en-us,en')
-        h.putheader('User-agent', self.userAgent)
-        h.endheaders()
-        returncode, returnmsg, headers = h.getreply()
-        self.results = h.getfile().read()
-        self.totalresults += self.results
+        headers = { 'User-Agent' : self.userAgent }
+        try:
+            urly = "http://" + self.server + "/search?q=%40" + self.word + "&count=50&first=" + str(self.counter)
+        except Exception as e:
+            print(e)
+        try:
+            r = requests.get(urly, headers=headers)
+        except Exception as e:
+            print(e)
+        self.results = r.content
+        self.totalresults += str(self.results)
 
     def do_search_api(self):
-        h = httplib.HTTP(self.apiserver)
-        h.putrequest('GET', "/xml.aspx?Appid=" + self.bingApi + "&query=%40" +
-                     self.word + "&sources=web&web.count=40&web.offset=" + str(self.counter))
-        h.putheader('Host', "api.search.live.net")
-        h.putheader('User-agent', self.userAgent)
-        h.endheaders()
-        returncode, returnmsg, headers = h.getreply()
-        self.results = h.getfile().read()
-        self.totalresults += self.results
+        headers = { 'User-Agent' : self.userAgent }
+        try:
+            urly = "http://" + self.apiserver + "/xml.aspx?Appid=" + self.bingApi + "&query=%40" + self.word + "&sources=web&web.count=40&web.offset=" + str(self.counter)
+        except Exception as e:
+            print(e)
+        try:
+            r = requests.get(urly, headers=headers)
+        except Exception as e:
+            print(e)
+        self.results = r.content
+        self.totalresults += str(self.results)
 
     def do_search_vhost(self):
-        h = httplib.HTTP(self.server)
-        h.putrequest('GET', "/search?q=ip:" + self.word +
-                     "&go=&count=50&FORM=QBHL&qs=n&first=" + str(self.counter))
-        h.putheader('Host', self.hostname)
-        h.putheader(
-            'Cookie', 'mkt=en-US;ui=en-US;SRCHHPGUSR=NEWWND=0&ADLT=DEMOTE&NRSLT=50')
-        h.putheader('Accept-Language', 'en-us,en')
-        h.putheader('User-agent', self.userAgent)
-        h.endheaders()
-        returncode, returnmsg, headers = h.getreply()
-        self.results = h.getfile().read()
-        self.totalresults += self.results
+        headers = { 'User-Agent' : self.userAgent }
+        try:
+            urly = "http://" + self.server + "/search?q=ip:" + self.word + "&go=&count=50&FORM=QBHL&qs=n&first=" + str(self.counter)
+        except Exception as e:
+            print(e)
+        try:
+            r = requests.get(urly, headers=headers)
+			# h.putheader('Cookie', 'mkt=en-US;ui=en-US;SRCHHPGUSR=NEWWND=0&ADLT=DEMOTE&NRSLT=50')
+        except Exception as e:
+            print(e)
+        self.results = r.content
+        self.totalresults += str(self.results)
 
     def get_emails(self):
         rawres = myparser.parser(self.totalresults, self.word)
@@ -74,7 +75,7 @@ class search_bing:
     def process(self, api):
         if api == "yes":
             if self.bingApi == "":
-                print "Please insert your API key in the discovery/bingsearch.py"
+                print("Please insert your API key in the discovery/bingsearch.py")
                 sys.exit()
         while (self.counter < self.limit):
             if api == "yes":
@@ -84,7 +85,7 @@ class search_bing:
                 self.do_search()
                 time.sleep(1)
             self.counter += 50
-            print "\tSearching " + str(self.counter) + " results..."
+            # print("\tSearching " + str(self.counter) + " results...")
 
     def process_vhost(self):
         # Maybe it is good to use other limit for this.
