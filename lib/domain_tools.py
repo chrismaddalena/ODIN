@@ -218,8 +218,8 @@ def goCrazy(client, target):
 	with open(f, 'w') as report:
 		try:
 			report.write("### URLCRAZY Typosquatting Report for {} ###\n\n".format(target))
-			#cmd = "urlcrazy {} -f csv -o crazy_temp.csv".format(target)
-			#subprocess.call(cmd, shell=True)
+			cmd = "urlcrazy {} -f csv -o crazy_temp.csv".format(target)
+			subprocess.call(cmd, shell=True)
 			with open(outfile, 'r') as results:
 				reader = csv.DictReader(row.replace('\0', '') for row in results)
 				for row in reader:
@@ -570,8 +570,8 @@ def shodanSearch(target, report):
 			try:
 				host = shoAPI.host(target)
 			except shodan.APIError as e:
-				print(red("[!] Error: {}"(e)))
-				report.write("[!] Error: {}"(e))
+				print(red("[!] Error: {}".format(e)))
+				report.write("[!] Error: {}".format(e))
 			try:
 				report.write("Shodan results found for {}:\n\n".format(target))
 				report.write("IP: {}\n".format(host['ip_str']))
