@@ -218,8 +218,9 @@ def goCrazy(client, target):
 	with open(f, 'w') as report:
 		try:
 			report.write("### URLCRAZY Typosquatting Report for {} ###\n\n".format(target))
-			cmd = "urlcrazy {} -f csv -o crazy_temp.csv".format(target)
-			subprocess.call(cmd, shell=True)
+			cmd = "urlcrazy -f csv -o {} {}".format(outfile, target)
+			with open(os.devnull, "w") as devnull:
+				subprocess.call(cmd, stdout=devnull, shell=True)
 			with open(outfile, 'r') as results:
 				reader = csv.DictReader(row.replace('\0', '') for row in results)
 				for row in reader:
@@ -231,15 +232,16 @@ def goCrazy(client, target):
 
 			squatted = zip(domains, a_records, mx_records)
 
+			report.write("Domain\t\t\tDNS-A\t\tDNS-MX\n")
 			for d in squatted:
-				report.write("Domain \t DNS-A \t DNS-MX\n")
 				report.write("{}\t{}\t{}\n".format(d[0], d[1], d[2]))
-				print("{}\t{}\t{}\n".format(d[0], d[1], d[2]))
 
 			os.rename(outfile, finalCSV)
-		except:
+		except Exception as e:
 			print(red("[!] Execution of urlcrazy failed!"))
+			print(red("[!] Error: {}".format(e)))
 			report.write("Execution of urlcrazy failed!\n")
+			report.write("[!] Error: {}".format(e))
 
 
 def collectDomainInfo(domain, report, verbose):
