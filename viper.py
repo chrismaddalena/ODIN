@@ -320,13 +320,13 @@ def verify(scope_file, output, cidr, client):
 	# initialize our dict for info storage
 	out = {}
 
-	try:
-		verification.infile(scope_file, ips, cidr)
-		verification.who(ips, out)
-		verification.outfile(out, report)
-	except Exception as e:
-		print(red("[!] Verification failed!"))
-		print(red("[!] Error: %s" % e))
+	#try:
+	verification.infile(scope_file, ips, cidr)
+	verification.who(ips, out)
+	verification.outfile(out, report)
+	#except Exception as e:
+	#	print(red("[!] Verification failed!"))
+	#	print(red("[!] Error: %s" % e))
 
 
 @viper.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')

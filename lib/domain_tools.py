@@ -218,7 +218,7 @@ def goCrazy(client, target):
 	with open(f, 'w') as report:
 		try:
 			report.write("### URLCRAZY Typosquatting Report for {} ###\n\n".format(target))
-			cmd = "urlcrazy -f csv -o {} {}".format(outfile, target)
+			cmd = "urlcrazy -f csv -o '{}' {}".format(outfile, target)
 			with open(os.devnull, "w") as devnull:
 				subprocess.call(cmd, stdout=devnull, shell=True)
 			with open(outfile, 'r') as results:
