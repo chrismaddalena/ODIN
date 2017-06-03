@@ -13,3 +13,4 @@ pyopenssl
 IPy
 dnspython
 censys
+pyPDF

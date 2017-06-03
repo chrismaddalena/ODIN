@@ -9,39 +9,36 @@ from colors import *
 from lib.theharvester import *
 import time
 from bs4 import BeautifulSoup as BS
+from lib import helpers
 
 # Try to setup Twitter OAuth
 try:
-	twitter_key_file = open('auth/twitter.txt', 'r')
-	twitter_key_line = twitter_key_file.readlines()
-	consumer_key = twitter_key_line[1].rstrip()
-	consumer_secret = twitter_key_line[2].rstrip()
-	access_token = twitter_key_line[3].rstrip()
-	access_token_secret = twitter_key_line[4].rstrip()
-	twitAuth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+	consumer_key = helpers.config_section_map("Twitter")["consumer_key"]
+	consumer_key_secret = helpers.config_section_map("Twitter")["key_secret"]
+	access_token = helpers.config_section_map("Twitter")["access_token"]
+	access_token_secret = helpers.config_section_map("Twitter")["token_secret"]
+	twitAuth = tweepy.OAuthHandler(consumer_key, consumer_key_secret)
 	twitAuth.set_access_token(access_token, access_token_secret)
 	twitAPI = tweepy.API(twitAuth)
-	twitter_key_file.close()
-except:
+except Exception as e:
 	twitAPI = None
+	print(yellow("[!] Could not setup OAuth for Twitter API."))
+	print(yellow("L.. Details: {}".format(e)))
 
 # Try to get the user's Full Contact API key
 try:
-	contact_key_file = open('auth/fullcontactkey.txt', 'r')
-	contact_key_line = contact_key_file.readlines()
-	CONTACT_API_KEY = contact_key_line[1].rstrip()
-	contact_key_file.close()
-except:
-	CONTACT_API_KEY = None
+	CONTACT_API_KEY = helpers.config_section_map("Full Contact")["api_key"]
+except Exception as e:
+	print(yellow("[!] Could not fetch Full Contact API key."))
+	print(yellow("L.. Details: {}".format(e)))
 
 # Headers for use with requests
 user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
 headers = { 'User-Agent' : user_agent }
 
 
-def pwnCheck(email):
-	"""Use HIBP's API to check for the target's email in security breaches
-	"""
+def pwn_check(email):
+	"""Use HIBP's API to check for the target's email in public security breaches."""
 	PWNED_API_URL = "https://haveibeenpwned.com/api/breachedaccount/{}".format(email)
 	try:
 		r = requests.get(PWNED_API_URL)
@@ -50,7 +47,7 @@ def pwnCheck(email):
 		return []
 
 
-def pasteCheck(email):
+def paste_check(email):
 	"""Use HIBP's API to check for the target's email in pastes across multiple
 	paste websites, e.g. slexy, ghostbin, pastebin
 	"""
@@ -62,9 +59,8 @@ def pasteCheck(email):
 		return []
 
 
-def fullContactEmail(email):
-	"""Use the Full Contact API to collect social information for the target
-	"""
+def full_contact_email(email):
+	"""Use the Full Contact API to collect social information for the target."""
 	if CONTACT_API_KEY is None:
 		print(red("[!] No Full Contact API key, so skipping these searches."))
 	else:
@@ -77,10 +73,14 @@ def fullContactEmail(email):
 
 def harvest(client, domain):
 	"""Use TheHarvester to discover email addresses and employee names and
-	pull-in information from HIBP and Twitter
+	pull-in information from HIBP, LinkedIn, and Twitter.
 	"""
 
-	print(green("""Viper will now attempt to find email addresses and potentially vulnerable accounts. TheHarvester will be used to find email addresses, names, and social media accounts. Emails will be checked against the HaveIBeenPwned database. (Thanks, Troy Hunt!) This may take a few minutes.
+	print(green("""
+	ODIN will now attempt to find email addresses and potentially vulnerable accounts.
+	TheHarvester will be used to find email addresses, names, and social media accounts.
+	Emails will be checked against the HaveIBeenPwned database. (Thanks, Troy Hunt!)
+	This may take a few minutes.
 	"""))
 
 	harvestLimit = 100
@@ -144,14 +144,15 @@ def harvest(client, domain):
 		report.write("---THEHARVESTER Results---\n")
 		report.write("Emails checked with HaveIBeenPwned for breaches and pastes:\n\n")
 		for email in uniqueEmails:
-			# Make sure we drop that @domain.com result Harvester always includes
+			# Make sure we drop that @domain.com result Harvester seems to always includes
 			if email == '@' + domain:
 				pass
 			else:
-				# Check haveibeenpwned data breaches
-				# We must use Try because an empty result is like a 404 and causes an error
+				# Check HaveIBeenPwned's known data breaches
+				# Note: This Try is primarily for catching empty results
+				# No results is like a 404
 				try:
-					pwned = pwnCheck(email)
+					pwned = pwn_check(email)
 					# If no results for breaches we return None
 					if not pwned:
 						report.write("{}\n".format(email))
@@ -166,9 +167,10 @@ def harvest(client, domain):
 				except Exception as e:
 					print(red("[!] Error involving {}!").format(email))
 					print(red("[!] Error: {}".format(e)))
-				# Check haveibeenpwned for pastes from Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
+				# Check HaveIBeenPwned for pastes from:
+				# Pastebin, Pastie, Slexy, Ghostbin, QuickLeak, JustPaste, and AdHocUrl
 				try:
-					pastes = pasteCheck(email)
+					pastes = paste_check(email)
 					if pastes:
 						report.write("Pastes: {}\n".format(pastes))
 				except Exception as e:
@@ -218,21 +220,26 @@ def harvest(client, domain):
 			report.write("\n")
 
 
-def getLinked(target, company):
-	"""Construct a Bing search URL and scrape for LinkedIn profile links related to the target's name.
+def harvest_linkedin(target, company):
+	"""Construct a Bing search URL and scrape for LinkedIn profile links related
+	to the target's name and company.
 	"""
-	url = 'http://www.bing.com/search?q=site:linkedin.com ' + '"' + target + '"' + ' ' + '"' + company + '"'
+	url = 'http://www.bing.com/search?q=site:linkedin.com%20"{}"%20"{}"'.format(target, company)
 	html = requests.get(url)
 	soup = BS(html.text, "html.parser")
 	result = soup.findAll('li', {'class': 'b_algo'})
 	name = target.split(" ")
 	refs = []
 	for i in result:
-		link = i.a['href']  # Get Hrefs from bing's source
+		# Get href links from Bing's source
+		link = i.a['href']
 		if '/dir/' in link or '/title/' in link or 'groupItem' in link or not 'linkedin.com' in link:
 			continue
 		else:
 			if name[0].lower() in link or name[1].lower() in link:
 				refs.append(link)
-	nodupLinks = set(refs)  # try and remove duplicates
-	return nodupLinks
+				# Take just the first result to avoid large, unmanageable lists
+				break
+	# Remove duplicate results
+	noDupLinks = set(refs)
+	return noDupLinks

@@ -11,7 +11,7 @@ import time
 from colors import *
 
 
-def runNMAP(ip, ports, args, report):
+def run_nmap(ip, ports, args, report):
 	"""Run an nmap scan using supplied arguments to output a CSV file with results
 	and tab-delimited terminal results
 	"""
