@@ -14,7 +14,7 @@ import csv
 import _thread
 
 def upprogress(progress):
-	sys.stdout.write('\r[{0}] {1}%'.format('#' * (progress / 10), progress))
+	sys.stdout.write('\r[{0}] {1}%'.format('#' * int((progress / 10)), progress))
 	sys.stdout.flush()
 
 
@@ -119,7 +119,7 @@ def getcert(a):
 def who(ips, out):
 	"""Lookup IP or CIDR in ARIN DB
 	"""
-	#upprogress(0)
+	upprogress(0)
 	total = len(ips)
 	prog = 0.0
 	for i in ips:
@@ -149,9 +149,10 @@ def who(ips, out):
 			try:
 				# Send GET request to the ARIN RESTFUL API for IP vals
 				r = requests.get("http://whois.arin.net/rest/ip/"+i+".json")
+				tmp = r.json()
 			except:
 				exit('Cannot connect to ARIN!')
-			tmp = r.json()
+
 			try:
 				name = tmp['net']['customerRef']['@name']
 				start = tmp['net']['netBlocks']['netBlock']['startAddress']['$']
@@ -168,7 +169,7 @@ def who(ips, out):
 				cn = getcert(i)
 				out[i] = i, name, start, end, hostname, cn
 			prog = prog + 1
-			#upprogress(int(prog / total * 100))
+			upprogress(int(prog / total * 100))
 		# Pause for just a sec to not destroy ARIN with requests
 		sleep(1)
 
