@@ -1,4 +1,4 @@
-## O.D.I.N.
+## O.D.I.N. [BETA]
 ### Observe, Detect, and Investigate networks
 
 ![O.D.I.N.](https://vignette3.wikia.nocookie.net/archer/images/4/46/ODINLogo.png/revision/latest/scale-to-width-down/250?cb=20170319051757)
