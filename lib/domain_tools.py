@@ -279,9 +279,9 @@ class Domain_Check(object):
 
 				# Search for domains and IP addresses tied to the domain name
 				urlcrazy_results = []
-				for d in squatted:
+				for domain in squatted:
 					try:
-						r = session.get(cymon_api + "/domain/" + d[0])
+						r = session.get(cymon_api + "/domain/" + domain[0])
 						# results = json.loads(r.text)
 
 						if r.status_code == 200:
@@ -290,11 +290,11 @@ class Domain_Check(object):
 							malicious_domain = 0
 					except Exception as e:
 						malicious_domain = 0
-						print(red("[!] There was an error checking {} with Cymon.io!".format(d[0])))
+						print(red("[!] There was an error checking {} with Cymon.io!".format(domain[0])))
 
 					# Search for domains and IP addresses tied to the A-record IP
 					try:
-						r = session.get(cymon_api + "/ip/" + d[1])
+						r = session.get(cymon_api + "/ip/" + domain[1])
 						# results = json.loads(r.text)
 
 						if r.status_code == 200:
@@ -303,21 +303,21 @@ class Domain_Check(object):
 							malicious_ip = 0
 					except Exception as e:
 						malicious_ip = 0
-						print(red("[!] There was an error checking {} with Cymon.io!".format(d[1])))
+						print(red("[!] There was an error checking {} with Cymon.io!".format(domain[1])))
 
 					if malicious_domain == 1:
 						cymon_result = "Yes"
-						print(yellow("[*] {} was flagged as malicious, so consider looking into this.".format(d[0])))
+						print(yellow("[*] {} was flagged as malicious, so consider looking into this.".format(domain[0])))
 					elif malicious_ip == 1:
 						cymon_result = "Yes"
-						print(yellow("[*] {} was flagged as malicious, so consider looking into this.".format(d[1])))
+						print(yellow("[*] {} was flagged as malicious, so consider looking into this.".format(domain[1])))
 					else:
 						cymon_result = "No"
 
 					temp = {}
-					temp['domain'] = d[0]
-					temp['a-records'] = d[1]
-					temp['mx-records'] = d[2]
+					temp['domain'] = domain[0]
+					temp['a-records'] = domain[1]
+					temp['mx-records'] = domain[2]
 					temp['malicious'] = cymon_result
 					urlcrazy_results.append(temp)
 
@@ -453,8 +453,8 @@ class Domain_Check(object):
 		if not self.is_ip(domain):
 			try:
 				if self.URLVOID_API_KEY is not None:
-					print(green("[+] Checking reputation with URLVoid"))
-					url = "http://api.urlvoid.com/api1000/{}/host/{}".format(URLVOID_API_KEY,domain)
+					print(green("[+] Checking reputation for {} with URLVoid".format(domain)))
+					url = "http://api.urlvoid.com/api1000/{}/host/{}".format(self.URLVOID_API_KEY,domain)
 					response = requests.get(url)
 					tree = ET.fromstring(response.content)
 					return tree
