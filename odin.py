@@ -103,9 +103,9 @@ def domain(client, domain, dns, google, files, scope_file, verbose):
 	scope, ip_list, domains_list = reporter.prepare_scope(scope_file, domain)
 	with xlsxwriter.Workbook(output_report) as workbook:
 		reporter.create_domain_report(workbook, scope, ip_list, domains_list, dns)
-		# reporter.create_urlcrazy_worksheet(workbook, client, domain)
-		# reporter.create_shodan_worksheet(workbook, ip_list, domains_list)
-		# reporter.create_censys_worksheet(workbook, scope, verbose)
+		reporter.create_urlcrazy_worksheet(workbook, client, domain)
+		reporter.create_shodan_worksheet(workbook, ip_list, domains_list)
+		reporter.create_censys_worksheet(workbook, scope, verbose)
 
 
 # The PEOPLE module -- Primarily TheHarvester with some Twitter and LinkedIn sprinkled in
@@ -136,8 +136,8 @@ def people(client,domain):
 @click.option('-d', '--domain', help="The target's domain, such as example.com.", required=True)
 @click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, resolve_path=True), help="A text file containing your in-scope IP addresses and domain names. List each one on a new line.")
 @click.option('--dns', is_flag=True, help="Set this option if you want ODIN to perform DNS brute forcing on the scope file's domains.")
-# @click.option('--google', is_flag=True, help="Use this flag if you want to Google for index pages and admin pages for the domain.")
-# @click.option('--files', is_flag=True, help="Use this flag if you want to Google for files on the domain.")
+@click.option('--google', is_flag=True, help="Use this flag if you want to Google for index pages and admin pages for the domain.")
+@click.option('--files', is_flag=True, help="Use this flag if you want to Google for files on the domain.")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output for more domain information and certificate information from Censys.")
 @click.pass_context
 
