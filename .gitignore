@@ -5,5 +5,5 @@
 *.html
 *.nessus
 
-/auth/*
+/auth/keys.config
 /reports/*

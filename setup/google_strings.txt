@@ -1,4 +1,0 @@
-login
-logon
-admin
-administrator
