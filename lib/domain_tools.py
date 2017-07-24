@@ -332,7 +332,7 @@ class Domain_Check(object):
 			print(yellow("[*] Skipped urlcrazy check."))
 
 	def run_shodan_search(self, target):
-		"""Collect information Shodan has for target IP address. This uses
+		"""Collect information Shodan has for target domain name. This uses
 		the Shodan search instead of host lookup and returns the target results
 		dictionary from Shodan.
 
@@ -350,12 +350,16 @@ class Domain_Check(object):
 				print(red("L.. Details: {}".format(e)))
 
 	def run_shodan_lookup(self, target):
-		"""Collect information Shodan has for target domain name. This uses
+		"""Collect information Shodan has for target IP address. This uses
 		the Shodan host lookup instead of search and returns the target results
 		dictionary from Shodan.
 
 		A Shodan API key is required.
 		"""
+		# dns_resolve = "https://api.shodan.io/dns/resolve?hostnames=" + target + "&key=" + SHODAN_API_KEY
+	    # resolved = requests.get(dnsResolve)
+	    # target_ip = resolved.json()[target]
+
 		if self.shoAPI is None:
 			pass
 		else:
@@ -466,6 +470,17 @@ class Domain_Check(object):
 				print(red("L.. Details: {}".format(e)))
 		else:
 			print(red("[!] Target is not a domain, so skipping URLVoid queries."))
+
+	def run_dns_bruteforce(self, domain):
+		"""Uses subbrute library to bruteforce the domain's subdomains and returns
+		a list of results.
+		"""
+
+		# TODO UNDER CONSTRUCTION
+
+		# subdomains = subbrute.run(domain)
+
+		return subdomains
 
 	def search_google(self, client, target):
 		"""Use Google to find pages with login forms and 'index of' pages."""

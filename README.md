@@ -40,13 +40,17 @@ If you setup a Twitter app for O.D.I.N., the tokens can be used with Tweepy and 
 #### Cymon
 eSentire's Cymon is used to check domains and IP addresses to see if the target appears in any of Cymon's collected threat intelligence feeds. This is used for reputation checks, but also used in combination with urlcrazy to check similar, registered domains to see if the domain or the domain's A-record IP addresses have been reported.
 
+#### HaveIBeenPwned
+Email addresses are checked against HIBP to determine if any email addresses for the organization have been mentioned in any pastes or been involved in any security breaches.
+
 ### Special Thanks
 A big thank you to a few contributors who gave me the OK to re-use some of their code:
 * Ninjasl0th - Creator of the original scope verification script and all around cool dude!
 * 0xF1 - Architect behind Cymon and a great guy to have on your team!
 * GRC_Ninja - For providing great feedback regarding HTTP requests and RDAP.
-
-And to these folks who have maintained and offered some of the tools integrated into O.D.I.N.:
 * Troy Hunt - For giving me permission to use HaveIBeenPwned's REST API in this way.
-* Laramies - Creator of the awesome TheHarvester (https://github.com/laramies/theHarvester)!
-* TrullJ - For making the slick SSL Labs Scanner module (https://github.com/TrullJ/ssllabs)!
+
+And to these folks who have created/maintained some of the tools integrated into O.D.I.N.:
+* Alton Johnson (altjx) - The creator of the original of the very cool PyFOCA (https://github.com/altjx/ipwn) that exists here in its new Python 3 form as a part of O.D.I.N.
+* Laramies - Creator of the awesome TheHarvester (https://github.com/laramies/theHarvester).
+* TrullJ - For making the slick SSL Labs Scanner module (https://github.com/TrullJ/ssllabs).
