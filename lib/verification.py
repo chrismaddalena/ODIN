@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Credit to the original creator of this cript, Ninjasl0th!
 # https://github.com/NinjaSl0th/IP-Check
 
