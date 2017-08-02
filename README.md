@@ -51,6 +51,7 @@ A big thank you to a few contributors who gave me the OK to re-use some of their
 * Troy Hunt - For giving me permission to use HaveIBeenPwned's REST API in this way.
 
 And to these folks who have created/maintained some of the tools integrated into O.D.I.N.:
-* Alton Johnson (altjx) - The creator of the original of the very cool PyFOCA (https://github.com/altjx/ipwn) that exists here in its new Python 3 form as a part of O.D.I.N.
+* Alton Johnson (altjx) - The creator of the original very cool PyFOCA (https://github.com/altjx/ipwn) that exists here in its new Python 3 form as a part of O.D.I.N.
 * Laramies - Creator of the awesome TheHarvester (https://github.com/laramies/theHarvester).
+* PaulSec - Creator of the unofficial API for the DNS Dumpster (https://github.com/PaulSec/API-dnsdumpster.com)
 * TrullJ - For making the slick SSL Labs Scanner module (https://github.com/TrullJ/ssllabs).

@@ -10,6 +10,8 @@ import subprocess
 import time
 from xml.etree import ElementTree as ET
 import csv
+import base64
+import re
 import shodan
 from cymon import Cymon
 import censys.certificates
@@ -20,7 +22,7 @@ from bs4 import BeautifulSoup
 import requests
 from colors import red, green, yellow
 from IPy import IP
-from netaddr import IPNetwork
+from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 from lib import helpers
 
@@ -43,26 +45,26 @@ class DomainCheck(object):
         try:
             shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
             self.shoAPI = shodan.Shodan(shodan_api_key)
-        except Exception as error:
+        except:
             self.shoAPI = None
             print(yellow("[!] Did not find a Shodan API key."))
 
         try:
             self.cymon_api_key = helpers.config_section_map("Cymon")["api_key"]
             self.cyAPI = Cymon(self.cymon_api_key)
-        except Exception as error:
+        except Exception:
             self.cyAPI = Cymon()
             print(yellow("[!] Did not find a Cymon API key, so proceeding without API auth."))
 
         try:
             self.urlvoid_api_key = helpers.config_section_map("URLVoid")["api_key"]
-        except Exception as error:
+        except:
             self.urlvoid_api_key = None
             print(yellow("[!] Did not find a URLVoid API key."))
 
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
-        except Exception as error:
+        except:
             self.contact_api_key = None
             print(yellow("[!] Did not find a Full Contact API key."))
 
@@ -71,7 +73,7 @@ class DomainCheck(object):
             censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
             self.cenCertAPI = censys.certificates.CensysCertificates(api_id=censys_api_id, api_secret=censys_api_secret)
             self.cenAddAPI = censys.ipv4.CensysIPv4(api_id=censys_api_id, api_secret=censys_api_secret)
-        except Exception as error:
+        except:
             self.cenCertAPI = None
             self.cenAddAPI = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
@@ -480,94 +482,179 @@ looking into this.".format(domain[1])))
         else:
             print(red("[!] Target is not a domain, so skipping URLVoid queries."))
 
-    def run_dns_bruteforce(self, domain):
-        """Uses subbrute library to bruteforce the domain's subdomains and returns
-        a list of results.
+    def check_dns_dumpster(self, domain):
+        """Function to collect subdomains known to DNS Dumpster 
+        for the provided domain. This is base don PaulSec's 
+        unofficial DNS Dumpster API available on GitHub.
         """
-        # FIXME: UNDER CONSTRUCTION
-        # subdomains = subbrute.run(domain)
-        return subdomains
+        dnsdumpster_url = 'https://dnsdumpster.com/'
+        results = {}
+        cookies = {}
 
-    def search_google(self, client, target):
-        """Use Google to find pages with login forms and 'index of' pages."""
-        f = "reports/{}/Gooogle_Report - {}.txt".format(client, target)
+        requests.packages.urllib3.disable_warnings()
+        session = requests.session()
+        request = session.get(dnsdumpster_url, verify=False)
 
-        with open(f, 'w') as report:
-            # Search for different login/logon/admin/administrator pages
-            report.write("\n### GOOGLE HACKING Report for {} ###\n".format(target))
-            report.write("---GOOGLE LOGIN PAGE Results---\n")
-            print(green("[+] Beginning Google queries..."))
-            print(yellow("[-] Warning: Google sometimes blocks automated \
-queries like this by using a CAPTCHA. This may fail. If it does, \
-try again later or use a VPN/proxy."))
-            print(green("[+] Checking Google for login pages"))
-            try:
-                # Login Logon Admin and administrator
-                # Edit setup/google_strings.txt to customize your search terms
-                for start in range(0, 10):
-                    with open('setup/google_strings.txt') as googles:
-                        url = "https://www.google.com/search?q=site:{}+".format(target)
-                        terms = googles.readlines()
-                        totalTerms = len(terms)
-                        for i in range(totalTerms-1):
-                            url = url + "intitle:{}+OR+".format(terms[i].rstrip())
-                        url = url + "intitle:{}&start={}".format\
-                            (terms[totalTerms-1].rstrip(), str(start*10))
+        csrf_token = session.cookies['csrftoken']
+        cookies['csrftoken'] = session.cookies['csrftoken']
+        headers = {'Referer': dnsdumpster_url}
+        data = {'csrfmiddlewaretoken': csrf_token, 'targetip': domain}
 
-                    r = requests.get(url, headers=my_headers)
-                    status = r.status_code
-                    soup = BeautifulSoup(r.text)
+        request = session.post(dnsdumpster_url, cookies=cookies, data=data, headers=headers)
 
-                    for cite in soup.findAll('cite'):
-                        try:
-                            report.write("{}\n".format(cite.text))
-                        except:
-                            if not status == 200:
-                                report.write("Viper did not receive a 200 OK! \
-You can double check by using this search query:\n")
-                                report.write("Query: {}".format(url))
-                                break
-                            else:
-                                continue
+        if request.status_code != 200:
+            print("[+] There appears to have been an error \
+    communicating with DNS Dumpster -- {} received!".format(request.status_code))
 
-                    # Take a break to avoid Google blocking our IP
-                    time.sleep(sleep)
-            except Exception  as error:
-                print ("Error: {}".format(error))
-                print(red("[!] Requests failed! It could be the internet \
-connection or a CAPTCHA. Try again later."))
-                report.write("Search failed due to a bad connection or a CAPTCHA. \
-You can try manually running this search: {}\n".format(url))
+        soup = BeautifulSoup(request.content, 'lxml')
+        tables = soup.findAll('table')
 
-            report.write("\n--- GOOGLE INDEX OF PAGE Results ---\n")
-            print(green("[+] Checking Google for pages offering file indexes"))
-            try:
-                # Look for "index of"
-                for start in range(0, 10):
-                    url = "https://www.google.com/search?q=site:{}+\
-                        intitle:index.of&start=".format(target + str(start*10))
+        results = {}
+        results['domain'] = domain
+        results['dns_records'] = {}
+        results['dns_records']['dns'] = self.retrieve_results(tables[0])
+        results['dns_records']['mx'] = self.retrieve_results(tables[1])
+        results['dns_records']['txt'] = self.retrieve_txt_record(tables[2])
+        results['dns_records']['host'] = self.retrieve_results(tables[3])
 
-                    request = requests.get(url, headers=my_headers)
-                    status = request.status_code
-                    soup = BeautifulSoup(r.text)
+        # Try to download the network mapping image
+        try:
+            val = soup.find('img', attrs={'class': 'img-responsive'})['src']
+            tmp_url = "{}{}".format(dnsdumpster_url, val)
+            image_data = base64.b64encode(requests.get(tmp_url).content)
+        except:
+            image_data = None
+        finally:
+            results['image_data'] = image_data
+            with open("imageToSave.png", "wb") as fh:
+                fh.write(base64.decodebytes(image_data))
 
-                    for cite in soup.findAll('cite'):
-                        try:
-                            report.write("{}\n".format(cite.text))
-                        except:
-                            if not status == 200:
-                                report.write("Viper did not receive a 200 OK! \
-                                    You can double check by using this search query:\n")
-                                report.write("Query: {}".format(url))
-                                break
-                            else:
-                                continue
+        return results
 
-                    # Take a break to avoid Google blocking our IP
-                    time.sleep(sleep)
-            except Exception  as error:
-                print("Error: {}".format(error))
-                print(red("[!] Requests failed! It could be the internet \
-connection or a CAPTCHA. Try again."))
-                report.write("Search failed due to a bad connection or a CAPTCHA. \
-You can try manually running this search: {}\n".format(url))
+    def retrieve_results(self, table):
+        """Helper function for check_dns_dumpster which
+        extracts the results from the HTML soup.
+        """
+        results = []
+        trs = table.findAll('tr')
+        for tr in trs:
+            tds = tr.findAll('td')
+            pattern_ip = r'([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})'
+            ip = re.findall(pattern_ip, tds[1].text)[0]
+            domain = tds[0].text.replace('\n', '').split(' ')[0]
+            header = ' '.join(tds[0].text.replace('\n', '').split(' ')[1:])
+            reverse_dns = tds[1].find('span', attrs={}).text
+
+            additional_info = tds[2].text
+            country = tds[2].find('span', attrs={}).text
+            autonomous_system = additional_info.split(' ')[0]
+            provider = ' '.join(additional_info.split(' ')[1:])
+            provider = provider.replace(country, '')
+            data = {'domain': domain,
+                    'ip': ip,
+                    'reverse_dns': reverse_dns,
+                    'as': autonomous_system,
+                    'provider': provider,
+                    'country': country,
+                    'header': header}
+            results.append(data)
+
+        return results
+
+    def retrieve_txt_record(self, table):
+        """Secondary helper function for check_dns_dumpster
+        which extracts the TXT records.
+        """
+        results = []
+        for td in table.findAll('td'):
+            results.append(td.text)
+
+        return results
+
+
+
+
+
+#     def search_google(self, client, target):
+#         """Use Google to find pages with login forms and 'index of' pages."""
+#         f = "reports/{}/Gooogle_Report - {}.txt".format(client, target)
+
+#         with open(f, 'w') as report:
+#             # Search for different login/logon/admin/administrator pages
+#             report.write("\n### GOOGLE HACKING Report for {} ###\n".format(target))
+#             report.write("---GOOGLE LOGIN PAGE Results---\n")
+#             print(green("[+] Beginning Google queries..."))
+#             print(yellow("[-] Warning: Google sometimes blocks automated \
+# queries like this by using a CAPTCHA. This may fail. If it does, \
+# try again later or use a VPN/proxy."))
+#             print(green("[+] Checking Google for login pages"))
+#             try:
+#                 # Login Logon Admin and administrator
+#                 # Edit setup/google_strings.txt to customize your search terms
+#                 for start in range(0, 10):
+#                     with open('setup/google_strings.txt') as googles:
+#                         url = "https://www.google.com/search?q=site:{}+".format(target)
+#                         terms = googles.readlines()
+#                         totalTerms = len(terms)
+#                         for i in range(totalTerms-1):
+#                             url = url + "intitle:{}+OR+".format(terms[i].rstrip())
+#                         url = url + "intitle:{}&start={}".format\
+#                             (terms[totalTerms-1].rstrip(), str(start*10))
+
+#                     r = requests.get(url, headers=my_headers)
+#                     status = r.status_code
+#                     soup = BeautifulSoup(r.text)
+
+#                     for cite in soup.findAll('cite'):
+#                         try:
+#                             report.write("{}\n".format(cite.text))
+#                         except:
+#                             if not status == 200:
+#                                 report.write("Viper did not receive a 200 OK! \
+# You can double check by using this search query:\n")
+#                                 report.write("Query: {}".format(url))
+#                                 break
+#                             else:
+#                                 continue
+
+#                     # Take a break to avoid Google blocking our IP
+#                     time.sleep(sleep)
+#             except Exception  as error:
+#                 print ("Error: {}".format(error))
+#                 print(red("[!] Requests failed! It could be the internet \
+# connection or a CAPTCHA. Try again later."))
+#                 report.write("Search failed due to a bad connection or a CAPTCHA. \
+# You can try manually running this search: {}\n".format(url))
+
+#             report.write("\n--- GOOGLE INDEX OF PAGE Results ---\n")
+#             print(green("[+] Checking Google for pages offering file indexes"))
+#             try:
+#                 # Look for "index of"
+#                 for start in range(0, 10):
+#                     url = "https://www.google.com/search?q=site:{}+\
+#                         intitle:index.of&start=".format(target + str(start*10))
+
+#                     request = requests.get(url, headers=my_headers)
+#                     status = request.status_code
+#                     soup = BeautifulSoup(r.text)
+
+#                     for cite in soup.findAll('cite'):
+#                         try:
+#                             report.write("{}\n".format(cite.text))
+#                         except:
+#                             if not status == 200:
+#                                 report.write("Viper did not receive a 200 OK! \
+#                                     You can double check by using this search query:\n")
+#                                 report.write("Query: {}".format(url))
+#                                 break
+#                             else:
+#                                 continue
+
+#                     # Take a break to avoid Google blocking our IP
+#                     time.sleep(sleep)
+#             except Exception  as error:
+#                 print("Error: {}".format(error))
+#                 print(red("[!] Requests failed! It could be the internet \
+# connection or a CAPTCHA. Try again."))
+#                 report.write("Search failed due to a bad connection or a CAPTCHA. \
+# You can try manually running this search: {}\n".format(url))

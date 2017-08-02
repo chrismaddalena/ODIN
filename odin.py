@@ -110,13 +110,13 @@ Twitter, Censys, Shodan, and Cymon.
     asciis.print_art()
 
     print(green("[+] OSINT Module Selected: O.D.I.N. will run all recon modules."))
+
     setup_reports(client)
     output_report = "reports/{}/OSINT_Report.xlsx".format(client)
-
     report = reporter.Reporter()
     scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_domain_report(workbook, scope, ip_list, domains_list, dns)
+        report.create_domain_report(workbook, scope, ip_list, domains_list, dns, verbose)
         report.create_urlcrazy_worksheet(workbook, client, domain)
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
         report.create_censys_worksheet(workbook, scope, verbose)
@@ -156,13 +156,13 @@ information on the provided IP addresses and/or domains.\n
 
     print(green("[+] Domain Module Selected: O.D.I.N. will \
 run only domain and IP-related modules."))
+
     setup_reports(client)
     output_report = "reports/{}/Domain_Report.xlsx".format(client)
-
     report = reporter.Reporter()
     scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_domain_report(workbook, scope, ip_list, domains_list, dns)
+        report.create_domain_report(workbook, scope, ip_list, domains_list, dns, verbose)
         report.create_urlcrazy_worksheet(workbook, client, domain)
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
         report.create_censys_worksheet(workbook, scope, verbose)
@@ -191,9 +191,9 @@ breaches, pastes, and social media accounts.\n
 
     print(green("[+] People Module Selected: O.D.I.N. will run only \
 modules for email addresses and social media."))
+
     setup_reports(client)
     output_report = "reports/{}/People_Report.xlsx".format(client)
-
     report = reporter.Reporter()
     with xlsxwriter.Workbook(output_report) as workbook:
         report.create_people_worksheet(workbook, domain, client)
@@ -218,12 +218,31 @@ def shodan(self, scope_file, output):
 
     print(green("[+] Shodan Module Selected: O.D.I.N. will check \
 Shodan for the provided domains and IPs."))
-    output_report = output
 
+    output_report = output
     report = reporter.Reporter()
     scope, ip_list, domains_list = report.prepare_scope(scope_file)
     with xlsxwriter.Workbook(output_report) as workbook:
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
+
+
+# The REP module -- Check a target's reputation against Cymon and URLVoid records
+@odin.command(name='rep', short_help='Check reputation of provided IP or domain.')
+@click.option('-t', '--target', help='The target IP address or domain.', required=True)
+def rep(target):
+    """
+    The Rep module:
+    Can be used to quickly collect reputation data for the provided \
+IP address. O.D.I.N. will query eSentire's Cymon.io and threat feeds.\n
+    An API key for Cymon is recommended.
+    """
+    asciis.print_art()
+
+    print(green("[+] Reputation Module Selected: O.D.I.N. will collect reputation \
+data for the provided IP address or domain name."))
+
+    report = reporter.Reporter()
+    report.create_cymon_worksheet(target)
 
 
 # The VERIFY module -- No OSINT, just a way to check a scope list of IPs and domain names
@@ -264,28 +283,6 @@ will attempt to verify who owns the provided IP addresses."))
         print(red("L.. Details: {}".format(error)))
 
 
-# # The REP module -- Check a target's reputation against Cymon and URLVoid records
-# @odin.command(name='rep', short_help='Check reputation of provided IP or domain.')
-# @click.option('-t', '--target', help='The target IP address or domain.', required=True)
-# @click.option('-o', '--output', default='Reputation_Report.txt',
-#               help='Name of the output file for the search results.')
-# def rep(target, output):
-#     """
-#     The Rep module:
-#     Can be used to quickly collect reputation data for the provided \
-# IP address. O.D.I.N. will query RDAP, Shodan, URLVoid, and eSentire's Cymon.\n
-#     API keys for Shodan, URLVoid, and Cymon are required!
-#     """
-#     report = open(output, 'w')
-#     domain_checker = domain_tools.Domain_Check()
-#
-#     asciis.print_art()
-#     print(green("[+] Reputation Module Selected: O.D.I.N. will reputation \
-# data for the provided IP address or domain name."))
-#     domain_checker.search_cymon(target, report)
-#     domain_checker.run_urlvoid_lookup(target, report)
-#
-#
 # # The SSL module -- Run SSLLabs' scanner against the target domain
 # @odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
 # @click.option('-t', '--target', help='IP address with the certificate. \
