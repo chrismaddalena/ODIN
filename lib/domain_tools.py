@@ -467,7 +467,8 @@ looking into this.".format(domain[1])))
         """
         if not self.is_ip(domain):
             try:
-                if self.urlvoid_api_key is not None:
+                if self.urlvoid_api_key != "":
+                    print(self.urlvoid_api_key)
                     print(green("[+] Checking reputation for {} with URLVoid".format(domain)))
                     url = "http://api.urlvoid.com/api1000/{}/host/{}"\
                         .format(self.urlvoid_api_key, domain)
@@ -476,9 +477,11 @@ looking into this.".format(domain[1])))
                     return tree
                 else:
                     print(green("[-] No URLVoid API key, so skipping this test."))
+                    return None
             except Exception as error:
                 print(red("[!] Could not load URLVoid for reputation check!"))
                 print(red("L.. Details: {}".format(error)))
+                return None
         else:
             print(red("[!] Target is not a domain, so skipping URLVoid queries."))
 

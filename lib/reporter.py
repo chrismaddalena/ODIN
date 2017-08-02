@@ -277,48 +277,49 @@ will be skipped."))
         # Check each domain with URLVoid for reputation and some Alexa data
         for domain in domains_list:
             tree = self.DC.run_urlvoid_lookup(domain)
-            # Check to see if urlvoid shows the domain flagged by any engines
-            for child in tree:
-                malicious_check = child.tag
-                if malicious_check == "detections":
-                    detections = tree[1]
-                    engines = detections[0]
-                    count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
-                    temp = []
-                    for engine in engines:
-                        temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
-                    engines = ", ".join(temp)
+            if tree is not None:
+                # Check to see if urlvoid shows the domain flagged by any engines
+                for child in tree:
+                    malicious_check = child.tag
+                    if malicious_check == "detections":
+                        detections = tree[1]
+                        engines = detections[0]
+                        count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
+                        temp = []
+                        for engine in engines:
+                            temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
+                        engines = ", ".join(temp)
 
-                    print(yellow("[*] URLVoid found malicious activity \
-reported for {}!".format(domain)))
-                    dom_worksheet.write(row, 8, "Count {}: {}".format(count, engines))
+                        print(yellow("[*] URLVoid found malicious activity \
+    reported for {}!".format(domain)))
+                        dom_worksheet.write(row, 8, "Count {}: {}".format(count, engines))
 
-            rep_data = tree[0]
-            ip_data = rep_data[11]
+                rep_data = tree[0]
+                ip_data = rep_data[11]
 
-            dom_worksheet.write(row, 0, ET.tostring(rep_data[0], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 1, ET.tostring(ip_data[0], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 2, ET.tostring(ip_data[1], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 3, ET.tostring(rep_data[3], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 4, ET.tostring(rep_data[4], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 5, ET.tostring(rep_data[5], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 6, ET.tostring(ip_data[2], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 7, ET.tostring(ip_data[3], method='text')
-                                .rstrip().decode('ascii'))
-            row += 1
+                dom_worksheet.write(row, 0, ET.tostring(rep_data[0], method='text')
+                                    .rstrip().decode('ascii'))
+                dom_worksheet.write(row, 1, ET.tostring(ip_data[0], method='text')
+                                    .rstrip().decode('ascii'))
+                dom_worksheet.write(row, 2, ET.tostring(ip_data[1], method='text')
+                                    .rstrip().decode('ascii'))
+                dom_worksheet.write(row, 3, ET.tostring(rep_data[3], method='text')
+                                    .rstrip().decode('ascii'))
+                dom_worksheet.write(row, 4, ET.tostring(rep_data[4], method='text')
+                                    .rstrip().decode('ascii'))
+                dom_worksheet.write(row, 5, ET.tostring(rep_data[5], method='text')
+                                    .rstrip().decode('ascii'))
+                dom_worksheet.write(row, 6, ET.tostring(ip_data[2], method='text')
+                                    .rstrip().decode('ascii'))
+                dom_worksheet.write(row, 7, ET.tostring(ip_data[3], method='text')
+                                    .rstrip().decode('ascii'))
+                row += 1
 
         # Add buffer rows for the next table
         row += 2
 
         if dns:
-            # TODO: This is udner construction
+            # TODO: This is under construction
             # Write headers for the DNS brute force table
             dom_worksheet.write(row, 0, "DNS Brute Force", bold)
             row += 1
