@@ -19,3 +19,6 @@ consumer_key:
 key_secret:
 access_token:
 token_secret: 
+
+[EmailHunter]
+api_key: 

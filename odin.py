@@ -83,8 +83,6 @@ Company, to use for report titles.", required=True)
 @click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, resolve_path=True),
               help="A text file containing your \
 in-scope IP addresses and domain names. List each one on a new line.", required=True)
-@click.option('--dns', is_flag=True, help="Set this option if you \
-want ODIN to perform DNS brute forcing on the scope file's domains.")
 @click.option('--files', is_flag=True, help="Use this option to use \
 Google to search for files under the provided domain (-d) and extract metadata.")
 @click.option('-e', '--ext', default="all", help="File extensions to \
@@ -96,7 +94,7 @@ if you want the downloaded files with --file to be deleted after analysis.")
 output for more (maybe way too much) domain contact info, Censys \
 certificate information, and additional status messages.")
 @click.pass_context
-def osint(self, client, domain, dns, files, ext, delete, scope_file, verbose):
+def osint(self, client, domain, files, ext, delete, scope_file, verbose):
     """
     The full O.D.I.N. toolkit:\n
     This module runs all OSINT modules together. O.D.I.N. uses \
@@ -116,7 +114,8 @@ Twitter, Censys, Shodan, and Cymon.
     report = reporter.Reporter()
     scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_domain_report(workbook, scope, ip_list, domains_list, dns, verbose)
+        report.create_company_info_worksheet(workbook, domain)
+        report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
         report.create_urlcrazy_worksheet(workbook, client, domain)
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
         report.create_censys_worksheet(workbook, scope, verbose)
@@ -133,8 +132,6 @@ Company. This will be used for report titles.", required=True)
 @click.option('-d', '--domain', help="The target's domain, such as example.com.", required=True)
 @click.option('-sf', '--scope-file', help="A list of IP address/ranges \
 and domains.", type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
-@click.option('--dns', is_flag=True, help="Set this option if you want \
-ODIN to perform DNS brute forcing on the scope file's domains.")
 @click.option('--files', is_flag=True, help="Use this option to use \
 Google to search for files under the provided domain (-d) and extract metadata.")
 @click.option('-e', '--ext', default="all", help="File extensions to \
@@ -146,7 +143,7 @@ if you want the downloaded files with --file to be deleted after analysis.")
 output for more (maybe way too much) domain contact info, Censys \
 certificate information, and additional status messages.")
 @click.pass_context
-def domain(self, client, domain, dns, files, ext, delete, scope_file, verbose):
+def domain(self, client, domain, files, ext, delete, scope_file, verbose):
     """
     The Domain module uses various tools and APIs to collect \
 information on the provided IP addresses and/or domains.\n
@@ -162,7 +159,8 @@ run only domain and IP-related modules."))
     report = reporter.Reporter()
     scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_domain_report(workbook, scope, ip_list, domains_list, dns, verbose)
+        report.create_company_info_worksheet(workbook, domain)
+        report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
         report.create_urlcrazy_worksheet(workbook, client, domain)
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
         report.create_censys_worksheet(workbook, scope, verbose)
@@ -196,6 +194,7 @@ modules for email addresses and social media."))
     output_report = "reports/{}/People_Report.xlsx".format(client)
     report = reporter.Reporter()
     with xlsxwriter.Workbook(output_report) as workbook:
+        report.create_company_info_worksheet(workbook, domain)
         report.create_people_worksheet(workbook, domain, client)
 
 
@@ -224,25 +223,6 @@ Shodan for the provided domains and IPs."))
     scope, ip_list, domains_list = report.prepare_scope(scope_file)
     with xlsxwriter.Workbook(output_report) as workbook:
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
-
-
-# The REP module -- Check a target's reputation against Cymon and URLVoid records
-@odin.command(name='rep', short_help='Check reputation of provided IP or domain.')
-@click.option('-t', '--target', help='The target IP address or domain.', required=True)
-def rep(target):
-    """
-    The Rep module:
-    Can be used to quickly collect reputation data for the provided \
-IP address. O.D.I.N. will query eSentire's Cymon.io and threat feeds.\n
-    An API key for Cymon is recommended.
-    """
-    asciis.print_art()
-
-    print(green("[+] Reputation Module Selected: O.D.I.N. will collect reputation \
-data for the provided IP address or domain name."))
-
-    report = reporter.Reporter()
-    report.create_cymon_worksheet(target)
 
 
 # The VERIFY module -- No OSINT, just a way to check a scope list of IPs and domain names
@@ -283,7 +263,27 @@ will attempt to verify who owns the provided IP addresses."))
         print(red("L.. Details: {}".format(error)))
 
 
-# # The SSL module -- Run SSLLabs' scanner against the target domain
+# TODO: Under Construction... or getting cut ¯\_(ツ)_/¯
+# The REP module -- Check a target's reputation against Cymon and URLVoid records
+# @odin.command(name='rep', short_help='Check reputation of provided IP or domain.')
+# @click.option('-t', '--target', help='The target IP address or domain.', required=True)
+# def rep(target):
+#     """
+#     The Rep module:
+#     Can be used to quickly collect reputation data for the provided \
+# IP address. O.D.I.N. will query eSentire's Cymon.io and threat feeds.\n
+#     An API key for Cymon is recommended.
+#     """
+#     asciis.print_art()
+
+#     print(green("[+] Reputation Module Selected: O.D.I.N. will collect reputation \
+# data for the provided IP address or domain name."))
+
+#     report = reporter.Reporter()
+#     report.create_cymon_worksheet(target)
+
+
+# The SSL module -- Run SSLLabs' scanner against the target domain
 # @odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
 # @click.option('-t', '--target', help='IP address with the certificate. \
 # Include the port if it is not 443, e.g. IP:8080', required=True)

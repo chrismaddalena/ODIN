@@ -6,6 +6,7 @@
 *.nessus
 *.txt
 *.json
+*.png
 
 /auth/keys.config
 /reports/*

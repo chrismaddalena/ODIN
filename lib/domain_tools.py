@@ -59,7 +59,7 @@ class DomainCheck(object):
         try:
             self.urlvoid_api_key = helpers.config_section_map("URLVoid")["api_key"]
         except:
-            self.urlvoid_api_key = None
+            self.urlvoid_api_key = ""
             print(yellow("[!] Did not find a URLVoid API key."))
 
         try:
@@ -158,7 +158,7 @@ class DomainCheck(object):
         team hounded me with some bizarre emails and pitches after
         I got my key.
         """
-        if self.contact_api_key is None:
+        if self.contact_api_key == "":
             print(red("[!] No Full Contact API key, so skipping these searches."))
         else:
             base_url = "https://api.fullcontact.com/v2/company/lookup.json"
@@ -468,7 +468,6 @@ looking into this.".format(domain[1])))
         if not self.is_ip(domain):
             try:
                 if self.urlvoid_api_key != "":
-                    print(self.urlvoid_api_key)
                     print(green("[+] Checking reputation for {} with URLVoid".format(domain)))
                     url = "http://api.urlvoid.com/api1000/{}/host/{}"\
                         .format(self.urlvoid_api_key, domain)
@@ -486,8 +485,8 @@ looking into this.".format(domain[1])))
             print(red("[!] Target is not a domain, so skipping URLVoid queries."))
 
     def check_dns_dumpster(self, domain):
-        """Function to collect subdomains known to DNS Dumpster 
-        for the provided domain. This is base don PaulSec's 
+        """Function to collect subdomains known to DNS Dumpster
+        for the provided domain. This is base don PaulSec's
         unofficial DNS Dumpster API available on GitHub.
         """
         dnsdumpster_url = 'https://dnsdumpster.com/'
@@ -529,7 +528,7 @@ looking into this.".format(domain[1])))
             image_data = None
         finally:
             results['image_data'] = image_data
-            with open("imageToSave.png", "wb") as fh:
+            with open(domain + "_Domain_Map.png", "wb") as fh:
                 fh.write(base64.decodebytes(image_data))
 
         return results
