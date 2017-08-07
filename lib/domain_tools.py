@@ -7,7 +7,6 @@ for evaluating IP addresses/ranges and domain names.
 
 import os
 import subprocess
-import time
 from xml.etree import ElementTree as ET
 import csv
 import base64
@@ -24,6 +23,9 @@ from colors import red, green, yellow
 from IPy import IP
 from netaddr import IPNetwork, iter_iprange
 import dns.resolver
+import boto3
+from botocore.exceptions import ClientError
+import validators
 from lib import helpers
 
 
@@ -77,6 +79,27 @@ class DomainCheck(object):
             self.cenCertAPI = None
             self.cenAddAPI = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
+
+        # Check for an AWS credentials file
+        try:
+            aws_region = helpers.config_section_map("AWS")["region_name"]
+            aws_access_id = helpers.config_section_map("AWS")["aws_access_key_id"]
+            aws_secret_access_key = helpers.config_section_map("AWS")["aws_secret_access_key"]
+            self.aws_session = boto3.Session(region_name=aws_region,
+                                aws_access_key_id=aws_access_id,
+                                aws_secret_access_key=aws_secret_access_key)
+        except:
+            self.aws_session = None
+            print(yellow("[!] Could not establish an AWS API session."))
+
+        # The following commented code can be used if the credentials file is desired
+        # aws_file = os.path.expanduser("~/.aws/credentials")
+        # if os.path.isfile(aws_file):
+        #     print(green("[+] Found AWS credentials file in ~/.aws/credentials for AWS recon."))
+        #     self.aws_creds = True
+        # else:
+        #     print(yellow("[*] No AWS credentials file in ~/.aws/credentials, so AWS recon will be skipped."))
+        #     self.aws_creds = False
 
     def is_ip(self, value):
         """Checks if the provided string is an IP address or not. If
@@ -573,90 +596,136 @@ looking into this.".format(domain[1])))
 
         return results
 
+    def enumerate_aws(self, client, domain, wordlist=None):
+        """Function to search for AWS S3 buckets and accounts.
+        Default search terms are the client, domain, and domain
+        without its TLD. A wordlist is optional.
+
+        This is based on modules from aws_pwn by dagrz on GitHub.
+        """
+        if self.aws_session is not None:
+            search_terms = [domain, client, domain.split(".")[0]]
+            bucket_results = []
+            account_results = []
+            for term in search_terms:
+                # Check for buckets
+                result = self.validate_bucket('head', term)
+                bucket_results.append(result)
+                # Check for accounts
+                result = self.validate_account("signin", term)
+                account_results.append(result)
+
+            if wordlist is not None:
+                with open(wordlist, "r") as bucket_list:
+                    for name in bucket_list:
+                        name = name.strip()
+                        if name and not name.startswith('#'):
+                            # Enumerate buckets from wordlist
+                            result = self.validate_bucket('head', name)
+                            bucket_results.append(result)
+                            # Enumerate accounts from wordlist
+                            result = self.validate_account("signin", name)
+                            account_results.append(result)
+
+            return bucket_results, account_results
+
+    def validate_bucket(self, validation_type, bucket_name):
+        """Function to be used with enumerate_aws() to evaluate
+        the AWS response for a bucket name.
+
+        This is based on modules from aws_pwn by dagrz on GitHub.
+        """
+        validation_functions = {
+            'head': self.validate_bucket_head
+        }
+        if validation_functions[validation_type]:
+            return validation_functions[validation_type](bucket_name)
 
 
+    def validate_bucket_head(self, bucket_name):
+        """Function to be used with validate_bucket() to evaluate
+        the AWS response for a bucket name. This determines if
+        AWS' response confirms the existence of a bucket name.
+
+        This is based on modules from aws_pwn by dagrz on GitHub.
+        """
+        # This test requires authentication
+        # Warning: Check credentials before use
+        error_values = {
+            '400': True,
+            '403': True,
+            '404': False
+        }
+        result = {
+            'bucketName': bucket_name,
+            'bucketUri': 'http://' + bucket_name + '.s3.amazonaws.com',
+            'arn': 'arn:aws:s3:::' + bucket_name,
+            'exists': False
+        }
+
+        client = self.aws_session.client('s3')
+        try:
+            client.head_bucket(Bucket=bucket_name)
+            result['exists'] = True
+        except ClientError as error:
+            result['exists'] = error_values[error.response['Error']['Code']]
+        return result
+
+    def check_bucket_access(self, uri):
+        """Function to request an S3 bucket's URI and check if
+        the bucket is publicly accessible (HTTP 200 OK).
+        """
+        try:
+            request = requests.get(uri)
+            if request.status_code == 200:
+                return True
+            else:
+                return False
+        except requests.exceptions.RequestException as error:
+            print(red("[!] There was an error checking an S3 bucket's URI"))
+            print(red("L...Details: {}".formt(result['error'] = error)))
+
+    def validate_account(self, validation_type, account):
+        """Function to be used with enumerate_aws() to evaluate
+        the AWS response for an account name or alias.
+
+        This is based on modules from aws_pwn by dagrz on GitHub.
+        """
+        validation_functions = {
+            'signin': self.validate_account_signin
+        }
+        if validation_functions[validation_type]:
+            return validation_functions[validation_type](account)
 
 
-#     def search_google(self, client, target):
-#         """Use Google to find pages with login forms and 'index of' pages."""
-#         f = "reports/{}/Gooogle_Report - {}.txt".format(client, target)
+    def validate_account_signin(self, account):
+        """Function to be used with validate_account() to evaluate
+        the AWS response for an account name or alias.
 
-#         with open(f, 'w') as report:
-#             # Search for different login/logon/admin/administrator pages
-#             report.write("\n### GOOGLE HACKING Report for {} ###\n".format(target))
-#             report.write("---GOOGLE LOGIN PAGE Results---\n")
-#             print(green("[+] Beginning Google queries..."))
-#             print(yellow("[-] Warning: Google sometimes blocks automated \
-# queries like this by using a CAPTCHA. This may fail. If it does, \
-# try again later or use a VPN/proxy."))
-#             print(green("[+] Checking Google for login pages"))
-#             try:
-#                 # Login Logon Admin and administrator
-#                 # Edit setup/google_strings.txt to customize your search terms
-#                 for start in range(0, 10):
-#                     with open('setup/google_strings.txt') as googles:
-#                         url = "https://www.google.com/search?q=site:{}+".format(target)
-#                         terms = googles.readlines()
-#                         totalTerms = len(terms)
-#                         for i in range(totalTerms-1):
-#                             url = url + "intitle:{}+OR+".format(terms[i].rstrip())
-#                         url = url + "intitle:{}&start={}".format\
-#                             (terms[totalTerms-1].rstrip(), str(start*10))
+        This is based on modules from aws_pwn by dagrz on GitHub.
+        """
+        result = {
+            'accountAlias': None,
+            'accountId': None,
+            'signinUri': 'https://' + account + '.signin.aws.amazon.com/',
+            'exists': False,
+            'error': None
+        }
 
-#                     r = requests.get(url, headers=my_headers)
-#                     status = r.status_code
-#                     soup = BeautifulSoup(r.text)
+        if re.match(r'\d{12}', account):
+            result['accountId'] = account
+        else:
+            result['accountAlias'] = account
 
-#                     for cite in soup.findAll('cite'):
-#                         try:
-#                             report.write("{}\n".format(cite.text))
-#                         except:
-#                             if not status == 200:
-#                                 report.write("Viper did not receive a 200 OK! \
-# You can double check by using this search query:\n")
-#                                 report.write("Query: {}".format(url))
-#                                 break
-#                             else:
-#                                 continue
+        if not validators.url(result['signinUri']):
+            result['error'] = 'Invalid URI'
+            return result
 
-#                     # Take a break to avoid Google blocking our IP
-#                     time.sleep(sleep)
-#             except Exception  as error:
-#                 print ("Error: {}".format(error))
-#                 print(red("[!] Requests failed! It could be the internet \
-# connection or a CAPTCHA. Try again later."))
-#                 report.write("Search failed due to a bad connection or a CAPTCHA. \
-# You can try manually running this search: {}\n".format(url))
+        try:
+            r = requests.get(result['signinUri'], allow_redirects=False)
+            if r.status_code == 302:
+                result['exists'] = True
+        except requests.exceptions.RequestException as error:
+            result['error'] = error
 
-#             report.write("\n--- GOOGLE INDEX OF PAGE Results ---\n")
-#             print(green("[+] Checking Google for pages offering file indexes"))
-#             try:
-#                 # Look for "index of"
-#                 for start in range(0, 10):
-#                     url = "https://www.google.com/search?q=site:{}+\
-#                         intitle:index.of&start=".format(target + str(start*10))
-
-#                     request = requests.get(url, headers=my_headers)
-#                     status = request.status_code
-#                     soup = BeautifulSoup(r.text)
-
-#                     for cite in soup.findAll('cite'):
-#                         try:
-#                             report.write("{}\n".format(cite.text))
-#                         except:
-#                             if not status == 200:
-#                                 report.write("Viper did not receive a 200 OK! \
-#                                     You can double check by using this search query:\n")
-#                                 report.write("Query: {}".format(url))
-#                                 break
-#                             else:
-#                                 continue
-
-#                     # Take a break to avoid Google blocking our IP
-#                     time.sleep(sleep)
-#             except Exception  as error:
-#                 print("Error: {}".format(error))
-#                 print(red("[!] Requests failed! It could be the internet \
-# connection or a CAPTCHA. Try again."))
-#                 report.write("Search failed due to a bad connection or a CAPTCHA. \
-# You can try manually running this search: {}\n".format(url))
+        return result

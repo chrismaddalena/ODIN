@@ -93,6 +93,8 @@ if you want the downloaded files with --file to be deleted after analysis.")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose \
 output for more (maybe way too much) domain contact info, Censys \
 certificate information, and additional status messages.")
+@click.option('-w', '--aws', help="A list of AWS S3 bucket names to \
+validate.", type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.pass_context
 def osint(self, client, domain, files, ext, delete, scope_file, verbose):
     """
@@ -120,6 +122,7 @@ Twitter, Censys, Shodan, and Cymon.
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
         report.create_censys_worksheet(workbook, scope, verbose)
         report.create_people_worksheet(workbook, domain, client)
+        report.create_cloud_worksheet(workbook, client, domain, aws)
         if files:
             report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
 
@@ -143,7 +146,9 @@ if you want the downloaded files with --file to be deleted after analysis.")
 output for more (maybe way too much) domain contact info, Censys \
 certificate information, and additional status messages.")
 @click.pass_context
-def domain(self, client, domain, files, ext, delete, scope_file, verbose):
+@click.option('-w', '--aws', help="A list of AWS S3 bucket names to \
+validate.", type=click.Path(exists=True, readable=True, resolve_path=True))
+def domain(self, client, domain, files, ext, delete, scope_file, aws, verbose):
     """
     The Domain module uses various tools and APIs to collect \
 information on the provided IP addresses and/or domains.\n
@@ -157,13 +162,14 @@ run only domain and IP-related modules."))
     setup_reports(client)
     output_report = "reports/{}/Domain_Report.xlsx".format(client)
     report = reporter.Reporter()
-    scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
+    dscope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
         report.create_company_info_worksheet(workbook, domain)
         report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
         report.create_urlcrazy_worksheet(workbook, client, domain)
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
         report.create_censys_worksheet(workbook, scope, verbose)
+        report.create_cloud_worksheet(workbook, client, domain, aws)
         if files:
             report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
 

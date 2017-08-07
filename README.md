@@ -1,6 +1,8 @@
 # O.D.I.N. [BETA]
 ### Observe, Detect, and Investigate Networks
 
+[![Python Version](https://img.shields.io/badge/Python-3.6-brightgreen.svg)]() [![license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
+
 ![O.D.I.N.](https://vignette3.wikia.nocookie.net/archer/images/4/46/ODINLogo.png/revision/latest/scale-to-width-down/250?cb=20170319051757)
 
 >A Python tool for automating penetration testing work, like intelligence gathering, testing, and reporting. O.D.I.N. is still in active development and is not be fully functional. Feedback on issues is welcome!
@@ -14,13 +16,7 @@
 
 ### Optional AWS Setup
 
-If you'd like to have O.D.I.N. do recon against AWS you will need an IAM user account and the associated ID and Secret. Get this from your AWS console and setup your ~/.aws/credentials file. It needs to look like this:
-
-~~~~
-[default]
-aws_access_key_id = xxxxxxxxxxxxxxxx
-aws_secret_access_key = xyz+abc
-~~~~
+If you'd like to have O.D.I.N. do recon against AWS you will need an IAM user account and the associated ID and Secret. Get this from your AWS console. Typically, you will place this in ~/.aws/credentials, but it's nice to keep everything in one place. O.D.I.N. will use your keys.config file, but Amazon's Boto3 library for AWS may still look at ~/.aws/credentials. If that file has errors, Boto3 may log an error and quit. Just be aware of this possibility in case you have/use ~/.aws/credentials.
 
 ## What Can O.D.I.N. Do?
 O.D.I.N. is still very much in development, but it aims to automate many of the common recon tasks carried out by penetration testers. Such as:
@@ -63,7 +59,7 @@ Meant for marketing folks to find leads and contacts at a company, this service 
 Full Contact support is implemented only for their Company API at the moment, but support for the People API may come in the future. For now, this is used to build a company profile based on a target domain, such as the client's primary domain used for email and their website. Full Contact catalogues everything from website info and company logo(s) to website blurbs and social media profiles.
 
 #### AWS
-Yes, Amazon Web Services. With an AWS IAM user's Access ID and Secret, the AWS API can be leveraged to do recon against AWS to find things like S3 buckets.
+Yes, Amazon Web Services. With an AWS IAM user's Access ID and Secret, the AWS API can be leveraged to do recon against AWS to find things like S3 buckets and accounts names and aliases. Account names are strings of numbers, so you will need some idea of waht you're looking for there. Aliases, however, can be anything, like a company name, and those can be validated as existing or not.
 
 ### Special Thanks
 A big thank you to a few contributors who gave me the OK to re-use some of their code:
@@ -73,7 +69,8 @@ A big thank you to a few contributors who gave me the OK to re-use some of their
 * Troy Hunt - For giving me permission to use HaveIBeenPwned's REST API in this way.
 
 And to these folks who have created/maintained some of the tools integrated into O.D.I.N.:
-* Alton Johnson (altjx) - The creator of the original very cool PyFOCA (https://github.com/altjx/ipwn) that exists here in its new Python 3 form as a part of O.D.I.N.
-* Laramies - Creator of the awesome TheHarvester (https://github.com/laramies/theHarvester).
+* Alton Johnson (altjx) - The creator of the original very cool [PyFOCA](https://github.com/altjx/ipwn) that exists here in its new Python 3 form as a part of O.D.I.N.
+* Laramies - Creator of the awesome [TheHarvester](https://github.com/laramies/theHarvester).
 * PaulSec - Creator of the unofficial API for the DNS Dumpster (https://github.com/PaulSec/API-dnsdumpster.com)
-* TrullJ - For making the slick SSL Labs Scanner module (https://github.com/TrullJ/ssllabs).
+* Daniel Grzalek (Dagrz) - Creator of [aws_pwn](https://github.com/dagrz/aws_pwn) and the reason why I was able to build out AWS recon options. 
+* TrullJ - For making the slick [SSL Labs Scanner module](https://github.com/TrullJ/ssllabs).

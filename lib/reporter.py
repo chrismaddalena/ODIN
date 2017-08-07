@@ -733,39 +733,39 @@ a nice API call delay..."))
             email_worksheet.write(row, 3, "Possible LI Profile(s)", bold)
             row += 1
 
-            # try:
-            # Try to find possible LinkedIn profiles for people
-            for person in unique_people:
-                # Record their job title, if we have one from Hunter
-                if person in job_titles:
-                    for name, title in job_titles.items():
-                        if name == person:
-                            email_worksheet.write(row, 1, title)
+            try:
+                # Try to find possible LinkedIn profiles for people
+                for person in unique_people:
+                    # Record their job title, if we have one from Hunter
+                    if person in job_titles:
+                        for name, title in job_titles.items():
+                            if name == person:
+                                email_worksheet.write(row, 1, title)
 
-                # Record their phone number, if we have one from Hunter
-                if person in phone_nums:
-                    for name, number in phone_nums.items():
-                        if name == person:
-                            email_worksheet.write(row, 2, number)
+                    # Record their phone number, if we have one from Hunter
+                    if person in phone_nums:
+                        for name, number in phone_nums.items():
+                            if name == person:
+                                email_worksheet.write(row, 2, number)
 
-                if person in linkedin:
-                    print(green("[+] Hunter has a LinkedIn link for {}!".format(person)))
-                    for name, link in linkedin.items():
-                        if name == person:
-                            email_worksheet.write(row, 0, name)
-                            email_worksheet.write(row, 3, link)
+                    if person in linkedin:
+                        print(green("[+] Hunter has a LinkedIn link for {}!".format(person)))
+                        for name, link in linkedin.items():
+                            if name == person:
+                                email_worksheet.write(row, 0, name)
+                                email_worksheet.write(row, 3, link)
+                                row += 1
+                    else:
+                        data = self.PC.harvest_linkedin(person, client)
+                        if data:
+                            email_worksheet.write(row, 0, person)
+                            email_worksheet.write(row, 3, ", ".join(data))
                             row += 1
-                else:
-                    data = self.PC.harvest_linkedin(person, client)
-                    if data:
-                        email_worksheet.write(row, 0, person)
-                        email_worksheet.write(row, 3, ", ".join(data))
-                        row += 1
 
-            # Add buffer rows for next table
-            row += 2
-            # except:
-            #     pass
+                # Add buffer rows for next table
+                row += 2
+            except:
+                pass
 
     def create_foca_worksheet(self, workbook, domain, extensions, del_files, verbose):
         """Function to add a FOCA worksheet containing pyFOCA results."""
@@ -856,3 +856,60 @@ for --file. Please try again."))
                 print("")
 
         print(green("[+] Cymon search completed!"))
+
+    def create_cloud_worksheet(self, workbook, client, domain, wordlist=None):
+        """Function to add a cloud worksheet for findings related to AWS."""
+        # Setup cloud worksheet
+        cloud_worksheet = workbook.add_worksheet("The Cloud")
+        bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
+        row = 0
+
+        print(green("[+] Looking for AWS buckets and accounts for target..."))
+        verified_buckets, verified_accounts = self.DC.enumerate_aws(client, domain, wordlist)
+
+        # Write headers for S3 Bucket table table
+        cloud_worksheet.write(row, 0, "AWS S3 Buckets", bold)
+        row += 1
+        cloud_worksheet.write(row, 0, "Name", bold)
+        cloud_worksheet.write(row, 1, "Bucket URI", bold)
+        cloud_worksheet.write(row, 2, "Bucket ARN", bold)
+        cloud_worksheet.write(row, 3, "Public Access", bold)
+        row += 1
+        # Write S3 Bucket table contents
+        for bucket in verified_buckets:
+            if bucket['exists']:
+                cloud_worksheet.write(row, 0, bucket['bucketName'])
+                cloud_worksheet.write(row, 1, bucket['bucketUri'])
+                cloud_worksheet.write(row, 2, bucket['arn'])
+                # Check public access to bucket
+                response = self.DC.check_bucket_access(bucket['bucketUri'])
+                if response:
+                    print(yellow("[*] Found a browseable S3 bucket!"))
+                    cloud_worksheet.write(row, 3, "Yes")
+                else:
+                    cloud_worksheet.write(row, 3, "No")
+
+                row += 1
+
+        # Add buffer rows for next table
+        row += 2
+        
+        # Write headers for AWS Account table
+        cloud_worksheet.write(row, 0, "AWS Accounts", bold)
+        row += 1
+        cloud_worksheet.write(row, 0, "Account Alias", bold)
+        cloud_worksheet.write(row, 1, "Account ID", bold)
+        cloud_worksheet.write(row, 2, "Account Signin URI", bold)
+        row += 1
+        # Write AWS Account table contents
+        for account in verified_accounts:
+            if account['exists']:
+                cloud_worksheet.write(row, 0, account['accountAlias'])
+                if account['accountId'] is None:
+                    cloud_worksheet.write(row, 1, "Unknown")
+                else:
+                    cloud_worksheet.write(row, 1, account['accountId'])
+                cloud_worksheet.write(row, 2, account['signinUri'])
+                row += 1
+
+        print(green("[+] AWS searches are complete and results are in the Cloud worksheet."))
