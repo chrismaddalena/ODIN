@@ -7,6 +7,7 @@ generating an XLSX report.
 
 import socket
 import time
+import base64
 from xml.etree import ElementTree  as ET
 from colors import red, green, yellow
 from lib import domain_tools, email_tools, pyfoca
@@ -219,9 +220,10 @@ will be skipped."))
         row += 1
         dom_worksheet.write(row, 0, "Domain", bold)
         dom_worksheet.write(row, 1, "Subdomain", bold)
-        dom_worksheet.write(row, 2, "MX", bold)
-        dom_worksheet.write(row, 3, "TXT", bold)
-        dom_worksheet.write(row, 4, "Host", bold)
+        dom_worksheet.write(row, 2, "IP", bold)
+        dom_worksheet.write(row, 3, "AS", bold)
+        dom_worksheet.write(row, 4, "Provider", bold)
+        dom_worksheet.write(row, 5, "Domain Frontable", bold)
         row += 1
 
         # Collect subdomain information from DNS Dumpster
@@ -233,12 +235,30 @@ will be skipped."))
                 dom_worksheet.write(row, 0, dumpster_results['domain'])
                 for result in dumpster_results['dns_records']['host']:
                     if result['reverse_dns']:
-                        dom_worksheet.write(row, 1, "{domain} ({reverse_dns}) ({ip}) \
-{as} {provider} {country} {header}".format(**result))
+#                         dom_worksheet.write(row, 1, "{domain} ({reverse_dns}) ({ip}) \
+# {as} {provider} {country} {header}".format(**result))
+                        dom_worksheet.write(row, 1, result['domain'])
+                        dom_worksheet.write(row, 2, result['ip'])
+                        dom_worksheet.write(row, 3, result['as'])
+                        dom_worksheet.write(row, 4, result['provider'])
                     else:
-                        dom_worksheet.write(row, 1, "{domain} ({ip}) {as} {provider} \
-{country} {header}".format(**result))
+#                         dom_worksheet.write(row, 1, "{domain} ({ip}) {as} {provider} \
+# {country} {header}".format(**result))
+                        dom_worksheet.write(row, 1, result['domain'])
+                        dom_worksheet.write(row, 2, result['ip'])
+                        dom_worksheet.write(row, 3, result['as'])
+                        dom_worksheet.write(row, 4, result['provider'])
+
+                    # Check the subdomain for domain fronting possibilties
+                    dom_worksheet.write(row, 5, self.DC.check_domain_fronting(result['domain']))
+
                     row += 1
+
+            # See if we can save the domain map
+            if dumpster_results['image_data']:
+                with open("reports/" + domain + "_Domain_Map.png", "wb") as fh:
+                    fh.write(base64.decodebytes(dumpster_results['image_data']))
+
         # Add buffer rows for the next table
         row += 2
 

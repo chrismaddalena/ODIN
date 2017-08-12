@@ -3,11 +3,15 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.6-brightgreen.svg)]() [![license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 
-![O.D.I.N.](https://vignette3.wikia.nocookie.net/archer/images/4/46/ODINLogo.png/revision/latest/scale-to-width-down/250?cb=20170319051757)
+<p style="text-align: center;"><img src="https://vignette3.wikia.nocookie.net/archer/images/4/46/ODINLogo.png/revision/latest/scale-to-width-down/250?cb=20170319051757" /></p>
 
 >A Python tool for automating penetration testing work, like intelligence gathering, testing, and reporting. O.D.I.N. is still in active development and is not be fully functional. Feedback on issues is welcome!
 
 > Note: O.D.I.N. is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but certain tools are Linux-only, like extract used for pulling metadata from non-PDF files. You'll be fine using an OS without these tools, but you'll see some warnings and get less information.
+
+## First Things First
+
+O.D.I.N. is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify.
 
 ## Getting Started
 1. Review the keys.config.sample file to fill-in your API keys and create a keys.config file.

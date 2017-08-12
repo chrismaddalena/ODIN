@@ -542,7 +542,7 @@ looking into this.".format(domain[1])))
         results['dns_records']['txt'] = self.retrieve_txt_record(tables[2])
         results['dns_records']['host'] = self.retrieve_results(tables[3])
 
-        # Try to download the network mapping image
+        # Try to fetch the network mapping image
         try:
             val = soup.find('img', attrs={'class': 'img-responsive'})['src']
             tmp_url = "{}{}".format(dnsdumpster_url, val)
@@ -551,8 +551,6 @@ looking into this.".format(domain[1])))
             image_data = None
         finally:
             results['image_data'] = image_data
-            with open(domain + "_Domain_Map.png", "wb") as fh:
-                fh.write(base64.decodebytes(image_data))
 
         return results
 
@@ -683,7 +681,7 @@ looking into this.".format(domain[1])))
                 return False
         except requests.exceptions.RequestException as error:
             print(red("[!] There was an error checking an S3 bucket's URI"))
-            print(red("L...Details: {}".formt(result['error'] = error)))
+            # print(red("L...Details: {}".formt(result['error'] = error)))
 
     def validate_account(self, validation_type, account):
         """Function to be used with enumerate_aws() to evaluate
@@ -729,3 +727,35 @@ looking into this.".format(domain[1])))
             result['error'] = error
 
         return result
+
+
+    def check_domain_fronting(self, subdomain):
+        """Function to check the A records for a given subdomain and look for
+        references to various CDNs to flag the submdomain for domain frontability.
+
+        CDN keywords provided by rvrsh3ll on GitHub: https://github.com/rvrsh3ll/FindFrontableDomains
+        """
+        try:
+            query = self.get_dns_record(subdomain, "a")
+            # Iterate through response and check for potential CNAMES
+            for item in query.response.answer:
+                for text in item.items:
+                    target = text.to_text()
+                    if "cloudfront" in target:
+                        return "Cloudfront: {}".format(target)
+                    elif "appspot.com" in target:
+                        return "Google: {}".format(target)
+                    elif "msecnd.net" in target:
+                        return "Azure: {}".format(target)
+                    elif "aspnetcdn.com" in target:
+                        return "Azure: {}".format(target)
+                    elif "azureedge.net" in target:
+                        return "Azure: {}".format(target)
+                    elif "a248.e.akamai.net" in target:
+                        return "Akamai: {}".format(target)
+                    elif "secure.footprint.net" in target:
+                        return "Level 3: {}".format(target)
+                    elif "cloudflare" in target:
+                        return "Cloudflare: {}".format(target)
+        except:
+            pass

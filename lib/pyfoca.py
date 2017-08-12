@@ -186,7 +186,7 @@ install extract' in terminal."))
         files = []
 
         print(green("[+] Domain: {}".format(self.domain_name)))
-        print(green("[+] Attempting to gather links from google searches..."))
+        print(green("[+] Attempting to gather links from Google searches..."))
 
         total_count = 0
 
@@ -210,13 +210,13 @@ install extract' in terminal."))
 the extension(s) and domain you provided."))
             exit()
 
-        print(green("[+] Discovered {} files from {} total google \
+        print(green("[+] Discovered {} files from {} total Google \
 searches...").format(len(files), total_count))
 
         # Create pyfoca-downloads directory if it doesn't exist
-        if not os.path.exists('pyfoca-downloads'):
-            print(green("[+] Creating pyfoca-downloads folder..."))
-            os.makedirs('pyfoca-downloads')
+        if not os.path.exists('reports/pyfoca-downloads'):
+            print(green("[+] Creating reports/pyfoca-downloads folder..."))
+            os.makedirs('reports/pyfoca-downloads')
 
         # Set maximum number of spaces for pdf file names
         spaces = 0
@@ -243,7 +243,7 @@ searches...").format(len(files), total_count))
             try:
                 response = requests.get(item)
                 source = response.content
-                with open('pyfoca-downloads/%s' % pdf_name, 'wb') as file_descriptor:
+                with open('reports/pyfoca-downloads/%s' % pdf_name, 'wb') as file_descriptor:
                     file_descriptor.write(source)
                 pdf_name = pdf_name.replace("(", "\(").replace(")", "\)")
                 if len(pdf_name) > 10:
@@ -257,18 +257,18 @@ searches...").format(len(files), total_count))
 
         for item in files:
             pdf_name = item[item.rfind("/")+1:]
-            self.process_file('pyfoca-downloads/%s' % pdf_name)
+            self.process_file('reports/pyfoca-downloads/%s' % pdf_name)
 
         return self.container
 
     def clean_up(self):
         """Small function to clean-up downloaded files."""
         if self.del_files is True:
-            print(green("[+] Done and deleting pyfoca-downloads folder for clean-up."))
+            print(green("[+] Done and deleting reports/pyfoca-downloads folder for clean-up."))
             try:
-                subprocess.Popen('rm -rf pyfoca-downloads/', shell=True)
+                subprocess.Popen('rm -rf reports/pyfoca-downloads/', shell=True)
             except Exception as error:
-                print(red("[!] Failed to delete pyfoca-downloads folder!"))
+                print(red("[!] Failed to delete reports/pyfoca-downloads folder!"))
                 print(red("L.. Details: {}".format(error)))
         else:
-            print(green("[+] Done! Downloaded files can be found in pyfoca-downloads."))
+            print(green("[+] Done! Downloaded files can be found in reports/pyfoca-downloads."))

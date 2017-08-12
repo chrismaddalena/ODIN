@@ -15,7 +15,7 @@ Description: Observation, Detection, and Investigation of Networks
              O.D.I.N. was designed to assist with OSINT automation for penetration
              testing clients and their networks, both the types with IP address
              and social. Provide a client's name, IPs, and domain(s) to gather
-             information from sources like whois, DNS, and Shodan.
+             information from sources like whois, DNS, Shodan, and much, much more.
 
              O.D.I.N. is made possible through the help, input, and work provided
              by others. Therefore, this project is entirely open source and
@@ -24,7 +24,7 @@ Description: Observation, Detection, and Investigation of Networks
 
 import os
 from colors import red, green
-from lib import reporter, asciis, verification
+from lib import reporter, asciis, verification, ssl_checker
 import click
 import xlsxwriter
 
@@ -64,6 +64,7 @@ class AliasedGroup(click.Group):
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 @click.group(cls=AliasedGroup, context_settings=CONTEXT_SETTINGS)
+
 def odin():
     """
     Welcome to O.D.I.N.! To use O.D.I.N., select a module you \
@@ -96,7 +97,8 @@ certificate information, and additional status messages.")
 @click.option('-w', '--aws', help="A list of AWS S3 bucket names to \
 validate.", type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.pass_context
-def osint(self, client, domain, files, ext, delete, scope_file, verbose):
+
+def osint(self, client, domain, files, ext, delete, scope_file, aws, verbose):
     """
     The full O.D.I.N. toolkit:\n
     This module runs all OSINT modules together. O.D.I.N. uses \
@@ -116,15 +118,15 @@ Twitter, Censys, Shodan, and Cymon.
     report = reporter.Reporter()
     scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_company_info_worksheet(workbook, domain)
+        # report.create_company_info_worksheet(workbook, domain)
         report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
-        report.create_urlcrazy_worksheet(workbook, client, domain)
-        report.create_shodan_worksheet(workbook, ip_list, domains_list)
-        report.create_censys_worksheet(workbook, scope, verbose)
-        report.create_people_worksheet(workbook, domain, client)
-        report.create_cloud_worksheet(workbook, client, domain, aws)
-        if files:
-            report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
+        # report.create_urlcrazy_worksheet(workbook, client, domain)
+        # report.create_shodan_worksheet(workbook, ip_list, domains_list)
+        # report.create_censys_worksheet(workbook, scope, verbose)
+        # report.create_people_worksheet(workbook, domain, client)
+        # report.create_cloud_worksheet(workbook, client, domain, aws)
+        # if files:
+        #     report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
 
 
 # The DOMAIN module -- Forget social and focus on IPs and domain names
@@ -148,6 +150,7 @@ certificate information, and additional status messages.")
 @click.pass_context
 @click.option('-w', '--aws', help="A list of AWS S3 bucket names to \
 validate.", type=click.Path(exists=True, readable=True, resolve_path=True))
+
 def domain(self, client, domain, files, ext, delete, scope_file, aws, verbose):
     """
     The Domain module uses various tools and APIs to collect \
@@ -162,7 +165,7 @@ run only domain and IP-related modules."))
     setup_reports(client)
     output_report = "reports/{}/Domain_Report.xlsx".format(client)
     report = reporter.Reporter()
-    dscope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
+    scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
         report.create_company_info_worksheet(workbook, domain)
         report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
@@ -183,6 +186,7 @@ Company. This will be used for naming reports.", required=True)
 @click.option('-d', '--domain', help="The email domain, such as \
 example.com. Do not include @.", required=True)
 @click.pass_context
+
 def people(self, client, domain):
     """
     Uses TheHarvester is used to locate email addresses and social \
@@ -213,6 +217,7 @@ addresses.", type=click.Path(exists=True, readable=True, resolve_path=True), req
               help="Name of the output xlsx file for the information. \
 Default is Shodan_Report.xlsx.")
 @click.pass_context
+
 def shodan(self, scope_file, output):
     """
     The Shodan module:\n
@@ -231,6 +236,9 @@ Shodan for the provided domains and IPs."))
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
 
 
+# TODO: HERE BE DRAGONS
+# Everything below here is under construction and a little bit janky ¯\_(ツ)_/¯
+
 # The VERIFY module -- No OSINT, just a way to check a scope list of IPs and domain names
 @odin.command(name='verify', short_help='Verify an external pen test scope. \
 This returns a csv file with SSL cert, whois, and other data for verification.')
@@ -244,6 +252,7 @@ IP addresses.', type=click.Path(exists=True, readable=True, resolve_path=True), 
               help='Output file (CSV) for the findings.')
 @click.option('--cidr', is_flag=True, help='Use if the scoped IPs include any CIDRs.')
 @click.pass_context
+
 def verify(self, scope_file, output, cidr, client):
     """
     The Verify module:
@@ -269,7 +278,34 @@ will attempt to verify who owns the provided IP addresses."))
         print(red("L.. Details: {}".format(error)))
 
 
-# TODO: Under Construction... or getting cut ¯\_(ツ)_/¯
+# The SSL module -- Run SSLLabs' scanner against the target domain
+@odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
+@click.option('-t', '--target', help='IP address with the certificate. \
+Include the port if it is not 443, e.g. IP:8080', required=True)
+@click.option('--labs', is_flag=True, help='Query Qualys SSL Labs in \
+addition to pulling the certificate.')
+@click.option('--cache', is_flag=True, help='Try to get cached scan data from \
+a completed SSL Labs scan, if available.')
+def ssl(target, labs, cache):
+    """
+    This module can be used to quickly pull an SSL certificate's information for easy reference.
+    It can also be used to run an SSLLabs scan on the target (coming soon).
+    """
+    asciis.print_art()
+    print(green("[+] SSL Module Selected: O.D.I.N. will pull SSL certificate \
+information for the provided IP and port."))
+    
+    ssl_checker.check_ssl(target)
+    if labs:
+        if cache:
+            print(green("[+] Checking SSL Labs' cache data for this host."))
+            ssl_checker.get_results(target, 2)
+        else:
+            print(green("[+] SSL Labs scanning was enabled, so requesting \
+information from Qualys."))
+            ssl_checker.get_results(target, 1)
+
+
 # The REP module -- Check a target's reputation against Cymon and URLVoid records
 # @odin.command(name='rep', short_help='Check reputation of provided IP or domain.')
 # @click.option('-t', '--target', help='The target IP address or domain.', required=True)
@@ -287,25 +323,6 @@ will attempt to verify who owns the provided IP addresses."))
 
 #     report = reporter.Reporter()
 #     report.create_cymon_worksheet(target)
-
-
-# The SSL module -- Run SSLLabs' scanner against the target domain
-# @odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
-# @click.option('-t', '--target', help='IP address with the certificate. \
-# Include the port if it is not 443, e.g. IP:8080', required=True)
-# @click.option('--labs', is_flag=True, help='Query Qualys SSL Labs in \
-# addition to pulling the certificate.')
-# def ssl(target, labs):
-#     """
-#     This module can be used to quickly pull an SSL certificate's information for easy reference.
-#     It can also be used to run an SSLLabs scan on the target (coming soon).
-#     """
-#     asciis.print_art()
-#     print(green("[+] SSL Module Selected: O.D.I.N. will pull SSL certificate \
-# information for the provided IP and port."))
-#     scan_tools.checkSSL(target)
-#     if labs:
-#         ssllabsscanner.get_results(target, 1)
 
 
 if __name__ == "__main__":
