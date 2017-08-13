@@ -251,8 +251,9 @@ searches...").format(len(files), total_count))
                 else:
                     short_file = pdf_name
             except Exception as error:
-                print(red("[!] There was an error downloading the files."))
-                print(red("L.. Details: {}").format(error))
+                print(red("[!] There was an error downloading a file from this URL:\n{}"
+                      .format(item)))
+                # print(red("L.. Details: {}").format(error))
                 continue
 
         for item in files:

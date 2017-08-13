@@ -11,25 +11,10 @@ import socket
 import OpenSSL
 import ssl
 import requests
-from IPy import IP
 from colors import green, red, yellow
+from lib import helpers
 
 SSL_API_ENDPOINT = "https://api.ssllabs.com/api/v2/"
-
-
-def is_ip(value):
-    """Checks if the provided string is an IP address or not. If
-    the check fails, it will be assumed the string is a domain
-    in most cases.
-
-    IPy is used to determine if a string is a valid IP address. A True or
-    False is returned.
-    """
-    try:
-        IP(value)
-    except ValueError:
-        return False
-    return True
 
 
 def request_api(path, payload={}):
@@ -50,7 +35,7 @@ def request_api(path, payload={}):
 
 def results_from_cache(host, publish="off", start_new="off", from_cache="on", all="done"):
     """This function returns results from SSL Labs' cache (previously run scans)."""
-    if is_ip(host):
+    if helpers.is_ip(host):
         print(red("[!] Your target host must be a domain, not an IP address! \
 SSL Labs will onyl scan domains."))
         exit()
@@ -63,7 +48,7 @@ SSL Labs will onyl scan domains."))
 
 def new_scan(host, publish = "off", start_new = "on", all = "done", ignoreMismatch = "on"):
     """This function requests SSL Labs to run new scan for the target domain."""
-    if is_ip(host):
+    if helpers.is_ip(host):
         print(red("[!] Your target host must be a domain, not an IP address! \
 SSL Labs will onyl scan domains."))
         exit()

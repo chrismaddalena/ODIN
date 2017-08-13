@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module contains all of tools and functions used
-for evaluating IP addresses/ranges and domain names.
+"""This module contains all of tools and functions used for evaluating IP addresses/ranges and
+domain names.
 """
 
 import os
@@ -20,7 +20,6 @@ from ipwhois import IPWhois
 from bs4 import BeautifulSoup
 import requests
 from colors import red, green, yellow
-from IPy import IP
 from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 import boto3
@@ -30,9 +29,7 @@ from lib import helpers
 
 
 class DomainCheck(object):
-    """A class containing the tools for performing OSINT against IP addresses
-    and domain names.
-    """
+    """A class containing the tools for performing OSINT against IP addresses and domain names."""
     # Google-friendly user-agent
     my_headers = {'User-agent' : '(Mozilla/5.0 (Windows; U; Windows NT 6.0; \
         en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6'}
@@ -101,24 +98,9 @@ class DomainCheck(object):
         #     print(yellow("[*] No AWS credentials file in ~/.aws/credentials, so AWS recon will be skipped."))
         #     self.aws_creds = False
 
-    def is_ip(self, value):
-        """Checks if the provided string is an IP address or not. If
-        the check fails, it will be assumed the string is a domain
-        in most cases.
-
-        IPy is used to determine if a string is a valid IP address. A True or
-        False is returned.
-        """
-        try:
-            IP(value)
-        except ValueError:
-            return False
-        return True
-
     def generate_scope(self, scope_file):
-        """Parse IP ranges inside the provided scope file to expand
-        IP ranges. This supports ranges with hyphens, underscores, and
-        CIDRs.
+        """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
+        with hyphens, underscores, and CIDRs.
         """
         scope = []
         try:
@@ -172,14 +154,10 @@ class DomainCheck(object):
         return scope
 
     def full_contact_domain(self, domain):
-        """Uses the Full Contact API to collect social media info. This returns
-        the FullContact JSON response.
+        """Uses the Full Contact API to collect social media info. This returns the FullContact
+        JSON response.
 
         An API key is required.
-
-        This has not been implemented, mostly because their sales
-        team hounded me with some bizarre emails and pitches after
-        I got my key.
         """
         if self.contact_api_key == "":
             print(red("[!] No Full Contact API key, so skipping these searches."))
@@ -225,15 +203,12 @@ class DomainCheck(object):
             print(red("L.. Details: {}".format(error)))
 
     def run_rdap(self, ip_address):
-        """Perform an RDAP lookup for an IP address. An RDAP lookup
-        object is returned.
+        """Perform an RDAP lookup for an IP address. An RDAP lookup object is returned.
 
-        From IPWhois: IPWhois.lookup_rdap() is now the recommended
-        lookup method. RDAP provides a far better data structure than
-        legacy whois and REST lookups (previous implementation).
-        RDAP queries allow for parsing of contact information and
-        details for users, organizations, and groups. RDAP also
-        provides more detailed network information.
+        From IPWhois: IPWhois.lookup_rdap() is now the recommended lookup method. RDAP provides
+        a far better data structure than legacy whois and REST lookups (previous implementation).
+        RDAP queries allow for parsing of contact information and details for users, organizations,
+        and groups. RDAP also provides more detailed network information.
         """
         try:
             rdapwho = IPWhois(ip_address)
@@ -245,14 +220,11 @@ class DomainCheck(object):
             print(red("L.. Details: {}".format(error)))
 
     def run_urlcrazy(self, client, target, cymon_api=cymon_api):
-        """Run urlcrazy to locate typosquatted domains related to
-        the target domain. The full output is saved to a csv file
-        and then domains with A-records are analyzed to see if they
-        may be in use for malicious purposes. The domain names and
-        IP addresses are checked against Cymon.io's threat feeds.
-        If a result is found (200 OK), then the domain or IP has
-        been reported to be part of some sort of malicious
-        activity relatively recently.
+        """Run urlcrazy to locate typosquatted domains related to the target domain. The full
+        output is saved to a csv file and then domains with A-records are analyzed to see if
+        they may be in use for malicious purposes. The domain names and IP addresses are checked
+        against Cymon.io's threat feeds. If a result is found (200 OK), then the domain or IP has
+        been reported to be part of some sort of malicious activity relatively recently.
 
         The function returns a list of domains, A-records, MX-records,
         and the results from Cymon.
@@ -319,7 +291,7 @@ class DomainCheck(object):
                             malicious_domain = 0
                     except Exception as error:
                         malicious_domain = 0
-                        print(red("[!] There was an error checking {} with Cymon.io!"\
+                        print(red("[!] There was an error checking {} with Cymon.io!"
                             .format(domain[0])))
 
                     # Search for domains and IP addresses tied to the A-record IP
@@ -333,17 +305,17 @@ class DomainCheck(object):
                             malicious_ip = 0
                     except Exception as error:
                         malicious_ip = 0
-                        print(red("[!] There was an error checking {} with Cymon.io!"\
-                        .format(domain[1])))
+                        print(red("[!] There was an error checking {} with Cymon.io!"
+                              .format(domain[1])))
 
                     if malicious_domain == 1:
                         cymon_result = "Yes"
-                        print(yellow("[*] {} was flagged as malicious, so consider \
-looking into this.".format(domain[0])))
+                        print(yellow("[*] {} was flagged as malicious, so consider looking into \
+this.".format(domain[0])))
                     elif malicious_ip == 1:
                         cymon_result = "Yes"
-                        print(yellow("[*] {} was flagged as malicious, so consider \
-looking into this.".format(domain[1])))
+                        print(yellow("[*] {} was flagged as malicious, so consider looking into \
+this.".format(domain[1])))
                     else:
                         cymon_result = "No"
 
@@ -365,27 +337,25 @@ looking into this.".format(domain[1])))
             print(yellow("[*] Skipped urlcrazy check."))
 
     def run_shodan_search(self, target):
-        """Collect information Shodan has for target domain name. This uses
-        the Shodan search instead of host lookup and returns the target results
-        dictionary from Shodan.
+        """Collect information Shodan has for target domain name. This uses the Shodan search
+        instead of host lookup and returns the target results dictionary from Shodan.
 
         A Shodan API key is required.
         """
         if self.shoAPI is None:
             pass
         else:
-            print(green("[+] Performing Shodan domain search for {}".format(target)))
+            print(green("[+] Performing Shodan domain search for {}.".format(target)))
             try:
                 target_results = self.shoAPI.search(target)
                 return target_results
             except shodan.APIError as error:
-                print(red("[!] Error fetching Shodan info for {}".format(target)))
+                print(red("[!] Error fetching Shodan info for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
     def run_shodan_lookup(self, target):
-        """Collect information Shodan has for target IP address. This uses
-        the Shodan host lookup instead of search and returns the target results
-        dictionary from Shodan.
+        """Collect information Shodan has for target IP address. This uses the Shodan host lookup
+        instead of search and returns the target results dictionary from Shodan.
 
         A Shodan API key is required.
         """
@@ -397,12 +367,12 @@ looking into this.".format(domain[1])))
         if self.shoAPI is None:
             pass
         else:
-            print(green("[+] Performing Shodan IP lookup for {}".format(target)))
+            print(green("[+] Performing Shodan IP lookup for {}.".format(target)))
             try:
                 target_results = self.shoAPI.host(target)
                 return target_results
             except shodan.APIError as error:
-                print(red("[!] Error fetching Shodan info for {}".format(target)))
+                print(red("[!] Error fetching Shodan info for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
     def run_shodan_exploit_search(self, CVE):
@@ -411,8 +381,8 @@ looking into this.".format(domain[1])))
         return exploits
 
     def search_cymon_ip(self, target):
-        """Get reputation data from Cymon.io for target IP address. This returns
-        two dictionaries for domains and security events.
+        """Get reputation data from Cymon.io for target IP address. This returns two dictionaries
+        for domains and security events.
 
         An API key is not required, but is recommended.
         """
@@ -430,8 +400,8 @@ looking into this.".format(domain[1])))
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
     def search_cymon_domain(self, target):
-        """Get reputation data from Cymon.io for target domain. This returns a
-        dictionary for the IP addresses tied to the domain.
+        """Get reputation data from Cymon.io for target domain. This returns a dictionary for
+        the IP addresses tied to the domain.
 
         An API key is not required, but is recommended.
         """
@@ -445,9 +415,9 @@ looking into this.".format(domain[1])))
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
     def run_censys_search_cert(self, target):
-        """Collect certificate information from Censys for the target domain
-        name. This returns a dictionary of certificate information. Censys can
-        return a LOT of certificate chain info, so be warned.
+        """Collect certificate information from Censys for the target domain name. This returns
+        a dictionary of certificate information. Censys can return a LOT of certificate chain
+        info, so be warned.
 
         This function uses these fields: parsed.subject_dn and parsed.issuer_dn
 
@@ -466,8 +436,8 @@ looking into this.".format(domain[1])))
                 print(red("L.. Details: {}".format(error)))
 
     def run_censys_search_address(self, target):
-        """Collect open port/protocol information from Censys for the target
-        IP address. This returns a dictionary of protocol information.
+        """Collect open port/protocol information from Censys for the target IP address. This 
+        returns a dictionary of protocol information.
 
         A free API key is required.
         """
@@ -483,12 +453,12 @@ looking into this.".format(domain[1])))
                 print(red("L.. Details: {}".format(error)))
 
     def run_urlvoid_lookup(self, domain):
-        """Collect reputation data from URLVoid for the target domain. This
-        returns an ElementTree object.
+        """Collect reputation data from URLVoid for the target domain. This returns an ElementTree
+        object.
 
         A free API key is required.
         """
-        if not self.is_ip(domain):
+        if not helpers.is_ip(domain):
             try:
                 if self.urlvoid_api_key != "":
                     print(green("[+] Checking reputation for {} with URLVoid".format(domain)))
@@ -606,6 +576,8 @@ looking into this.".format(domain[1])))
             bucket_results = []
             account_results = []
             for term in search_terms:
+                # Strip out any spaces that might've been included in client name
+                term = "".join(term.split())
                 # Check for buckets
                 result = self.validate_bucket('head', term)
                 bucket_results.append(result)
@@ -730,20 +702,24 @@ looking into this.".format(domain[1])))
 
 
     def check_domain_fronting(self, subdomain):
-        """Function to check the A records for a given subdomain and look for
-        references to various CDNs to flag the submdomain for domain frontability.
+        """Function to check the A records for a given subdomain and look for references to various
+        CDNs to flag the submdomain for domain frontability.
 
-        CDN keywords provided by rvrsh3ll on GitHub: https://github.com/rvrsh3ll/FindFrontableDomains
+        Many CDN keywords provided by rvrsh3ll on GitHub:
+        https://github.com/rvrsh3ll/FindFrontableDomains
         """
         try:
+            # Get the A record(s) for the subdomain
             query = self.get_dns_record(subdomain, "a")
-            # Iterate through response and check for potential CNAMES
+            # Look for records matching known CDNs
             for item in query.response.answer:
                 for text in item.items:
                     target = text.to_text()
                     if "cloudfront" in target:
                         return "Cloudfront: {}".format(target)
                     elif "appspot.com" in target:
+                        return "Google: {}".format(target)
+                    elif "googleplex.com" in target:
                         return "Google: {}".format(target)
                     elif "msecnd.net" in target:
                         return "Azure: {}".format(target)

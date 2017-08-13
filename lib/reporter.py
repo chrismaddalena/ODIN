@@ -10,13 +10,12 @@ import time
 import base64
 from xml.etree import ElementTree  as ET
 from colors import red, green, yellow
-from lib import domain_tools, email_tools, pyfoca
+from lib import domain_tools, email_tools, pyfoca, helpers
 
 
 class Reporter(object):
-    """A class that can be used to call upon the other
-    modules to collect results and then format a report
-    saved as an XLSX spreadsheet.
+    """A class that can be used to call upon the other modules to collect results and then format
+    a report saved as an XLSX spreadsheet.
     """
     ip_addresses = []
     domains_list = []
@@ -30,9 +29,7 @@ class Reporter(object):
         self.PC = email_tools.PeopleCheck()
 
     def prepare_scope(self, scope_file, domain=None):
-        """Function to split the user's scope file into IP
-        addresses and domain names.
-        """
+        """Function to split the user's scope file into IP addresses and domain names."""
         # Generate the scope lists from the supplied scope file, if there is one
         scope = []
         scope = self.DC.generate_scope(scope_file)
@@ -46,7 +43,7 @@ scope file, so it has been added to the scope for OSINT."))
 
         # Create lists of IP addresses and domain names from scope
         for item in scope:
-            if self.DC.is_ip(item):
+            if helpers.is_ip(item):
                 self.ip_addresses.append(item)
             elif item == "":
                 pass
@@ -56,9 +53,7 @@ scope file, so it has been added to the scope for OSINT."))
         return scope, self.ip_addresses, self.domains_list
 
     def create_company_info_worksheet(self, workbook, domain):
-        """Function to generate a worksheet of company information 
-        provided via Full Contact.
-        """
+        """Function to generate a worksheet of company information provided via Full Contact."""
         # Try to collect the info
         info_json = self.PC.full_contact_company(domain)
 
@@ -139,8 +134,8 @@ scope file, so it has been added to the scope for OSINT."))
         row = 0
 
         if verbose:
-            print(yellow("[*] Verbose output Enabled -- Enumeration of RDAP contact \
-information is enabled, so you may get a lot of it if scope includes a large cloud provider."))
+            print(yellow("[*] Verbose output Enabled -- Enumeration of RDAP contact information \
+is enabled, so you may get a lot of it if scope includes a large cloud provider."))
         else:
             print(yellow("[*] Verbose output Disabled -- Enumeration of contact information \
 will be skipped."))
@@ -315,7 +310,7 @@ will be skipped."))
         for target in scope:
             try:
                 # Slightly change output and recorded target if it's a domain
-                if self.DC.is_ip(target):
+                if helpers.is_ip(target):
                     target_ip = target
                     for_output = target
                     print(green("[+] Running RDAP lookup for {}".format(for_output)))
@@ -414,30 +409,33 @@ will be skipped."))
                             temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
                         engines = ", ".join(temp)
 
-                        print(yellow("[*] URLVoid found malicious activity \
-    reported for {}!".format(domain)))
+                        print(yellow("[*] URLVoid found malicious activity reported for \
+{}!".format(domain)))
                         dom_worksheet.write(row, 8, "Count {}: {}".format(count, engines))
 
-                rep_data = tree[0]
-                ip_data = rep_data[11]
+                try:
+                    rep_data = tree[0]
+                    ip_data = rep_data[11]
 
-                dom_worksheet.write(row, 0, ET.tostring(rep_data[0], method='text')
-                                    .rstrip().decode('ascii'))
-                dom_worksheet.write(row, 1, ET.tostring(ip_data[0], method='text')
-                                    .rstrip().decode('ascii'))
-                dom_worksheet.write(row, 2, ET.tostring(ip_data[1], method='text')
-                                    .rstrip().decode('ascii'))
-                dom_worksheet.write(row, 3, ET.tostring(rep_data[3], method='text')
-                                    .rstrip().decode('ascii'))
-                dom_worksheet.write(row, 4, ET.tostring(rep_data[4], method='text')
-                                    .rstrip().decode('ascii'))
-                dom_worksheet.write(row, 5, ET.tostring(rep_data[5], method='text')
-                                    .rstrip().decode('ascii'))
-                dom_worksheet.write(row, 6, ET.tostring(ip_data[2], method='text')
-                                    .rstrip().decode('ascii'))
-                dom_worksheet.write(row, 7, ET.tostring(ip_data[3], method='text')
-                                    .rstrip().decode('ascii'))
-                row += 1
+                    dom_worksheet.write(row, 0, ET.tostring(rep_data[0], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 1, ET.tostring(ip_data[0], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 2, ET.tostring(ip_data[1], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 3, ET.tostring(rep_data[3], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 4, ET.tostring(rep_data[4], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 5, ET.tostring(rep_data[5], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 6, ET.tostring(ip_data[2], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 7, ET.tostring(ip_data[3], method='text')
+                                        .rstrip().decode('ascii'))
+                    row += 1
+                except:
+                    print(red("[!] There was an error getting the data for {}.".format(domain)))
 
         # Add buffer rows for the next table
         row += 2
@@ -489,9 +487,7 @@ will be skipped."))
         for domain in domains_list:
             try:
                 results = self.DC.run_shodan_search(domain)
-                if not results['total'] == 0:
-                    # shodan_worksheet.write(row, 0, "{} Shodan results found \
-# for:".format(results['total']))
+                if results['total'] > 0:
                     for result in results['matches']:
                         shodan_worksheet.write(row, 0, result['ip_str'])
                         shodan_worksheet.write(row, 1, ", ".join(result['hostnames']))
@@ -499,6 +495,8 @@ will be skipped."))
                         shodan_worksheet.write(row, 3, result['port'])
                         shodan_worksheet.write(row, 4, result['data'])
                         row += 1
+                else:
+                    print(yellow("[*] No results for {}.".format(domain)))
             except:
                 pass
 
@@ -679,9 +677,8 @@ will be skipped."))
             email_worksheet.write(row, 2, "Pastes", bold)
             row += 1
 
-            print(green("[+] Moving on to checking emails with HIBP -- \
-might take some time because we're going be nice and give Troy Hunt \
-a nice API call delay..."))
+            print(green("[+] Moving on to checking emails with HIBP -- might take some time \
+because we're going be nice and give Troy Hunt a nice API call delay..."))
 
             try:
                 for email in unique_emails:
@@ -840,10 +837,10 @@ for --file. Please try again."))
 
 
     def create_cymon_worksheet(self, target):
-        """Function to check the provided the target against Cymon.io's
-        database of threat feeds and then print the results.
+        """Function to check the provided the target against Cymon.io's database of threat feeds
+        and then print the results.
         """
-        if self.DC.is_ip(target):
+        if helpers.is_ip(target):
             domains_results, ip_results = self.DC.search_cymon_ip(target)
             if domains_results:
                 print(yellow("\n[+] Associated Domains:"))

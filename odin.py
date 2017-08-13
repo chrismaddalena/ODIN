@@ -10,16 +10,14 @@
 
 Developer:   Chris "cmaddy" Maddalena
 Description: Observation, Detection, and Investigation of Networks
-             O.D.I.N. is an evolution of Codename:Viper. As with any project that
-             uses a codename, it must eventually get a real name and evolve.
-             O.D.I.N. was designed to assist with OSINT automation for penetration
-             testing clients and their networks, both the types with IP address
-             and social. Provide a client's name, IPs, and domain(s) to gather
+             O.D.I.N. is an evolution of Codename:Viper. As with any project that uses a codename,
+             it must eventually get a real name and evolve. O.D.I.N. was designed to assist with
+             OSINT automation for penetration testing clients and their networks, both the types
+             with IP address and social. Provide a client's name, IPs, and domain(s) to gather
              information from sources like whois, DNS, Shodan, and much, much more.
 
-             O.D.I.N. is made possible through the help, input, and work provided
-             by others. Therefore, this project is entirely open source and
-             available to all to use/modify.
+             O.D.I.N. is made possible through the help, input, and work provided by others.
+             Therefore, this project is entirely open source and available to all to use/modify.
 """
 
 import os
@@ -29,14 +27,14 @@ import click
 import xlsxwriter
 
 
-# Create a directory for the client reports
 def setup_reports(client):
-    """Create a reports directory for the target client."""
+    """Function to create a reports directory for the target client."""
     if not os.path.exists("reports/{}".format(client)):
         try:
             os.makedirs("reports/{}".format(client))
-        except:
+        except OSError as error:
             print(red("[!] Could not create the reports directory!"))
+            print(red("L.. Details: {}".format(error)))
 
 
 # Setup a class for CLICK
@@ -65,49 +63,51 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 @click.group(cls=AliasedGroup, context_settings=CONTEXT_SETTINGS)
 
+# Note: The following function descriptors will look weird and some will contain \n.
+# This is necessary for CLICK. These are displayed with the -h help info and need to be written
+# just like we want them to be displayed in the user's terminal.
 def odin():
     """
-    Welcome to O.D.I.N.! To use O.D.I.N., select a module you \
-wish to run. Functions are split into modules for flexibility.\n
-    Run 'odin.py <MODULE> --help' for more information on a specific module.\n
+Welcome to O.D.I.N.! To use O.D.I.N., select a module you wish to run. Functions are split into
+modules for flexibility.\n
+Run 'odin.py <MODULE> --help' for more information on a specific
+module.
     """
     # Everything starts here
     pass
 
 
 # The OSINT module -- hit it with everything
-@odin.command(name='osint', short_help="The full OSINT suite of tools \
-will be run (domain, people, Shodan).")
-@click.option('-c', '--client', help="The target client, such as ABC \
-Company, to use for report titles.", required=True)
+@odin.command(name='osint', short_help="The full OSINT suite of tools will be run (domain, people\
+, and Shodan).")
+@click.option('-c', '--client', help="The target client, such as ABC Company, to use for report \
+titles.", required=True)
 @click.option('-d', '--domain', help="The target's domain, such as example.com.", required=True)
-@click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, resolve_path=True),
-              help="A text file containing your \
-in-scope IP addresses and domain names. List each one on a new line.", required=True)
-@click.option('--files', is_flag=True, help="Use this option to use \
-Google to search for files under the provided domain (-d) and extract metadata.")
-@click.option('-e', '--ext', default="all", help="File extensions to \
-look for with --file. Default is 'all' or you can pick from key, \
-pdf, doc, docx, xls, xlsx, and ppt.")
+@click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, \
+              resolve_path=True), help="A text file containing your in-scope IP addresses and \
+              domain names. List each one on a new line.", required=True)
+@click.option('--files', is_flag=True, help="Use this option to use Google to search for files \
+under the provided domain (-d) and extract metadata.")
+@click.option('-e', '--ext', default="all", help="File extensions to look for with --file. \
+Default is 'all' or you can pick from key, pdf, doc, docx, xls, xlsx, and ppt.")
 @click.option('-x', '--delete', is_flag=True, help="Set this option \
 if you want the downloaded files with --file to be deleted after analysis.")
-@click.option('-v', '--verbose', is_flag=True, help="Enable verbose \
-output for more (maybe way too much) domain contact info, Censys \
-certificate information, and additional status messages.")
-@click.option('-w', '--aws', help="A list of AWS S3 bucket names to \
-validate.", type=click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output for more (maybe way \
+too much) domain contact info, Censys certificate information, and additional status messages.")
+@click.option('-w', '--aws', help="A list of AWS S3 bucket names to validate.",  \
+              type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.pass_context
 
 def osint(self, client, domain, files, ext, delete, scope_file, aws, verbose):
     """
-    The full O.D.I.N. toolkit:\n
-    This module runs all OSINT modules together. O.D.I.N. uses \
-TheHarvester to locate email addresses and social media profiles.
-    Profiles are cross-referenced with HaveIBeenPwned, Twitter's API, and LinkedIn.\n
-    O.D.I.N. uses various tools and APIs to collect domain/IP \
-information on the provided IP addresses and/or domains.\n
-    Several API keys are required for all of the look-ups: \
-Twitter, Censys, Shodan, and Cymon.
+The full O.D.I.N. toolkit:\n
+This module runs all OSINT modules together. O.D.I.N. uses TheHarvester and Hunter.io
+to locate email addresses and social media profiles. Profiles are then cross-referenced with
+HaveIBeenPwned, Twitter's API, and search engines to collect additional information.\n
+O.D.I.N. uses various tools and APIs to collect domain/IP information on the provided IP
+addresses and/or domains.\n
+Several API keys are required for all of the look-ups: Twitter, Censys, Shodan, EmailHunter,
+and Cymon.
     """
     asciis.print_art()
 
@@ -118,49 +118,50 @@ Twitter, Censys, Shodan, and Cymon.
     report = reporter.Reporter()
     scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
     with xlsxwriter.Workbook(output_report) as workbook:
-        # report.create_company_info_worksheet(workbook, domain)
+        report.create_company_info_worksheet(workbook, domain)
         report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
-        # report.create_urlcrazy_worksheet(workbook, client, domain)
-        # report.create_shodan_worksheet(workbook, ip_list, domains_list)
-        # report.create_censys_worksheet(workbook, scope, verbose)
-        # report.create_people_worksheet(workbook, domain, client)
-        # report.create_cloud_worksheet(workbook, client, domain, aws)
-        # if files:
-        #     report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
+        report.create_urlcrazy_worksheet(workbook, client, domain)
+        report.create_shodan_worksheet(workbook, ip_list, domains_list)
+        report.create_censys_worksheet(workbook, scope, verbose)
+        report.create_people_worksheet(workbook, domain, client)
+        report.create_cloud_worksheet(workbook, client, domain, aws)
+        if files:
+            report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
+
+    print(green("[+] Job's done! Your results are in {}.".format(output_report)))
 
 
-# The DOMAIN module -- Forget social and focus on IPs and domain names
-@odin.command(name='domain', short_help="Only domain-related recon will \
-be performed (RDAP, DNS, Shodan). Provide a list of IPs and domains.")
-@click.option('-c', '--client', help="The target client, such as ABC \
-Company. This will be used for report titles.", required=True)
+# The DOMAINS module -- Forget social and focus on IPs and domain names
+@odin.command(name='domains', short_help="Only domain-related recon will be performed (RDAP, DNS, \
+and Shodan). Provide a list of IPs and domains.")
+@click.option('-c', '--client', help="The target client, such as ABC Company. This will be used \
+for report titles.", required=True)
 @click.option('-d', '--domain', help="The target's domain, such as example.com.", required=True)
-@click.option('-sf', '--scope-file', help="A list of IP address/ranges \
-and domains.", type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
-@click.option('--files', is_flag=True, help="Use this option to use \
-Google to search for files under the provided domain (-d) and extract metadata.")
-@click.option('-e', '--ext', default="all", help="File extensions to \
-look for with --file. Default is 'all' or you can pick from key, \
-pdf, doc, docx, xls, xlsx, and ppt.")
-@click.option('-x', '--delete', is_flag=True, help="Set this option \
-if you want the downloaded files with --file to be deleted after analysis.")
-@click.option('-v', '--verbose', is_flag=True, help="Enable verbose \
-output for more (maybe way too much) domain contact info, Censys \
-certificate information, and additional status messages.")
+@click.option('-sf', '--scope-file', help="A list of IP address/ranges and domains.", \
+              type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
+@click.option('--files', is_flag=True, help="Use this option to use Google to search for files \
+under the provided domain (-d) and extract metadata.")
+@click.option('-e', '--ext', default="all", help="File extensions to look for with --file. \
+Default is 'all' or you can pick from key, pdf, doc, docx, xls, xlsx, and ppt.")
+@click.option('-x', '--delete', is_flag=True, help="Set this option if you want the downloaded \
+files with --file to be deleted after analysis.")
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output for more (maybe way \
+too much) domain contact info, Censys certificate information, and additional status messages.")
+@click.option('-w', '--aws', help="A list of AWS S3 bucket names to validate.", \
+              type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.pass_context
-@click.option('-w', '--aws', help="A list of AWS S3 bucket names to \
-validate.", type=click.Path(exists=True, readable=True, resolve_path=True))
 
-def domain(self, client, domain, files, ext, delete, scope_file, aws, verbose):
+def domains(self, client, domain, files, ext, delete, scope_file, aws, verbose):
     """
-    The Domain module uses various tools and APIs to collect \
-information on the provided IP addresses and/or domains.\n
-    Several API keys are required for all of the look-ups: Censys, Shodan, and Cymon.
+The Domain module uses various tools and APIs to collect information on the provided IP addresses
+and/or domains.\n
+Several API keys are required for all of the look-ups: Censys, FullContact, Shodan, URLVoid, and
+Cymon.
     """
     asciis.print_art()
 
-    print(green("[+] Domain Module Selected: O.D.I.N. will \
-run only domain and IP-related modules."))
+    print(green("[+] Domain Module Selected: O.D.I.N. will run only domain and IP-related \
+modules."))
 
     setup_reports(client)
     output_report = "reports/{}/Domain_Report.xlsx".format(client)
@@ -176,29 +177,30 @@ run only domain and IP-related modules."))
         if files:
             report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
 
+    print(green("[+] Job's done! Your results are in {}.".format(output_report)))
 
-# The PEOPLE module -- Primarily TheHarvester with some Twitter and LinkedIn sprinkled in
+
+# The PEOPLE module -- Primarily email hunting with some Twitter and LinkedIn sprinkled in
 @odin.command(name='people',
-              short_help="Only email addresses and social media profile recon \
-(email, Twitter, and LinkedIn). Provide an email @domain.")
-@click.option('-c', '--client', help="The target client, such as ABC \
-Company. This will be used for naming reports.", required=True)
-@click.option('-d', '--domain', help="The email domain, such as \
-example.com. Do not include @.", required=True)
+              short_help="Only email addresses and social media profile recon (email, Twitter, and \
+LinkedIn). Provide an email @domain.")
+@click.option('-c', '--client', help="The target client, such as ABC Company. This will be used \
+for naming reports.", required=True)
+@click.option('-d', '--domain', help="The email domain, such as example.com. Do not include \
+@.", required=True)
 @click.pass_context
 
 def people(self, client, domain):
     """
-    Uses TheHarvester is used to locate email addresses and social \
-media profiles. Profiles are cross-referenced with
-    HaveIBeenPwned, Twitter's API, and LinkedIn to try to find security \
+Uses TheHarvester and EmailHunter to locate email addresses and social media profiles. Profiles
+are cross-referenced with HaveIBeenPwned, Twitter's API, and search engines to try to find security
 breaches, pastes, and social media accounts.\n
-    A Twitter app key is necessary for the Twitter API integration.
+Several API keys are required for all of the look-ups: EmailHunter and Twitter.
     """
     asciis.print_art()
 
-    print(green("[+] People Module Selected: O.D.I.N. will run only \
-modules for email addresses and social media."))
+    print(green("[+] People Module Selected: O.D.I.N. will run only modules for email addresses \
+and social media."))
 
     setup_reports(client)
     output_report = "reports/{}/People_Report.xlsx".format(client)
@@ -207,27 +209,28 @@ modules for email addresses and social media."))
         report.create_company_info_worksheet(workbook, domain)
         report.create_people_worksheet(workbook, domain, client)
 
+    print(green("[+] Job's done! Your results are in {}.".format(output_report)))
 
-# The SHODAN module -- Perform Shodan searches only
-@odin.command(name='shodan', short_help="Look-up IPs and domains on \
-Shodan using the Shodan API and your API key.")
-@click.option('-sf', '--scope-file', help="Name fo the file with your IP \
-addresses.", type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
-@click.option('-o', '--output', default="Shodan_Report.xlsx",
-              help="Name of the output xlsx file for the information. \
-Default is Shodan_Report.xlsx.")
+
+# The SHODAN module -- Mostly a Shodan CLI
+@odin.command(name='shodan', short_help="Look-up IPs and domains on Shodan using the Shodan API \
+and your API key.")
+@click.option('-sf', '--scope-file', help="Name of the file with your IP addresses.", 
+              type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
+@click.option('-o', '--output', default="Shodan_Report.xlsx", help="Name of the output xlsx file \
+for the information. Default is Shodan_Report.xlsx.")
 @click.pass_context
 
 def shodan(self, scope_file, output):
     """
-    The Shodan module:\n
-    Look-up information on IP addresses using Shodan's API and your API key.\n
-    You must have a Shodan API key!
+The Shodan module:\n
+Look-up information on the target IP address(es) using Shodan's API.\n
+A Shodan API key is required.
     """
     asciis.print_art()
 
-    print(green("[+] Shodan Module Selected: O.D.I.N. will check \
-Shodan for the provided domains and IPs."))
+    print(green("[+] Shodan Module Selected: O.D.I.N. will check Shodan for the provided domains \
+and IPs."))
 
     output_report = output
     report = reporter.Reporter()
@@ -235,48 +238,64 @@ Shodan for the provided domains and IPs."))
     with xlsxwriter.Workbook(output_report) as workbook:
         report.create_shodan_worksheet(workbook, ip_list, domains_list)
 
+    print(green("[+] Job's done! Your Shodan results are in {}.".format(output)))
 
-# TODO: HERE BE DRAGONS
-# Everything below here is under construction and a little bit janky ¯\_(ツ)_/¯
 
-# The VERIFY module -- No OSINT, just a way to check a scope list of IPs and domain names
-@odin.command(name='verify', short_help='Verify an external pen test scope. \
-This returns a csv file with SSL cert, whois, and other data for verification.')
-@click.option('-c', '--client', help='The target client, such as ABC Company. \
-This will be used for report titles.', required=True)
-@click.option('-sf', '--scope-file', help='Name fo the file with your \
-IP addresses.', type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
-# @click.option('-s', '--scope-ips', help='Scoped IP addresses. \
-# Can be used instead of a scoping file.', multiple=True)
-@click.option('-o', '--output', default='Verification.csv',
-              help='Output file (CSV) for the findings.')
+# The VERIFY module -- No OSINT, just a way to check a ownership of a list of IPs
+@odin.command(name='verify', short_help='Verify an external pen test scope. This returns a csv \
+file with SSL cert, whois, and other data for verification.')
+@click.option('-c', '--client', help='The target client, such as ABC Company. This will be used \
+for report titles.', required=True)
+@click.option('-sf', '--scope-file', help='Name fo the file with your IP addresses.', \
+              type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
+# @click.option('-s', '--scope-ips', help='Scoped IP addresses. Can be used instead of a scoping \
+# file.', multiple=True)
+@click.option('-o', '--output', default='Verification.csv', help='Output file (CSV) for the \
+findings.')
 @click.option('--cidr', is_flag=True, help='Use if the scoped IPs include any CIDRs.')
 @click.pass_context
 
 def verify(self, scope_file, output, cidr, client):
     """
-    The Verify module:
-    Uses reverse DNS, ARIN, and SSL certificate information to help you verify a testing scope.
+The Verify module:
+Uses reverse DNS, ARIN, and SSL certificate information to help you verify a testing scope.
+Sometimes clients provide a bad IP address or two and you may not realize it. ¯\_(ツ)_/¯\n
+
+This is only for verifying IP addresses. Domains may not have public ownership information
+available. Compare the IP ownership information from ARIN and any certificate information that
+is found to what you know about your client.
+
+Acceptable IP addresses/ranges include:\n
+* x.x.x.x-y (ex: 8.8.8.8-10)\n
+* x.x.x.x_x.x.x.y (ex: 8.8.8.8_8.8.8.10\n
+* x.x.x.x/yz (ex: 8.8.8.0/24)\n
+* x.x.x.x (ex: 8.8.8.8)\n
+
     """
     asciis.print_art()
-    print(green("[+] Scope Verification Module Selected: O.D.I.N. \
-will attempt to verify who owns the provided IP addresses."))
+
+    print(green("[+] Scope Verification Module Selected: O.D.I.N. will attempt to verify who owns \
+the provided IP addresses."))
+
     setup_reports(client)
     report = "reports/{}/{}".format(client, output)
 
-    # initialize our array for IP address storage
-    ips = []
-    # initialize our dict for info storage
+    ip_list = []
     out = {}
 
     try:
-        verification.infile(scope_file, ips, cidr)
-        verification.who(ips, out)
-        verification.outfile(out, report)
+        verification.prepare_scope(scope_file, ip_list, cidr)
+        verification.perform_whois(ip_list, out)
+        verification.print_output(out, report)
     except Exception as error:
         print(red("[!] Verification failed!"))
         print(red("L.. Details: {}".format(error)))
 
+    print(green("[+] Job's done! Your identity report is in {}.".format(report)))
+
+
+# TODO: HERE THERE BE DRAGONS
+# Everything below here is under construction and a little bit janky ¯\_(ツ)_/¯
 
 # The SSL module -- Run SSLLabs' scanner against the target domain
 @odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
