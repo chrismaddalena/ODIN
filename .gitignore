@@ -4,6 +4,11 @@
 *.pyc
 *.html
 *.nessus
+*.txt
+*.json
+*.png
+*.xlsx
 
 /auth/keys.config
 /reports/*
+/pyfoca-downloads/*

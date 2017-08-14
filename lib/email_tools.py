@@ -38,8 +38,15 @@ class PeopleCheck(object):
             print(yellow("[!] Could not setup OAuth for Twitter API."))
 
         try:
+            self.emailhunter_api_key = helpers.config_section_map("EmailHunter")["api_key"]
+        except:
+            self.emailhunter_api_key = ""
+            print(yellow("[!] Could not fetch EmailHunter API key."))
+
+        try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
         except:
+            self.contact_api_key = ""
             print(yellow("[!] Could not fetch Full Contact API key."))
 
     def pwn_check(self, email):
@@ -57,7 +64,7 @@ class PeopleCheck(object):
 
     def paste_check(self, email):
         """Use HIBP's API to check for the target's email in pastes across multiple
-        paste websites, e.g. slexy, ghostbin, pastebin
+        paste websites, e.g. slexy, ghostbin, pastebin.
         """
         paste_api_endpoint = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
         try:
@@ -71,12 +78,28 @@ class PeopleCheck(object):
             return []
 
     def full_contact_email(self, email):
-        """Use the Full Contact API to collect social information for the target."""
+        """Use the Full Contact API to collect social information
+        for the target email address.
+        """
         if self.contact_api_key is None:
             print(red("[!] No Full Contact API key, so skipping these searches."))
         else:
-            base_url = 'https://api.fullcontact.com/v2/person.json'
+            base_url = "https://api.fullcontact.com/v2/person.json"
             payload = {'email':email, 'apiKey':self.contact_api_key}
+            resp = requests.get(base_url, params=payload)
+            if resp.status_code == 200:
+                return resp.json()
+
+    def full_contact_company(self, domain):
+        """Use the Full Contact API to collect company profile
+        information for the target domain.
+        """
+        if self.contact_api_key is None:
+            print(red("[!] No Full Contact API key, so skipping company lookup."))
+            return None
+        else:
+            base_url = "https://api.fullcontact.com/v2/company/lookup.json"
+            payload = {'domain':domain, 'apiKey':self.contact_api_key}
             resp = requests.get(base_url, params=payload)
             if resp.status_code == 200:
                 return resp.json()
@@ -121,34 +144,14 @@ class PeopleCheck(object):
         jigsaw_harvest = search.get_people()
 
         # Combine lists and strip out duplicate findings for unique lists
-        total_emails = google_harvest + bing_harvest + yahoo_harvest
-        temp = []
-        for email in total_emails:
-            email = email.lower()
-            temp.append(email)
-        unique = set(temp)
-        unique_emails = list(unique)
+        all_emails = google_harvest + bing_harvest + yahoo_harvest
+        all_people = link_harvest + jigsaw_harvest
 
-        # Do the same with people, but keep Twitter handles separate
-        total_people = link_harvest + jigsaw_harvest
-        unique = set(total_people)
-        unique_people = list(unique)
-
-        # Process Twitter handles to kill duplicates
-        handles = []
-        for twit in twit_harvest:
-            # Split handle from account description and strip rogue periods
-            handle = twit.split(' ')[0]
-            handle = handle.rstrip('.')
-            handles.append(handle.lower())
-        unique = set(handles)
-        unique_twitter = list(unique)
-
-        print(green("[+] Harvester found a total of {} emails and {} \
-names across all engines".format(len(unique_emails), len(unique_people) + len(unique_twitter))))
+        print(green("[+] TheHarvester has found {} emails, {} names, and \
+{} Twitter handles.".format(len(all_emails), len(all_people), len(twit_harvest))))
 
         # Return the results for emails, people, and Twitter accounts
-        return unique_emails, unique_people, unique_twitter
+        return all_emails, all_people, twit_harvest
 
     def harvest_twitter(self, handle):
         """Function to lookup the provided handle on Twitter using Tweepy."""
@@ -204,3 +207,83 @@ for {} at {}".format(target, company)))
         no_dups = set(refs)
 
         return no_dups
+
+    def harvest_emailhunter(self, domain):
+        """"Call upon EmailHunter's API to collect known email
+        addresses for a domain and other information, such as names,
+        job titles, and the original source of the data.
+
+        A free EmailHunter API key is required.
+        """
+        emailhunter_api_url = "https://api.hunter.io/v2/domain-search?\
+domain={}&api_key={}".format(domain, self.emailhunter_api_key)
+        request = requests.get(emailhunter_api_url)
+        results = request.json()
+
+        if "errors" in results:
+            print(red("[!] The request to EmailHunter returned an error!"))
+            print(red("L.. Details: {}".format(results['errors'])))
+            return None
+
+        print(green("[+] Hunter has contact data for {} \
+people.".format(len(results['data']['emails']))))
+        return results
+
+    def process_harvested_lists(self, harvester_emails, harvester_people,\
+    harvester_twitter, hunter_json):
+        """Take data harvested from EmailHunter and TheHarvester,
+        combine it, make unique lists, and return the total results.
+        """
+        temp_emails = []
+        twitter_handles = []
+        job_titles = {}
+        linkedin = {}
+        phone_nums = {}
+
+        # Process emails found by TheHarvester
+        for email in harvester_emails:
+            email = email.lower()
+            temp_emails.append(email)
+
+        # Process emails and people found by Hunter
+        for result in hunter_json['data']['emails']:
+            email = result['value'].lower()
+            temp_emails.append(email)
+
+            if "first_name" in result and "last_name" in result:
+                if result['first_name'] is not None and result['last_name'] is not None:
+                    person = result['first_name'] + " " + result['last_name']
+                    harvester_people.append(person)
+                    if "position" in result:
+                        if result['position'] is not None:
+                            job_titles[person] = result['position']
+                    if "linkedin" in result:
+                        if result['linkedin'] is not None:
+                            linkedin[person] = result['linkedin']
+                    if "phone_number" in result:
+                        if result['phone_number'] is not None:
+                            phone_nums[person] = result['phone_number']
+
+            if "twitter" in email:
+                if result['twitter'] is not None:
+                    harvester_twitter.append(result['twitter'])
+
+        # Remove any duplicate results
+        unique = set(temp_emails)
+        unique_emails = list(unique)
+
+        unique = set(harvester_people)
+        unique_people = list(unique)
+
+        for twit in harvester_twitter:
+            # Split handle from account description and strip rogue periods
+            handle = twit.split(' ')[0]
+            handle = handle.rstrip('.')
+            twitter_handles.append(handle.lower())
+        unique = set(twitter_handles)
+        unique_twitter = list(unique)
+
+        print(green("[+] Final unique findings: {} emails, {} people, \
+{} Twitter handles.".format(len(unique_emails), len(unique_people), len(unique_twitter))))
+
+        return unique_emails, unique_people, unique_twitter, job_titles, linkedin, phone_nums

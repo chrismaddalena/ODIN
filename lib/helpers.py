@@ -7,6 +7,7 @@ between libraries.
 """
 
 import configparser
+from IPy import IP
 from colors import red
 
 
@@ -38,3 +39,17 @@ def config_section_map(section):
     except configparser.Error as error:
         print(red("[!] There was an error with: {}".format(section)))
         print(red("L.. Details: {}".format(error)))
+
+def is_ip(value):
+    """Checks if the provided string is an IP address or not. If
+    the check fails, it will be assumed the string is a domain
+    in most cases.
+
+    IPy is used to determine if a string is a valid IP address. A True or
+    False is returned.
+    """
+    try:
+        IP(value)
+    except ValueError:
+        return False
+    return True

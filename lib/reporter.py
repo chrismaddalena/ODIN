@@ -7,15 +7,15 @@ generating an XLSX report.
 
 import socket
 import time
+import base64
 from xml.etree import ElementTree  as ET
 from colors import red, green, yellow
-from lib import domain_tools, email_tools, pyfoca
+from lib import domain_tools, email_tools, pyfoca, helpers
 
 
 class Reporter(object):
-    """A class that can be used to call upon the other
-    modules to collect results and then format a report
-    saved as an XLSX spreadsheet.
+    """A class that can be used to call upon the other modules to collect results and then format
+    a report saved as an XLSX spreadsheet.
     """
     ip_addresses = []
     domains_list = []
@@ -28,11 +28,8 @@ class Reporter(object):
         self.DC = domain_tools.DomainCheck()
         self.PC = email_tools.PeopleCheck()
 
-
     def prepare_scope(self, scope_file, domain=None):
-        """Function to split the user's scope file into IP
-        addresses and domain names.
-        """
+        """Function to split the user's scope file into IP addresses and domain names."""
         # Generate the scope lists from the supplied scope file, if there is one
         scope = []
         scope = self.DC.generate_scope(scope_file)
@@ -46,15 +43,88 @@ scope file, so it has been added to the scope for OSINT."))
 
         # Create lists of IP addresses and domain names from scope
         for item in scope:
-            if self.DC.is_ip(item):
+            if helpers.is_ip(item):
                 self.ip_addresses.append(item)
+            elif item == "":
+                pass
             else:
                 self.domains_list.append(item)
 
         return scope, self.ip_addresses, self.domains_list
 
+    def create_company_info_worksheet(self, workbook, domain):
+        """Function to generate a worksheet of company information provided via Full Contact."""
+        # Try to collect the info
+        info_json = self.PC.full_contact_company(domain)
 
-    def create_domain_report(self, workbook, scope, ip_addresses, domains_list, dns):
+        if info_json is not None:
+            # Setup Company Info worksheet
+            info_worksheet = workbook.add_worksheet("Company Info")
+            bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
+            row = 0
+
+            # Write the information labels
+            info_worksheet.write(row, 0, "Corporate Information", bold)
+            row += 1
+            info_worksheet.write(row, 0, "Name", bold)
+            info_worksheet.write(row, 1, info_json['organization']['name'])
+            row += 1
+            info_worksheet.write(row, 0, "Logo", bold)
+            info_worksheet.write(row, 1, info_json['logo'])
+            row += 1
+            info_worksheet.write(row, 0, "Website", bold)
+            info_worksheet.write(row, 1, info_json['website'])
+            row += 1
+            info_worksheet.write(row, 0, "Approx Employees", bold)
+            info_worksheet.write(row, 1, info_json['organization']['approxEmployees'])
+            row += 1
+            info_worksheet.write(row, 0, "Year Founded", bold)
+            info_worksheet.write(row, 1, info_json['organization']['founded'])
+            row += 1
+            info_worksheet.write(row, 0, "Website Overview", bold)
+            info_worksheet.write(row, 1, info_json['organization']['overview'])
+            row += 1
+            info_worksheet.write(row, 0, "Corp Keywords", bold)
+            info_worksheet.write(row, 1, ", ".join(info_json['organization']['keywords']))
+            row += 2
+
+            info_worksheet.write(row, 0, "Corp Social Media", bold)
+            row += 1
+            for profile in info_json['socialProfiles']:
+                info_worksheet.write(row, 0, profile['typeName'], bold)
+                info_worksheet.write(row, 1, profile['url'])
+                row += 1
+            row += 2
+
+            info_worksheet.write(row, 0, "Corp Contact Info", bold)
+            row += 1
+            if "emailAddresses" in info_json['organization']['contactInfo']:
+                for email in info_json['organization']['contactInfo']['emailAddresses']:
+                    info_worksheet.write(row, 0, "Email ({})".format(email['label']), bold)
+                    info_worksheet.write(row, 1, email['value'])
+                    row += 1
+            if "phoneNumbers" in info_json['organization']['contactInfo']:
+                for number in info_json['organization']['contactInfo']['phoneNumbers']:
+                    info_worksheet.write(row, 0, "Phone ({})".format(number['label']), bold)
+                    info_worksheet.write(row, 1, number['number'])
+                    row += 1
+            if "addresses" in info_json['organization']['contactInfo']:
+                for address in info_json['organization']['contactInfo']['addresses']:
+                    info_worksheet.write(row, 0, "Address", bold)
+                    complete = ""
+                    for key, value in address.items():
+                        if key == "region":
+                            complete += "{}, ".format(value['name'])
+                        elif key == "country":
+                            complete += "{}, ".format(value['name'])
+                        elif key == "label":
+                            pass
+                        else:
+                            complete += "{}, ".format(value)
+                    info_worksheet.write(row, 1, complete)
+                    row == 1
+
+    def create_domain_report(self, workbook, scope, ip_addresses, domains_list, verbose):
         """Function to generate a domain report consisting of information like
         DNS records and subdomains.
         """
@@ -62,6 +132,13 @@ scope file, so it has been added to the scope for OSINT."))
         dom_worksheet = workbook.add_worksheet("Domain Info")
         bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
         row = 0
+
+        if verbose:
+            print(yellow("[*] Verbose output Enabled -- Enumeration of RDAP contact information \
+is enabled, so you may get a lot of it if scope includes a large cloud provider."))
+        else:
+            print(yellow("[*] Verbose output Disabled -- Enumeration of contact information \
+will be skipped."))
 
         # Write headers for the DNS records table
         dom_worksheet.write(row, 0, "DNS Records", bold)
@@ -91,8 +168,8 @@ scope file, so it has been added to the scope for OSINT."))
             # Get the A records
             try:
                 temp = []
-                ns_records = self.DC.get_dns_record(domain, "A")
-                for rdata in ns_records.response.answer:
+                a_records = self.DC.get_dns_record(domain, "A")
+                for rdata in a_records.response.answer:
                     for item in rdata.items:
                         temp.append(item.to_text())
                 dom_worksheet.write(row, 2, "{}".format(", ".join(temp)))
@@ -133,6 +210,53 @@ scope file, so it has been added to the scope for OSINT."))
         # Add buffer rows for the next table
         row += 2
 
+        # Write headers for subdomain table
+        dom_worksheet.write(row, 0, "Subdomains", bold)
+        row += 1
+        dom_worksheet.write(row, 0, "Domain", bold)
+        dom_worksheet.write(row, 1, "Subdomain", bold)
+        dom_worksheet.write(row, 2, "IP", bold)
+        dom_worksheet.write(row, 3, "AS", bold)
+        dom_worksheet.write(row, 4, "Provider", bold)
+        dom_worksheet.write(row, 5, "Domain Frontable", bold)
+        row += 1
+
+        # Collect subdomain information from DNS Dumpster
+        for domain in domains_list:
+            print(green("[+] Checking DNS Dumpster for {}".format(domain)))
+            dumpster_results = self.DC.check_dns_dumpster(domain)
+            # Log DNS Dumpster's info
+            if dumpster_results:
+                dom_worksheet.write(row, 0, dumpster_results['domain'])
+                for result in dumpster_results['dns_records']['host']:
+                    if result['reverse_dns']:
+#                         dom_worksheet.write(row, 1, "{domain} ({reverse_dns}) ({ip}) \
+# {as} {provider} {country} {header}".format(**result))
+                        dom_worksheet.write(row, 1, result['domain'])
+                        dom_worksheet.write(row, 2, result['ip'])
+                        dom_worksheet.write(row, 3, result['as'])
+                        dom_worksheet.write(row, 4, result['provider'])
+                    else:
+#                         dom_worksheet.write(row, 1, "{domain} ({ip}) {as} {provider} \
+# {country} {header}".format(**result))
+                        dom_worksheet.write(row, 1, result['domain'])
+                        dom_worksheet.write(row, 2, result['ip'])
+                        dom_worksheet.write(row, 3, result['as'])
+                        dom_worksheet.write(row, 4, result['provider'])
+
+                    # Check the subdomain for domain fronting possibilties
+                    dom_worksheet.write(row, 5, self.DC.check_domain_fronting(result['domain']))
+
+                    row += 1
+
+            # See if we can save the domain map
+            if dumpster_results['image_data']:
+                with open("reports/" + domain + "_Domain_Map.png", "wb") as fh:
+                    fh.write(base64.decodebytes(dumpster_results['image_data']))
+
+        # Add buffer rows for the next table
+        row += 2
+
         # Write headers for whois table
         dom_worksheet.write(row, 0, "Whois Results", bold)
         row += 1
@@ -149,25 +273,25 @@ scope file, so it has been added to the scope for OSINT."))
 
         # The whois lookups are only for domain names
         for domain in domains_list:
-            # try:
-            # Run whois lookup
-            print(green("[+] Running whois for {}".format(domain)))
-            results = self.DC.run_whois(domain)
-            # Log whois results to domain report
-            if results:
-                dom_worksheet.write(row, 0, "{}".format(results['domain_name'][0].lower()))
-                dom_worksheet.write(row, 1, "{}".format(results['registrar']))
-                dom_worksheet.write(row, 2, "{}".format(results['expiration_date']))
-                dom_worksheet.write(row, 3, "{}".format(results['org']))
-                dom_worksheet.write(row, 4, "{}".format(results['registrant']))
-                dom_worksheet.write(row, 5, "{}".format(results['admin_email']))
-                dom_worksheet.write(row, 6, "{}".format(results['tech_email']))
-                dom_worksheet.write(row, 7, "{}".format(results['address'].rstrip()))
-                dom_worksheet.write(row, 8, "{}".format(results['dnssec']))
-                row += 1
-            # except Exception as e:
-            #     print(red("[!] There was an error running whois for {}!".format(domain)))
-            #     print(red("L.. Details: {}".format(e)))
+            try:
+                # Run whois lookup
+                print(green("[+] Running whois for {}".format(domain)))
+                results = self.DC.run_whois(domain)
+                # Log whois results to domain report
+                if results:
+                    dom_worksheet.write(row, 0, "{}".format(results['domain_name'][0].lower()))
+                    dom_worksheet.write(row, 1, "{}".format(results['registrar']))
+                    dom_worksheet.write(row, 2, "{}".format(results['expiration_date']))
+                    dom_worksheet.write(row, 3, "{}".format(results['org']))
+                    dom_worksheet.write(row, 4, "{}".format(results['registrant']))
+                    dom_worksheet.write(row, 5, "{}".format(results['admin_email']))
+                    dom_worksheet.write(row, 6, "{}".format(results['tech_email']))
+                    dom_worksheet.write(row, 7, "{}".format(results['address'].rstrip()))
+                    dom_worksheet.write(row, 8, "{}".format(results['dnssec']))
+                    row += 1
+            except Exception as error:
+                print(red("[!] There was an error running whois for {}!".format(domain)))
+                print(red("L.. Details: {}".format(error)))
         # Add buffer rows for the next table
         row += 2
 
@@ -186,18 +310,19 @@ scope file, so it has been added to the scope for OSINT."))
         for target in scope:
             try:
                 # Slightly change output and recorded target if it's a domain
-                if self.DC.is_ip(target):
+                if helpers.is_ip(target):
                     target_ip = target
                     for_output = target
                     print(green("[+] Running RDAP lookup for {}".format(for_output)))
+                elif target == "":
+                    pass
                 else:
                     target_ip = socket.gethostbyname(target)
                     for_output = "{} ({})".format(target_ip, target)
                     print(green("[+] Running RDAP lookup for {}".format(for_output)))
 
-                # Run RDAP lookups
+                # Log RDAP lookups
                 results = self.DC.run_rdap(target_ip)
-                # Log RDAP results
                 if results:
                     dom_worksheet.write(row, 0, for_output)
                     dom_worksheet.write(row, 1, results['asn_registry'])
@@ -207,55 +332,49 @@ scope file, so it has been added to the scope for OSINT."))
                     dom_worksheet.write(row, 5, results['asn_country_code'])
 
                 # Verbose mode is optional to allow users to NOT be overwhelmed by contact data
-                # if verbose:
-                #     print(yellow("[*] Enumeration of RDAP contact information is \
-# enabled, so you may get a lot of it if the target is a large cloud provider."))
-                #     for object_key, object_dict in results['objects'].items():
-                #         handle = str(object_key)
-                #         if results['objects'] is not None:
-                #             for item in results['objects']:
-                #                 name = results['objects'][item]['contact']['name']
-                #                 if name is not None:
-                #                     dom_worksheet.write(row, 0, "Contact Name:")
-                #                     dom_worksheet.write(row, 1, name)
-                #                     row += 1
-                #
-                #                 title = results['objects'][item]['contact']['title']
-                #                 if title is not None:
-                #                     dom_worksheet.write(row, 0, "Contact's Title:")
-                #                     dom_worksheet.write(row, 1, title)
-                #                     row += 1
-                #
-                #                 role = results['objects'][item]['contact']['role']
-                #                 if role is not None:
-                #                     dom_worksheet.write(row, 0, "Contact's Role:")
-                #                     dom_worksheet.write(row, 1, role)
-                #                     row += 1
-                #
-                #                 email = results['objects'][item]['contact']['email']
-                #                 if email is not None:
-                #                     dom_worksheet.write(row, 0, "Contact's Email:")
-                #                     dom_worksheet.write(row, 1, email[0]['value'])
-                #                     row += 1
-                #
-                #                 phone = results['objects'][item]['contact']['phone']
-                #                 if phone is not None:
-                #                     dom_worksheet.write(row, 0, "Contact's Phone:")
-                #                     dom_worksheet.write(row, 1, phone[0]['value'])
-                #                     row += 1
-                #
-                #                 address = results['objects'][item]['contact']['address']
-                #                 if address is not None:
-                #                     dom_worksheet.write(row, 0, "Contact's Address:")
-                #                     dom_worksheet.write(row, 1, address[0]['value'])
-                #                     row += 1
-                # else:
-                #     print(yellow("[*] Enumeration of contact information was \
-# skipped because Verbose mode was not enabled."))
-                row += 1
-            except Exception  as e:
+                if verbose:
+                    row += 1
+                    for object_key, object_dict in results['objects'].items():
+                        if results['objects'] is not None:
+                            for item in results['objects']:
+                                name = results['objects'][item]['contact']['name']
+                                if name is not None:
+                                    dom_worksheet.write(row, 1, "Contact Name:")
+                                    dom_worksheet.write(row, 2, name)
+                                    row += 1
+
+                                title = results['objects'][item]['contact']['title']
+                                if title is not None:
+                                    dom_worksheet.write(row, 1, "Contact's Title:")
+                                    dom_worksheet.write(row, 2, title)
+                                    row += 1
+
+                                role = results['objects'][item]['contact']['role']
+                                if role is not None:
+                                    dom_worksheet.write(row, 1, "Contact's Role:")
+                                    dom_worksheet.write(row, 2, role)
+                                    row += 1
+
+                                email = results['objects'][item]['contact']['email']
+                                if email is not None:
+                                    dom_worksheet.write(row, 1, "Contact's Email:")
+                                    dom_worksheet.write(row, 2, email[0]['value'])
+                                    row += 1
+
+                                phone = results['objects'][item]['contact']['phone']
+                                if phone is not None:
+                                    dom_worksheet.write(row, 1, "Contact's Phone:")
+                                    dom_worksheet.write(row, 2, phone[0]['value'])
+                                    row += 1
+
+                                address = results['objects'][item]['contact']['address']
+                                if address is not None:
+                                    dom_worksheet.write(row, 1, "Contact's Address:")
+                                    dom_worksheet.write(row, 2, address[0]['value'])
+                                    row += 1
+            except Exception as error:
                 print(red("[!] The RDAP lookup failed for {}!".format(target)))
-                print(red("L.. Details: {}".format(e)))
+                print(red("L.. Details: {}".format(error)))
 
         # Add buffer rows for the next table
         row += 2
@@ -277,65 +396,49 @@ scope file, so it has been added to the scope for OSINT."))
         # Check each domain with URLVoid for reputation and some Alexa data
         for domain in domains_list:
             tree = self.DC.run_urlvoid_lookup(domain)
-            # Check to see if urlvoid shows the domain flagged by any engines
-            for child in tree:
-                malicious_check = child.tag
-                if malicious_check == "detections":
-                    detections = tree[1]
-                    engines = detections[0]
-                    count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
-                    temp = []
-                    for engine in engines:
-                        temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
-                    engines = ", ".join(temp)
+            if tree is not None:
+                # Check to see if urlvoid shows the domain flagged by any engines
+                for child in tree:
+                    malicious_check = child.tag
+                    if malicious_check == "detections":
+                        detections = tree[1]
+                        engines = detections[0]
+                        count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
+                        temp = []
+                        for engine in engines:
+                            temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
+                        engines = ", ".join(temp)
 
-                    print(yellow("[*] URLVoid found malicious activity \
-reported for {}!".format(domain)))
-                    dom_worksheet.write(row, 8, "Count {}: {}".format(count, engines))
+                        print(yellow("[*] URLVoid found malicious activity reported for \
+{}!".format(domain)))
+                        dom_worksheet.write(row, 8, "Count {}: {}".format(count, engines))
 
-            rep_data = tree[0]
-            ip_data = rep_data[11]
+                try:
+                    rep_data = tree[0]
+                    ip_data = rep_data[11]
 
-            dom_worksheet.write(row, 0, ET.tostring(rep_data[0], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 1, ET.tostring(ip_data[0], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 2, ET.tostring(ip_data[1], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 3, ET.tostring(rep_data[3], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 4, ET.tostring(rep_data[4], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 5, ET.tostring(rep_data[5], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 6, ET.tostring(ip_data[2], method='text')
-                                .rstrip().decode('ascii'))
-            dom_worksheet.write(row, 7, ET.tostring(ip_data[3], method='text')
-                                .rstrip().decode('ascii'))
-            row += 1
+                    dom_worksheet.write(row, 0, ET.tostring(rep_data[0], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 1, ET.tostring(ip_data[0], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 2, ET.tostring(ip_data[1], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 3, ET.tostring(rep_data[3], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 4, ET.tostring(rep_data[4], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 5, ET.tostring(rep_data[5], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 6, ET.tostring(ip_data[2], method='text')
+                                        .rstrip().decode('ascii'))
+                    dom_worksheet.write(row, 7, ET.tostring(ip_data[3], method='text')
+                                        .rstrip().decode('ascii'))
+                    row += 1
+                except:
+                    print(red("[!] There was an error getting the data for {}.".format(domain)))
 
         # Add buffer rows for the next table
         row += 2
-
-        if dns:
-            # Write headers for the DNS brute force table
-            dom_worksheet.write(row, 0, "DNS Brute Force", bold)
-            row += 1
-            dom_worksheet.write(row, 0, "Return Name", bold)
-            dom_worksheet.write(row, 1, "Record Type", bold)
-            dom_worksheet.write(row, 2, "Data", bold)
-            row += 1
-
-            print(green("[+] DNS brute forcing has been enabled, so proceeding..."))
-            for domain in domains_list:
-                subs = self.DC.run_dns_bruteforce(domain)
-
-                for result in subs:
-                    return_name, record_type, data = result
-                    dom_worksheet.write(row, 0, return_name, bold)
-                    dom_worksheet.write(row, 1, record_type, bold)
-                    dom_worksheet.write(row, 2, data, bold)
-
 
     def create_urlcrazy_worksheet(self, workbook, client, domain):
         """Function to add a worksheet for URLCrazy results."""
@@ -364,7 +467,6 @@ reported for {}!".format(domain)))
                 urlcrazy_worksheet.write(row, 3, result['malicious'])
                 row += 1
 
-
     def create_shodan_worksheet(self, workbook, ip_addresses, domains_list):
         """Function to add a Shodan worksheet with Shodan search results."""
         # Setup the Shodan worksheet
@@ -385,9 +487,7 @@ reported for {}!".format(domain)))
         for domain in domains_list:
             try:
                 results = self.DC.run_shodan_search(domain)
-                if not results['total'] == 0:
-                    # shodan_worksheet.write(row, 0, "{} Shodan results found \
-# for:".format(results['total']))
+                if results['total'] > 0:
                     for result in results['matches']:
                         shodan_worksheet.write(row, 0, result['ip_str'])
                         shodan_worksheet.write(row, 1, ", ".join(result['hostnames']))
@@ -395,9 +495,11 @@ reported for {}!".format(domain)))
                         shodan_worksheet.write(row, 3, result['port'])
                         shodan_worksheet.write(row, 4, result['data'])
                         row += 1
+                else:
+                    print(yellow("[*] No results for {}.".format(domain)))
             except:
                 pass
-        
+
             # Take a break for Shodan's rate limits
             time.sleep(self.sleep)
 
@@ -442,9 +544,9 @@ reported for {}!".format(domain)))
                                 temp['cve'] = cve
                                 temp['cve_description'] = cve_description
                                 vuln_data.append(temp)
-                except Exception as e:
+                except:
                     pass
-            except Exception as e:
+            except:
                 pass
 
             # Take a break for Shodan's rate limits
@@ -467,7 +569,6 @@ reported for {}!".format(domain)))
                 shodan_worksheet.write(row, 1, vuln['cve'])
                 shodan_worksheet.write(row, 2, vuln['cve_description'])
                 row += 1
-
 
     def create_censys_worksheet(self, workbook, scope, verbose):
         """Function to add a Censys.io worksheet with Censys host
@@ -497,7 +598,7 @@ reported for {}!".format(domain)))
                     for prot in result["protocols"]:
                         censys_worksheet.write(row, 3, prot)
                         row += 1
-            except Exception as e:
+            except:
                 pass
 
             # Take a break for Censys's rate limits
@@ -520,12 +621,11 @@ reported for {}!".format(domain)))
                         censys_worksheet.write(row, 1, cert["parsed.subject_dn"])
                         censys_worksheet.write(row, 2, cert["parsed.issuer_dn"])
                         row += 1
-                except Exception as e:
+                except:
                     pass
 
                 # Take a break for Censys's rate limits
                 time.sleep(self.sleep)
-
 
     def create_people_worksheet(self, workbook, domain, client):
         """Function to add a people worksheet with information
@@ -536,13 +636,18 @@ reported for {}!".format(domain)))
         email_worksheet = workbook.add_worksheet("People & Emails")
         bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
         row = 0
+        unique_emails = None
+        unique_people = None
+        unique_twitter = None
 
         # Get the "people" data -- emails, names, and social media handles
-        try:
-            unique_emails, unique_people, unique_twitter = self.PC.harvest_all(domain)
-        except Exception as e:
-            print(red("[!] Error harvesting contact information!"))
-            print(red("L.. Details: {}".format(e)))
+        harvester_emails, harvester_people, harvester_twitter = self.PC.harvest_all(domain)
+        hunter_json = self.PC.harvest_emailhunter(domain)
+
+        # Process the collected data
+        unique_emails, unique_people, unique_twitter, job_titles, linkedin, phone_nums = \
+        self.PC.process_harvested_lists(harvester_emails, harvester_people, \
+        harvester_twitter, hunter_json)
 
         # If we have emails, record them and check HaveIBeenPwned
         if unique_emails:
@@ -572,41 +677,40 @@ reported for {}!".format(domain)))
             email_worksheet.write(row, 2, "Pastes", bold)
             row += 1
 
-            # try:
-            for email in unique_emails:
-                # Make sure we drop that @domain.com result Harvester often includes
-                if email == '@' + domain or email == " ":
-                    pass
-                else:
-                    # try:
-                    pwned = self.PC.pwn_check(email)
-                    pastes = self.PC.paste_check(email)
-                    if pwned:
-                        hits = []
-                        for pwn in pwned:
-                            hits.append(pwn)
-                        email_worksheet.write(row, 1, ", ".join(hits))
-                    if pastes:
-                        email_worksheet.write(row, 2, pastes)
+            print(green("[+] Moving on to checking emails with HIBP -- might take some time \
+because we're going be nice and give Troy Hunt a nice API call delay..."))
 
-                    if pwned or pastes:
-                        email_worksheet.write(row, 0, email)
-                        row += 1
-#                         except Exception as e:
-#                             print(red("[!] Error checking HaveIBeenPwned's \
-# database for {}!".format(email)))
-#                             print(red("L.. Details: {}".format(e)))
+            try:
+                for email in unique_emails:
+                    # Make sure we drop that @domain.com result Harvester often includes
+                    if email == '@' + domain or email == " ":
+                        pass
+                    else:
+                        pwned = self.PC.pwn_check(email)
+                        pastes = self.PC.paste_check(email)
+                        if pwned:
+                            hits = []
+                            for pwn in pwned:
+                                hits.append(pwn)
+                            email_worksheet.write(row, 1, ", ".join(hits))
+                        if pastes:
+                            email_worksheet.write(row, 2, pastes)
 
-                # Give HIBP a rest for a few seconds
-                time.sleep(self.hibp_sleep)
+                        if pwned or pastes:
+                            email_worksheet.write(row, 0, email)
+                            row += 1
 
-            # Add buffer rows for next table
-            row += 2
-            # except Exception as e:
-            #     print(red("[!] Error checking emails with HaveIBeenPwned's database!"))
-            #     print(red("L.. Detail: {}".format(e)))
+                    # Give HIBP a rest for a few seconds
+                    time.sleep(self.hibp_sleep)
+                # Add buffer rows for next table
+                row += 2
+            except Exception as error:
+                print(red("[!] Error checking emails with HaveIBeenPwned's database!"))
+                print(red("L.. Detail: {}".format(error)))
 
-        # If we have Twitter handles, cehck Twitter for user data
+        print(green("[+] Moving on to gathering Twitter account data..."))
+
+        # If we have Twitter handles, check Twitter for user data
         if unique_twitter:
             # Write headers for Twitter table
             email_worksheet.write(row, 0, "Twitter Data", bold)
@@ -632,7 +736,7 @@ reported for {}!".format(domain)))
 
                 # Add buffer rows for next table
                 row += 2
-            except Exception as e:
+            except:
                 pass
 
         # If we have names, try to find LinkedIn profiles for them
@@ -641,23 +745,44 @@ reported for {}!".format(domain)))
             email_worksheet.write(row, 0, "LinkedIn Profiles", bold)
             row += 1
             email_worksheet.write(row, 0, "Name", bold)
-            email_worksheet.write(row, 1, "Possible Profile(s)", bold)
+            email_worksheet.write(row, 1, "Job Title(s)", bold)
+            email_worksheet.write(row, 2, "Phone", bold)
+            email_worksheet.write(row, 3, "Possible LI Profile(s)", bold)
             row += 1
 
             try:
-            # Try to find possible LinkedIn profiles for people
+                # Try to find possible LinkedIn profiles for people
                 for person in unique_people:
-                    data = self.PC.harvest_linkedin(person, client)
-                    if data:
-                        email_worksheet.write(row, 0, person)
-                        email_worksheet.write(row, 1, ", ".join(data))
-                        row += 1
+                    # Record their job title, if we have one from Hunter
+                    if person in job_titles:
+                        for name, title in job_titles.items():
+                            if name == person:
+                                email_worksheet.write(row, 1, title)
+
+                    # Record their phone number, if we have one from Hunter
+                    if person in phone_nums:
+                        for name, number in phone_nums.items():
+                            if name == person:
+                                email_worksheet.write(row, 2, number)
+
+                    if person in linkedin:
+                        print(green("[+] Hunter has a LinkedIn link for {}!".format(person)))
+                        for name, link in linkedin.items():
+                            if name == person:
+                                email_worksheet.write(row, 0, name)
+                                email_worksheet.write(row, 3, link)
+                                row += 1
+                    else:
+                        data = self.PC.harvest_linkedin(person, client)
+                        if data:
+                            email_worksheet.write(row, 0, person)
+                            email_worksheet.write(row, 3, ", ".join(data))
+                            row += 1
 
                 # Add buffer rows for next table
                 row += 2
-            except Exception as e:
+            except:
                 pass
-
 
     def create_foca_worksheet(self, workbook, domain, extensions, del_files, verbose):
         """Function to add a FOCA worksheet containing pyFOCA results."""
@@ -711,50 +836,97 @@ for --file. Please try again."))
                 row += 1
 
 
+    def create_cymon_worksheet(self, target):
+        """Function to check the provided the target against Cymon.io's database of threat feeds
+        and then print the results.
+        """
+        if helpers.is_ip(target):
+            domains_results, ip_results = self.DC.search_cymon_ip(target)
+            if domains_results:
+                print(yellow("\n[+] Associated Domains:"))
+                # Print out associated domains for the IP
+                for result in domains_results:
+                    print("URL:\t %s" % result['name'])
+                    print("Created: %s" % result['created'])
+                    print("Updated: %s\n" % result['updated'])
+            if ip_results:
+                print(yellow("[+] Recorded Malicious Events:"))
+                # Print out security events for the IP
+                for result in ip_results:
+                    print("Title:\t\t %s" % result['title'])
+                    print("Description:\t %s" % result['description'])
+                    print("Created:\t %s" % result['created'])
+                    print("Updated:\t %s" % result['updated'])
+                    print("Details:\t %s\n" % result['details_url'])
+        else:
+            results = self.DC.search_cymon_domain(target)
+            # Print out information for the domain
+            if results:
+                print(yellow("\n[+] Cymon.io events for %s" % target))
+                print("URL:\t %s" % results['name'])
+                print("Created: %s" % results['created'])
+                print("Updated: %s" % results['updated'])
+                for source in results['sources']:
+                    print("Source:\t {}".format(source))
+                for ip in results['ips']:
+                    print("IP:\t {}".format(ip))
+                print("")
 
-    #     cymon ip domains
-    # for result in results:
-    #     report.write("\nURL: %s\n" % result['name'])
-    #     report.write("Created: %s\n" % result['created'])
-    #     report.write("Updated: %s\n" % result['updated'])
-    # # Search for security events for the IP
-    # data = self.cyAPI.ip_events(target)
-    # results = data['results']
-    # report.write("\nEVENT results:\n")
-    # for result in results:
-    #     report.write("\nTitle: %s\n" % result['title'])
-    #     report.write("Description: %s\n" % result['description'])
-    #     report.write("Created: %s\n" % result['created'])
-    #     report.write("Updated: %s\n" % result['updated'])
-    #     report.write("Details: %s\n" % result['details_url'])
-    #
-    # cymon domain:
-    # results = self.cyAPI.domain_lookup(target)
-    # report.write("\n--- The following data is for domain: {}---\n".format(target))
-    # report.write("\nURL: %s\n" % results['name'])
-    # report.write("Created: %s\n" % results['created'])
-    # report.write("Updated: %s\n" % results['updated'])
-    # for source in results['sources']:
-    #     report.write("Source: {}\n".format(source))
-    # for ip in results['ips']:
-    #     report.write("IP: {}\n".format(ip))
-    # print(green("[+] Cymon search completed!"))
+        print(green("[+] Cymon search completed!"))
 
+    def create_cloud_worksheet(self, workbook, client, domain, wordlist=None):
+        """Function to add a cloud worksheet for findings related to AWS."""
+        # Setup cloud worksheet
+        cloud_worksheet = workbook.add_worksheet("The Cloud")
+        bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
+        row = 0
 
+        print(green("[+] Looking for AWS buckets and accounts for target..."))
+        verified_buckets, verified_accounts = self.DC.enumerate_aws(client, domain, wordlist)
 
-    # TODO Everything Google
-    # if files:
-    #     print(green("[+] File discovery was selected: O.D.I.N. will perform Google searches to find files for the provided domain."))
-    #     file_discovery.discover(client, domain)
-    # else:
-    #     print(yellow("[+] File discovery was NOT selected: O.D.I.N. skipped Googling for files."))
-    #
-    # if google:
-    #     print(green("[+] Google discovery was selected: O.D.I.N. will perform Google searches to find admin and index pages."))
-    #     domain_checker.googleFu(client, domain)
-    # else:
-    #     print(yellow("[+] Google discovery was NOT selected: O.D.I.N. skipped Googling for admin and index pages."))
+        # Write headers for S3 Bucket table table
+        cloud_worksheet.write(row, 0, "AWS S3 Buckets", bold)
+        row += 1
+        cloud_worksheet.write(row, 0, "Name", bold)
+        cloud_worksheet.write(row, 1, "Bucket URI", bold)
+        cloud_worksheet.write(row, 2, "Bucket ARN", bold)
+        cloud_worksheet.write(row, 3, "Public Access", bold)
+        row += 1
+        # Write S3 Bucket table contents
+        for bucket in verified_buckets:
+            if bucket['exists']:
+                cloud_worksheet.write(row, 0, bucket['bucketName'])
+                cloud_worksheet.write(row, 1, bucket['bucketUri'])
+                cloud_worksheet.write(row, 2, bucket['arn'])
+                # Check public access to bucket
+                response = self.DC.check_bucket_access(bucket['bucketUri'])
+                if response:
+                    print(yellow("[*] Found a browseable S3 bucket!"))
+                    cloud_worksheet.write(row, 3, "Yes")
+                else:
+                    cloud_worksheet.write(row, 3, "No")
 
-    # except Exception as e:
-    #     print(e)
-    # TODO Uncomment the try/except and re-indent
+                row += 1
+
+        # Add buffer rows for next table
+        row += 2
+        
+        # Write headers for AWS Account table
+        cloud_worksheet.write(row, 0, "AWS Accounts", bold)
+        row += 1
+        cloud_worksheet.write(row, 0, "Account Alias", bold)
+        cloud_worksheet.write(row, 1, "Account ID", bold)
+        cloud_worksheet.write(row, 2, "Account Signin URI", bold)
+        row += 1
+        # Write AWS Account table contents
+        for account in verified_accounts:
+            if account['exists']:
+                cloud_worksheet.write(row, 0, account['accountAlias'])
+                if account['accountId'] is None:
+                    cloud_worksheet.write(row, 1, "Unknown")
+                else:
+                    cloud_worksheet.write(row, 1, account['accountId'])
+                cloud_worksheet.write(row, 2, account['signinUri'])
+                row += 1
+
+        print(green("[+] AWS searches are complete and results are in the Cloud worksheet."))
