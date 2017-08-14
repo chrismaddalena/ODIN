@@ -5,6 +5,8 @@
 
 <p style="text-align: center;"><img src="https://vignette3.wikia.nocookie.net/archer/images/4/46/ODINLogo.png/revision/latest/scale-to-width-down/250?cb=20170319051757" /></p>
 
+Current version: v1.0 Muninn
+
 >A Python tool for automating intelligence gathering, testing and reporting. O.D.I.N. is still in active development and is incomplete. Feedback on issues is welcome!
 
 > Note: O.D.I.N. is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files, is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information.
