@@ -26,7 +26,7 @@ O.D.I.N. is still very much in development, but it aims to automate many of the 
 ## Getting Started
 1. Review the keys.config.sample file to fill-in your API keys and create a keys.config file.
 2. `cd` into the /setup directory and run `setup_check.py` to make sure your keys.config file is in order.
-3. Install any missing libraries by running pip with the requirements.txt file in the /setup directory: `pip install -r requirements.txt`
+3. Install any missing libraries by running pip with the requirements.txt file in the /setup directory: `pip3 install -r requirements.txt` or `python3 -m pip install -r requirements.txt`
 
 ### Optional AWS Setup
 If you'd like to have O.D.I.N. do recon against AWS you will need an IAM user account and the associated ID and Secret. Get this from your AWS console. Typically, you will place this in ~/.aws/credentials, but it's nice to keep everything in one place. O.D.I.N. will use your keys.config file, but Amazon's Boto3 library for AWS may still look at ~/.aws/credentials. If that file has errors, Boto3 may log an error and quit. Just be aware of this possibility in case you have/use ~/.aws/credentials.
@@ -54,7 +54,7 @@ URLVoid offers reputation data for domains, including Alexa and Google rankings,
 
 This may be the most "skippable" of the APIs, but some of the data can be useful and worthwhile. It's included for those occasions.
 
-Sign-up for an account to get your API key: [urlvoid.com/api](https://www.urlvoid.com/api/)
+Sign-up for an account to get your API key: [urlvoid.com/api](http://api.urlvoid.com/)
 
 #### Twitter
 If you setup a Twitter app for O.D.I.N., the tokens can be used with Tweepy and TheHarvester to not only locate Twitter handles tied to the provided domain but also collect account data (e.g. real name, location, follower count, and user description).
