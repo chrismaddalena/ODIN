@@ -3,7 +3,7 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.6-brightgreen.svg)]() [![license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 
-<p style="text-align: center;"><img src="https://vignette3.wikia.nocookie.net/archer/images/4/46/ODINLogo.png/revision/latest/scale-to-width-down/250?cb=20170319051757" /></p>
+![ODIN](https://github.com/chrismaddalena/viper/blob/master/odin.jpg "ODIN")
 
 Current version: v1.0 Muninn
 
