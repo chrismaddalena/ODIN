@@ -8,6 +8,7 @@ generating an XLSX report.
 import socket
 import time
 import base64
+import datetime
 from xml.etree import ElementTree  as ET
 from colors import red, green, yellow
 from lib import domain_tools, email_tools, pyfoca, helpers
@@ -62,67 +63,71 @@ scope file, so it has been added to the scope for OSINT."))
             info_worksheet = workbook.add_worksheet("Company Info")
             bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
             row = 0
-
-            # Write the information labels
-            info_worksheet.write(row, 0, "Corporate Information", bold)
-            row += 1
-            info_worksheet.write(row, 0, "Name", bold)
-            info_worksheet.write(row, 1, info_json['organization']['name'])
-            row += 1
-            info_worksheet.write(row, 0, "Logo", bold)
-            info_worksheet.write(row, 1, info_json['logo'])
-            row += 1
-            info_worksheet.write(row, 0, "Website", bold)
-            info_worksheet.write(row, 1, info_json['website'])
-            row += 1
-            info_worksheet.write(row, 0, "Approx Employees", bold)
-            info_worksheet.write(row, 1, info_json['organization']['approxEmployees'])
-            row += 1
-            info_worksheet.write(row, 0, "Year Founded", bold)
-            info_worksheet.write(row, 1, info_json['organization']['founded'])
-            row += 1
-            info_worksheet.write(row, 0, "Website Overview", bold)
-            info_worksheet.write(row, 1, info_json['organization']['overview'])
-            row += 1
-            info_worksheet.write(row, 0, "Corp Keywords", bold)
-            info_worksheet.write(row, 1, ", ".join(info_json['organization']['keywords']))
-            row += 2
-
-            info_worksheet.write(row, 0, "Corp Social Media", bold)
-            row += 1
-            for profile in info_json['socialProfiles']:
-                info_worksheet.write(row, 0, profile['typeName'], bold)
-                info_worksheet.write(row, 1, profile['url'])
+            
+            try:
+                # Write the information labels
+                info_worksheet.write(row, 0, "Corporate Information", bold)
                 row += 1
-            row += 2
+                info_worksheet.write(row, 0, "Name", bold)
+                info_worksheet.write(row, 1, info_json['organization']['name'])
+                row += 1
+                info_worksheet.write(row, 0, "Logo", bold)
+                info_worksheet.write(row, 1, info_json['logo'])
+                row += 1
+                info_worksheet.write(row, 0, "Website", bold)
+                info_worksheet.write(row, 1, info_json['website'])
+                row += 1
+                info_worksheet.write(row, 0, "Approx Employees", bold)
+                info_worksheet.write(row, 1, info_json['organization']['approxEmployees'])
+                row += 1
+                info_worksheet.write(row, 0, "Year Founded", bold)
+                info_worksheet.write(row, 1, info_json['organization']['founded'])
+                row += 1
+                info_worksheet.write(row, 0, "Website Overview", bold)
+                info_worksheet.write(row, 1, info_json['organization']['overview'])
+                row += 1
+                info_worksheet.write(row, 0, "Corp Keywords", bold)
+                info_worksheet.write(row, 1, ", ".join(info_json['organization']['keywords']))
+                row += 2
 
-            info_worksheet.write(row, 0, "Corp Contact Info", bold)
-            row += 1
-            if "emailAddresses" in info_json['organization']['contactInfo']:
-                for email in info_json['organization']['contactInfo']['emailAddresses']:
-                    info_worksheet.write(row, 0, "Email ({})".format(email['label']), bold)
-                    info_worksheet.write(row, 1, email['value'])
+                info_worksheet.write(row, 0, "Corp Social Media", bold)
+                row += 1
+                for profile in info_json['socialProfiles']:
+                    info_worksheet.write(row, 0, profile['typeName'], bold)
+                    info_worksheet.write(row, 1, profile['url'])
                     row += 1
-            if "phoneNumbers" in info_json['organization']['contactInfo']:
-                for number in info_json['organization']['contactInfo']['phoneNumbers']:
-                    info_worksheet.write(row, 0, "Phone ({})".format(number['label']), bold)
-                    info_worksheet.write(row, 1, number['number'])
-                    row += 1
-            if "addresses" in info_json['organization']['contactInfo']:
-                for address in info_json['organization']['contactInfo']['addresses']:
-                    info_worksheet.write(row, 0, "Address", bold)
-                    complete = ""
-                    for key, value in address.items():
-                        if key == "region":
-                            complete += "{}, ".format(value['name'])
-                        elif key == "country":
-                            complete += "{}, ".format(value['name'])
-                        elif key == "label":
-                            pass
-                        else:
-                            complete += "{}, ".format(value)
-                    info_worksheet.write(row, 1, complete)
-                    row == 1
+                row += 2
+
+                info_worksheet.write(row, 0, "Corp Contact Info", bold)
+                row += 1
+                if "emailAddresses" in info_json['organization']['contactInfo']:
+                    for email in info_json['organization']['contactInfo']['emailAddresses']:
+                        info_worksheet.write(row, 0, "Email ({})".format(email['label']), bold)
+                        info_worksheet.write(row, 1, email['value'])
+                        row += 1
+                if "phoneNumbers" in info_json['organization']['contactInfo']:
+                    for number in info_json['organization']['contactInfo']['phoneNumbers']:
+                        info_worksheet.write(row, 0, "Phone ({})".format(number['label']), bold)
+                        info_worksheet.write(row, 1, number['number'])
+                        row += 1
+                if "addresses" in info_json['organization']['contactInfo']:
+                    for address in info_json['organization']['contactInfo']['addresses']:
+                        info_worksheet.write(row, 0, "Address", bold)
+                        complete = ""
+                        for key, value in address.items():
+                            if key == "region":
+                                complete += "{}, ".format(value['name'])
+                            elif key == "country":
+                                complete += "{}, ".format(value['name'])
+                            elif key == "label":
+                                pass
+                            else:
+                                complete += "{}, ".format(value)
+                        info_worksheet.write(row, 1, complete)
+                        row == 1
+            except:
+                info_worksheet.write(row, 0, "No data found for {} in Full Contact's database. \
+This may not be the company's primary domain used for their website.".format(domain))
 
     def create_domain_report(self, workbook, scope, ip_addresses, domains_list, verbose):
         """Function to generate a domain report consisting of information like
@@ -279,9 +284,19 @@ will be skipped."))
                 results = self.DC.run_whois(domain)
                 # Log whois results to domain report
                 if results:
-                    dom_worksheet.write(row, 0, "{}".format(results['domain_name'][0].lower()))
+                    # Check if more than one expiration date is returned
+                    if isinstance(results['expiration_date'], datetime.date):
+                        expiration_date = results['expiration_date']
+                    # We have a list, so break-up list into human readable dates and times
+                    else:
+                        expiration_date = []
+                        for date in results['expiration_date']:
+                            expiration_date.append(date.strftime("%Y-%m-%d %H:%M:%S"))
+                        expiration_date = ", ".join(expiration_date)
+
+                    dom_worksheet.write(row, 0, "{}".format(domain))
                     dom_worksheet.write(row, 1, "{}".format(results['registrar']))
-                    dom_worksheet.write(row, 2, "{}".format(results['expiration_date']))
+                    dom_worksheet.write(row, 2, "{}".format(expiration_date))
                     dom_worksheet.write(row, 3, "{}".format(results['org']))
                     dom_worksheet.write(row, 4, "{}".format(results['registrant']))
                     dom_worksheet.write(row, 5, "{}".format(results['admin_email']))
