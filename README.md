@@ -41,6 +41,11 @@ Both of these services are used to collect data on domains and IP addresses. Thi
 
 No API key is needed.
 
+#### Robtex
+The Robtex free API is used to collect domain names tied to IP addresses. This information is displayed alongside the RDAP information for IP addresses, so you can see what else is hosted at that IP address.
+
+No API key is needed.
+
 #### Shodan
 Shodan is used to search for domains and lookup hosts (IP addresses). This pulls in information like open ports, banners, hostnames, and location data. Shodan also flags hosts for well known vulnerabilities like Heartbleed. This data is recorded as well, if it exists.
 
@@ -108,25 +113,45 @@ Please make sure you are using Python 3, not Python 2.7 or earlier. I don't writ
 
 **I get an error when O.D.I.N. tries to import a library. What's wrong?**
 
-Like above, please make sure you are using Python 3. O.D.I.N. must be run in Python 3 and the requirements must be installed using `pip` for Python 3. To ensure Python 3 is used, just in case the `pip` commands are tied to another version, run this command: `python3 -m pip install -r requirements.txt`
+Like above, please make sure you are using Python 3. O.D.I.N. must be run in Python 3 and the requirements must be installed using `pip` for Python 3. To ensure Python 3 is used, just in case your `pip` command are tied to another version, run this command: `python3 -m pip install -r requirements.txt`
 
-**Why not Clearbit?**
+**Why do you not like "why not" questions?**
 
-Clearbit looks useful for OSINT, but the free tier is restricted to 20 API calls in a month. That may even be 20 API calls for the life of the accounts. The details are unclear. Either way, that's very restrictive and I want O.D.I.N. to be as simple and free to use as possible.
+If you ask "why not use X API," that's not very helpful. Presumably, the question is meant to convey the idea that X API would be a good addition and inquire about any reason it is not currently supported. The answer is most likely "I wasn't aware of this API." That also means I don't know anything about it.
 
-**Why not use FullContact's People API?**
+If you have a suggestion for a service or API, please explain what it does and provide some details explaining why you think it would be a good addition.
+
+**Why not add support for the Clearbit API?**
+
+Clearbit looks useful for OSINT, but the free tier is restricted to 20 API calls in a month. That may even be 20 API calls for the life of the account. The details are unclear. Either way, that's very restrictive and I want O.D.I.N. to be as simple and free to use as possible. The paid tiers are quire expensive.
+
+**Why not use Wappalyzer?**
+
+Wappalyzer is useful, but it's very difficult to automate fetching the results from Wappalyzer. Some tools can do this, but they use an unmaintained package called wappalyzer-python (https://github.com/scrapinghub/wappalyzer-python). This package works, as far as I know, but there are several problems with it. The package has not been updated in three years, the developers have stated they have no plans to change that or support wappalyzer-python, and the package is Python 2. It could be used until it breaks one day, but the Python 2 bit is the real sticking point.
+
+**Why not add support for the BuiltWith API?**
+
+Like Clearbit, BuiltWith is a neat resource and some interesting details can be reviewed on the website. The API, however, is not free. The free version of the API won't give you any details, so at best it can be used to highlight a domain you may want to then review on the BuiltWith website. Scraping the website search results is certainly possible, but that could easily break and/or be unreliable.
+
+Adding support for BuiltWith hasn't been ruled out, but the goal is to make O.D.I.N. entirely free to use.
+
+**Why not use Full Contact's People API?**
 
 Currently only the Company API is used. There are plans to incorproate the People API in the future.
 
+**Why not use NetCraft?**
+
+NetCraft is awesome, but it doesn't have an API. There are changes in the works to make use of web requests and BeautifulSoup to parse the results. This will come in a later release.
+
 **Does O.D.I.N. perform DNS brute forcing?**
 
-No. This is being considered, but brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into O.D.I.N. without just running the commands for those tools. Look to Fierce and DNSRecon for this.
+No, but it is being considered. However, brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into O.D.I.N. without just running the commands for those tools. Look to Fierce and DNSRecon for this.
 
 That does not mean more subdomain goodies are not coming. Some opportunities are being investigated and optional DNS brute forcing is probably happening in the future.
 
 **I don't have X API key, can I still use O.D.I.N.?**
 
-Absolutely. If an API key is missing from the keys.config file, any checks using those keys will be skipped. You are strongly encouraged to go get the free API keys to get the most out of the tools, but you can skip any you don't want.
+Absolutely. If an API key is missing from the keys.config file, any checks using those keys will be skipped. You are strongly encouraged to go get the free API keys to get the most out of O.D.I.N., but you can skip any you don't want.
 
 ### Special Thanks
 A big thank you to a few contributors who gave me the OK to re-use some of their code:
