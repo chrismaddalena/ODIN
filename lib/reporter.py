@@ -319,6 +319,7 @@ will be skipped."))
         dom_worksheet.write(row, 3, "Network CIDR(s)", bold)
         dom_worksheet.write(row, 4, "ASN", bold)
         dom_worksheet.write(row, 5, "Country Code", bold)
+        dom_worksheet.write(row, 6, "Related Domains", bold)
         row += 1
 
         # The RDAP lookups are only for IPs, but we get the IPs for each domain name, too
@@ -345,6 +346,13 @@ will be skipped."))
                     dom_worksheet.write(row, 3, results['network']['cidr'])
                     dom_worksheet.write(row, 4, results['asn'])
                     dom_worksheet.write(row, 5, results['asn_country_code'])
+
+                robtex = self.DC.lookup_robtex_ipinfo(target_ip)
+                if robtex:
+                    results = []
+                    for result in robtex['pas']:
+                        results.append(result['o'])
+                    dom_worksheet.write(row, 6, ", ".join(results))
 
                 # Verbose mode is optional to allow users to NOT be overwhelmed by contact data
                 if verbose:

@@ -37,6 +37,8 @@ class DomainCheck(object):
     sleep = 10
     # Cymon.io API endpoint
     cymon_api = "https://cymon.io/api/nexus/v1"
+    # Robtex's free API endpoint
+    robtex_api = "https://freeapi.robtex.com/ipquery/"
 
     def __init__(self):
         """Everything that should be initiated with a new object goes here."""
@@ -667,7 +669,6 @@ this.".format(domain[1])))
         if validation_functions[validation_type]:
             return validation_functions[validation_type](account)
 
-
     def validate_account_signin(self, account):
         """Function to be used with validate_account() to evaluate
         the AWS response for an account name or alias.
@@ -699,7 +700,6 @@ this.".format(domain[1])))
             result['error'] = error
 
         return result
-
 
     def check_domain_fronting(self, subdomain):
         """Function to check the A records for a given subdomain and look for references to various
@@ -735,3 +735,13 @@ this.".format(domain[1])))
                         return "Cloudflare: {}".format(target)
         except:
             pass
+
+    def lookup_robtex_ipinfo(self, ip_address):
+        """Function to lookup information about a target IP address with Robtex."""
+        if helpers.is_ip(ip_address):
+            request = requests.get(self.robtex_api + ip_address)
+            ip_json = request.json()
+            
+            return ip_json
+        else:
+            print(red("[!] The provided IP for Robtex address is invalid!"))
