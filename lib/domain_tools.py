@@ -84,9 +84,12 @@ class DomainCheck(object):
             aws_region = helpers.config_section_map("AWS")["region_name"]
             aws_access_id = helpers.config_section_map("AWS")["aws_access_key_id"]
             aws_secret_access_key = helpers.config_section_map("AWS")["aws_secret_access_key"]
-            self.aws_session = boto3.Session(region_name=aws_region,
-                                aws_access_key_id=aws_access_id,
-                                aws_secret_access_key=aws_secret_access_key)
+            if not aws_access_id == "" or not aws_secret_access_key == "":
+                self.aws_session = boto3.Session(region_name=aws_region,
+                                    aws_access_key_id=aws_access_id,
+                                    aws_secret_access_key=aws_secret_access_key)
+            else:
+                self.aws_session = None
         except:
             self.aws_session = None
             print(yellow("[!] Could not establish an AWS API session."))
@@ -600,6 +603,8 @@ this.".format(domain[1])))
                             account_results.append(result)
 
             return bucket_results, account_results
+        else:
+            return None, None
 
     def validate_bucket(self, validation_type, bucket_name):
         """Function to be used with enumerate_aws() to evaluate

@@ -15,3 +15,4 @@ PyPDF2
 dnslib
 boto3
 validators
+lxml
