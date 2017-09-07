@@ -8,7 +8,10 @@
 *.json
 *.png
 *.xlsx
+*.log
 
 /auth/keys.config
 /reports/*
 /pyfoca-downloads/*
+
+chromedriver

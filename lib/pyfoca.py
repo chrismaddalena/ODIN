@@ -1,9 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module works like a Python version of FOCA. It
-can be used to search Google for files under a provided
-domain and then extract metadata from discovered files.
+"""This module works like a Python version of FOCA. It can be used to search Google for files
+under a provided domain and then extract metadata from discovered files.
 """
 
 import os
@@ -20,8 +19,8 @@ ED_FROM = 0
 
 
 class Metaparser:
-    """This class will search a domain for files and then attempt to extract
-    metadata from any discovered files.
+    """This class will search a domain for files and then attempt to extract metadata from any
+    discovered files.
     """
     def __init__(self, domain_name, page_results, exts, del_files, verbose):
         self.container = list()
@@ -43,9 +42,9 @@ class Metaparser:
             self.data_exists.append(0)
 
     def process_file(self, curr_file):
-        """Function to process the provided file. If the file is a PDF, the PyPDF2
-        library will be used. Otherwise, the extract tool is used, so extract must
-        be installed. This is the one piece that requires Linux.
+        """Function to process the provided file. If the file is a PDF, the PyPDF2 library will be
+        used. Otherwise, the extract tool is used, so extract must be installed. This is the one
+        piece that requires Linux.
         """
         global ED_FROM
         author = '-'
@@ -175,8 +174,8 @@ install extract' in terminal."))
             except Exception as error:
                 if "command not found" in str(error):
                     print(red("[!] PyFOCA requires the 'extract' command."))
-                    print(red("L.. Please install extract by typing 'apt-get \
-install extract' in terminal."))
+                    print(red("L.. Please install extract by typing 'apt-get install extract' \
+in terminal."))
                     exit()
                 return
 
@@ -206,8 +205,8 @@ install extract' in terminal."))
                 TOTAL_FILES = len(files)
 
         if len(files) == 0:
-            print(green("[+] No files were located within Google based on \
-the extension(s) and domain you provided."))
+            print(green("[+] No files were located within Google based on the extension(s) and \
+domain you provided."))
             exit()
 
         print(green("[+] Discovered {} files from {} total Google \

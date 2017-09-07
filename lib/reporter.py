@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module brings the other modules together for
-generating an XLSX report.
-"""
+"""This module brings the other modules together for generating an XLSX report."""
 
 import socket
 import time
@@ -226,24 +224,34 @@ will be skipped."))
         dom_worksheet.write(row, 5, "Domain Frontable", bold)
         row += 1
 
-        # Collect subdomain information from DNS Dumpster
+        # Collect subdomain information from DNS Dumpster and NetCraft
         for domain in domains_list:
-            print(green("[+] Checking DNS Dumpster for {}".format(domain)))
-            dumpster_results = self.DC.check_dns_dumpster(domain)
-            # Log DNS Dumpster's info
+            print(green("[+] Checking DNS Dumpster and NetCraft for {}".format(domain)))
+            dumpster_results = []
+            netcraft_results = []
+            try:
+                dumpster_results = self.DC.check_dns_dumpster(domain)
+            except:
+                print(red("[!] There was a problem collecting results from DNS Dumpster."))
+            try:
+                netcraft_results = self.DC.check_netcraft(domain)
+            except:
+                print(red("[!] There was a problem collecting results from NetCraft."))
+            
             if dumpster_results:
-                dom_worksheet.write(row, 0, dumpster_results['domain'])
+                # See if we can save the domain map from DNS Dumpster
+                if dumpster_results['image_data']:
+                    with open("reports/" + domain + "_Domain_Map.png", "wb") as fh:
+                        fh.write(base64.decodebytes(dumpster_results['image_data']))
+                # Log the info from DNS Dumpster
+                dom_worksheet.write(row, 0, domain)
                 for result in dumpster_results['dns_records']['host']:
                     if result['reverse_dns']:
-#                         dom_worksheet.write(row, 1, "{domain} ({reverse_dns}) ({ip}) \
-# {as} {provider} {country} {header}".format(**result))
                         dom_worksheet.write(row, 1, result['domain'])
                         dom_worksheet.write(row, 2, result['ip'])
                         dom_worksheet.write(row, 3, result['as'])
                         dom_worksheet.write(row, 4, result['provider'])
                     else:
-#                         dom_worksheet.write(row, 1, "{domain} ({ip}) {as} {provider} \
-# {country} {header}".format(**result))
                         dom_worksheet.write(row, 1, result['domain'])
                         dom_worksheet.write(row, 2, result['ip'])
                         dom_worksheet.write(row, 3, result['as'])
@@ -254,10 +262,38 @@ will be skipped."))
 
                     row += 1
 
-            # See if we can save the domain map
-            if dumpster_results['image_data']:
-                with open("reports/" + domain + "_Domain_Map.png", "wb") as fh:
-                    fh.write(base64.decodebytes(dumpster_results['image_data']))
+            # Log the info from NetCraft
+            if netcraft_results:
+                for result in netcraft_results:
+                    dom_worksheet.write(row, 1, result)
+                    # Check the subdomain for domain fronting possibilties
+                    dom_worksheet.write(row, 5, self.DC.check_domain_fronting(result))
+                    row += 1
+
+        # Add buffer rows for the next table
+        row += 2
+
+        # Write headers for IP history table
+        dom_worksheet.write(row, 0, "Domain IP History", bold)
+        row += 1
+        dom_worksheet.write(row, 0, "Domain", bold)
+        dom_worksheet.write(row, 1, "Netblock Owner", bold)
+        dom_worksheet.write(row, 2, "IP", bold)
+        row += 1
+
+        for domain in domains_list:
+            ip_history = []
+            try:
+                ip_history = self.DC.fetch_netcraft_domain_history(domain)
+            except:
+                print(red("[!] There was a problem collecting domain history from NetCraft."))
+
+            if ip_history:
+                dom_worksheet.write(row, 0, domain)
+                for result in ip_history:
+                    dom_worksheet.write(row, 1, result[0])
+                    dom_worksheet.write(row, 2, result[1])
+                    row += 1
 
         # Add buffer rows for the next table
         row += 2
@@ -899,57 +935,53 @@ for --file. Please try again."))
 
     def create_cloud_worksheet(self, workbook, client, domain, wordlist=None):
         """Function to add a cloud worksheet for findings related to AWS."""
-        # Setup cloud worksheet
-        cloud_worksheet = workbook.add_worksheet("The Cloud")
-        bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
-        row = 0
-
         print(green("[+] Looking for AWS buckets and accounts for target..."))
         verified_buckets, verified_accounts = self.DC.enumerate_aws(client, domain, wordlist)
 
-        # Write headers for S3 Bucket table table
-        cloud_worksheet.write(row, 0, "AWS S3 Buckets", bold)
-        row += 1
-        cloud_worksheet.write(row, 0, "Name", bold)
-        cloud_worksheet.write(row, 1, "Bucket URI", bold)
-        cloud_worksheet.write(row, 2, "Bucket ARN", bold)
-        cloud_worksheet.write(row, 3, "Public Access", bold)
-        row += 1
-        # Write S3 Bucket table contents
-        for bucket in verified_buckets:
-            if bucket['exists']:
-                cloud_worksheet.write(row, 0, bucket['bucketName'])
-                cloud_worksheet.write(row, 1, bucket['bucketUri'])
-                cloud_worksheet.write(row, 2, bucket['arn'])
-                # Check public access to bucket
-                response = self.DC.check_bucket_access(bucket['bucketUri'])
-                if response:
-                    print(yellow("[*] Found a browseable S3 bucket!"))
-                    cloud_worksheet.write(row, 3, "Yes")
-                else:
-                    cloud_worksheet.write(row, 3, "No")
+        if verified_buckets and verified_accounts:
+            # Setup cloud worksheet
+            cloud_worksheet = workbook.add_worksheet("The Cloud")
+            bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
+            row = 0
+            # Write headers for S3 Bucket table table
+            cloud_worksheet.write(row, 0, "AWS S3 Buckets", bold)
+            row += 1
+            cloud_worksheet.write(row, 0, "Name", bold)
+            cloud_worksheet.write(row, 1, "Bucket URI", bold)
+            cloud_worksheet.write(row, 2, "Bucket ARN", bold)
+            cloud_worksheet.write(row, 3, "Public Access", bold)
+            row += 1
+            # Write S3 Bucket table contents
+            for bucket in verified_buckets:
+                if bucket['exists']:
+                    cloud_worksheet.write(row, 0, bucket['bucketName'])
+                    cloud_worksheet.write(row, 1, bucket['bucketUri'])
+                    cloud_worksheet.write(row, 2, bucket['arn'])
+                    cloud_worksheet.write(row, 3, bucket['public'])
 
-                row += 1
+                    row += 1
 
-        # Add buffer rows for next table
-        row += 2
+            # Add buffer rows for next table
+            row += 2
         
-        # Write headers for AWS Account table
-        cloud_worksheet.write(row, 0, "AWS Accounts", bold)
-        row += 1
-        cloud_worksheet.write(row, 0, "Account Alias", bold)
-        cloud_worksheet.write(row, 1, "Account ID", bold)
-        cloud_worksheet.write(row, 2, "Account Signin URI", bold)
-        row += 1
-        # Write AWS Account table contents
-        for account in verified_accounts:
-            if account['exists']:
-                cloud_worksheet.write(row, 0, account['accountAlias'])
-                if account['accountId'] is None:
-                    cloud_worksheet.write(row, 1, "Unknown")
-                else:
-                    cloud_worksheet.write(row, 1, account['accountId'])
-                cloud_worksheet.write(row, 2, account['signinUri'])
-                row += 1
+            # Write headers for AWS Account table
+            cloud_worksheet.write(row, 0, "AWS Accounts", bold)
+            row += 1
+            cloud_worksheet.write(row, 0, "Account Alias", bold)
+            cloud_worksheet.write(row, 1, "Account ID", bold)
+            cloud_worksheet.write(row, 2, "Account Signin URI", bold)
+            row += 1
+            # Write AWS Account table contents
+            for account in verified_accounts:
+                if account['exists']:
+                    cloud_worksheet.write(row, 0, account['accountAlias'])
+                    if account['accountId'] is None:
+                        cloud_worksheet.write(row, 1, "Unknown")
+                    else:
+                        cloud_worksheet.write(row, 1, account['accountId'])
+                    cloud_worksheet.write(row, 2, account['signinUri'])
+                    row += 1
 
-        print(green("[+] AWS searches are complete and results are in the Cloud worksheet."))
+            print(green("[+] AWS searches are complete and results are in the Cloud worksheet."))
+        else:
+            print(yellow("[*] Could not access the AWS API to enumerate S3 buckets and accounts."))

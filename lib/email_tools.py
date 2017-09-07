@@ -1,9 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module contains all of tools and functions used
-for seeking out individuals and collecting data, such as
-email addresses and social media account data.
+"""This module contains all of tools and functions used for seeking out individuals and collecting
+data, such as email addresses and social media account data.
 """
 
 import requests
@@ -91,9 +90,7 @@ class PeopleCheck(object):
                 return resp.json()
 
     def full_contact_company(self, domain):
-        """Use the Full Contact API to collect company profile
-        information for the target domain.
-        """
+        """Use the Full Contact API to collect company profile information for the target domain."""
         if self.contact_api_key is None:
             print(red("[!] No Full Contact API key, so skipping company lookup."))
             return None
@@ -181,8 +178,8 @@ account.".format(handle)))
                     print(red("L.. Details: {}".format(error)))
 
     def harvest_linkedin(self, target, company):
-        """Construct a Bing search URL and scrape for LinkedIn profile links related
-        to the target's name and company.
+        """Construct a Bing search URL and scrape for LinkedIn profile links related to the
+        target's name and company.
         """
         print(green("[+] Looking for potential LinkedIn profiles \
 for {} at {}".format(target, company)))
@@ -209,9 +206,8 @@ for {} at {}".format(target, company)))
         return no_dups
 
     def harvest_emailhunter(self, domain):
-        """"Call upon EmailHunter's API to collect known email
-        addresses for a domain and other information, such as names,
-        job titles, and the original source of the data.
+        """"Call upon EmailHunter's API to collect known email addresses for a domain and other
+        information, such as names, job titles, and the original source of the data.
 
         A free EmailHunter API key is required.
         """
@@ -231,8 +227,8 @@ people.".format(len(results['data']['emails']))))
 
     def process_harvested_lists(self, harvester_emails, harvester_people,\
     harvester_twitter, hunter_json):
-        """Take data harvested from EmailHunter and TheHarvester,
-        combine it, make unique lists, and return the total results.
+        """Take data harvested from EmailHunter and TheHarvester, combine it, make unique lists,
+        and return the total results.
         """
         temp_emails = []
         twitter_handles = []
