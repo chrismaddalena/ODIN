@@ -87,6 +87,14 @@ DNS Dumpster is a cool project you can find at dnsdumpster.com. Subdomain inform
 
 No API key is needed.
 
+#### NetCraft
+O.D.I.N. will check NetCraft for domain history and known subdomains. This does require a web driver for Selenium. If you download a driver and provide the path to it in your keys.config file (Yes, this isn't really a key, but so be it), NetCraft searches will be kicked off automatically when you perform domain OSINT.
+
+The Chrome web driver is recommended, but the Firefox/Gecko driver should work just fine, too.
+
+[Chrome Web Driver](https://github.com/SeleniumHQ/selenium/wiki/ChromeDriver)
+[Gecko Driver](https://github.com/mozilla/geckodriver/releases)
+
 #### EmailHunter
 Meant for marketing folks to find leads and contacts at a company, this service offers free API keys for harvesting their contact information organizaed by company/domain. Hunter will return names, email addresses, phone numbers, Twitter handles, LinkedIn profile links, and job titles.
 
@@ -100,11 +108,11 @@ It's likely Full Contact will get some things wrong, such as number of employees
 Sign-up for an account to get your API key: [app.fullcontact.com](https://app.fullcontact.com/start/welcome)
 
 #### AWS
-Yes, Amazon Web Services. With an AWS IAM user's Access ID and Secret, the AWS API can be leveraged to do recon against AWS to find things like S3 buckets and accounts names and aliases. Account names are strings of numbers, so you will need some idea of what you're looking for there. Aliases, however, can be anything, like a company name, and those can be validated as existing or not.
+Yes, Amazon Web Services. O.D.I.N. will perform recon against AWS to find things like S3 buckets and accounts names and aliases. Account names are strings of numbers, so you will need some idea of what you're looking for there. Aliases, however, can be anything, like a company name, and those can be validated as existing or not.
 
 By default, O.D.I.N. uses the client (`-c`) name and domain (`-d`) for searches. O.D.I.N. will search for the name with spaces stripped out, the domain with the TLD, and the domain without the TLD. An optional wordlist can be provided with `--aws`. Keywords can be anything, really. Consider assembling a list of related words or running a tool like `cEWL` to generate one.
 
-Setup an IAM user on any Amazon account to get an Access ID and Secret.
+No Amaon account or API key is needed.
 
 ## FAQ
 **I get this syntax error. What's the deal?**

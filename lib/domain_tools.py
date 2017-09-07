@@ -22,9 +22,9 @@ import requests
 from colors import red, green, yellow
 from netaddr import IPNetwork, iter_iprange
 import dns.resolver
-import boto3
-from botocore.exceptions import ClientError
 import validators
+import time
+from selenium import webdriver
 from lib import helpers
 
 
@@ -72,36 +72,24 @@ class DomainCheck(object):
         try:
             censys_api_id = helpers.config_section_map("Censys")["api_id"]
             censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
-            self.cenCertAPI = censys.certificates.CensysCertificates(api_id=censys_api_id, api_secret=censys_api_secret)
-            self.cenAddAPI = censys.ipv4.CensysIPv4(api_id=censys_api_id, api_secret=censys_api_secret)
+            self.cenCertAPI = censys.certificates.CensysCertificates(
+                api_id=censys_api_id, api_secret=censys_api_secret)
+            self.cenAddAPI = censys.ipv4.CensysIPv4(
+                api_id=censys_api_id, api_secret=censys_api_secret)
         except:
             self.cenCertAPI = None
             self.cenAddAPI = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
 
-        # Check for an AWS credentials file
         try:
-            aws_region = helpers.config_section_map("AWS")["region_name"]
-            aws_access_id = helpers.config_section_map("AWS")["aws_access_key_id"]
-            aws_secret_access_key = helpers.config_section_map("AWS")["aws_secret_access_key"]
-            if not aws_access_id == "" or not aws_secret_access_key == "":
-                self.aws_session = boto3.Session(region_name=aws_region,
-                                    aws_access_key_id=aws_access_id,
-                                    aws_secret_access_key=aws_secret_access_key)
+            chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+            if chrome_driver_path:
+                self.webdriver = webdriver.Chrome(chrome_driver_path)
             else:
-                self.aws_session = None
+                self.webdriver = None    
         except:
-            self.aws_session = None
-            print(yellow("[!] Could not establish an AWS API session."))
-
-        # The following commented code can be used if the credentials file is desired
-        # aws_file = os.path.expanduser("~/.aws/credentials")
-        # if os.path.isfile(aws_file):
-        #     print(green("[+] Found AWS credentials file in ~/.aws/credentials for AWS recon."))
-        #     self.aws_creds = True
-        # else:
-        #     print(yellow("[*] No AWS credentials file in ~/.aws/credentials, so AWS recon will be skipped."))
-        #     self.aws_creds = False
+            self.webdriver = None
+            self.chrome_driver_path = None
 
     def generate_scope(self, scope_file):
         """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
@@ -182,11 +170,11 @@ class DomainCheck(object):
         return answer
 
     def run_whois(self, domain):
-        """Perform a whois lookup for the provided target domain.
-        The whois results are returned as a dictionary.
+        """Perform a whois lookup for the provided target domain. The whois results are returned
+        as a dictionary.
 
-        This can fail, usually if the domain is registered through
-        a registrar outside of North America.
+        This can fail, usually if the domain is registered through a registrar outside of
+        North America.
         """
         try:
             who = whois.whois(domain)
@@ -231,8 +219,7 @@ class DomainCheck(object):
         against Cymon.io's threat feeds. If a result is found (200 OK), then the domain or IP has
         been reported to be part of some sort of malicious activity relatively recently.
 
-        The function returns a list of domains, A-records, MX-records,
-        and the results from Cymon.
+        The function returns a list of domains, A-records, MX-records, and the results from Cymon.
 
         A Cymon API key is recommended, but not required.
         """
@@ -277,7 +264,7 @@ class DomainCheck(object):
                 squatted = zip(domains, a_records, mx_records)
 
                 session = requests.Session()
-                session.headers = {'content-type': 'application/json', 'accept': 'application/json'}
+                session.headers = {'content-type':'application/json', 'accept':'application/json'}
                 # Add the Cymon API, if available, to the headers
                 if self.cymon_api_key != None:
                     session.headers.update({'Authorization': 'Token {0}' \
@@ -483,11 +470,10 @@ this.".format(domain[1])))
             print(red("[!] Target is not a domain, so skipping URLVoid queries."))
 
     def check_dns_dumpster(self, domain):
-        """Function to collect subdomains known to DNS Dumpster
-        for the provided domain. This is base don PaulSec's
-        unofficial DNS Dumpster API available on GitHub.
+        """Function to collect subdomains known to DNS Dumpster for the provided domain. This is
+        based on PaulSec's unofficial DNS Dumpster API available on GitHub.
         """
-        dnsdumpster_url = 'https://dnsdumpster.com/'
+        dnsdumpster_url = "https://dnsdumpster.com/"
         results = {}
         cookies = {}
 
@@ -503,8 +489,8 @@ this.".format(domain[1])))
         request = session.post(dnsdumpster_url, cookies=cookies, data=data, headers=headers)
 
         if request.status_code != 200:
-            print("[+] There appears to have been an error \
-    communicating with DNS Dumpster -- {} received!".format(request.status_code))
+            print("[+] There appears to have been an error communicating with DNS Dumpster -- {} \
+                  received!".format(request.status_code))
 
         soup = BeautifulSoup(request.content, 'lxml')
         tables = soup.findAll('table')
@@ -530,9 +516,7 @@ this.".format(domain[1])))
         return results
 
     def retrieve_results(self, table):
-        """Helper function for check_dns_dumpster which
-        extracts the results from the HTML soup.
-        """
+        """Helper function for check_dns_dumpster which extracts the results from the HTML soup."""
         results = []
         trs = table.findAll('tr')
         for tr in trs:
@@ -560,126 +544,148 @@ this.".format(domain[1])))
         return results
 
     def retrieve_txt_record(self, table):
-        """Secondary helper function for check_dns_dumpster
-        which extracts the TXT records.
-        """
+        """Secondary helper function for check_dns_dumpster which extracts the TXT records."""
         results = []
         for td in table.findAll('td'):
             results.append(td.text)
 
         return results
 
+    def check_netcraft(self, domain):
+        """Function to collect subdomains known to NetCraft for the provided domain. NetCraft blocks
+        scripted requests by requiring cookies and JavaScript for all browser, so Selenium is
+        required.
+
+        This is based on code from the DataSploit project, but updated to work with today's
+        NetCraft.
+        """
+        results = []
+        # If the WebDriver path is empty, we cannot continue with NetCraft
+        if self.webdriver:
+            netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
+            target_dom_name = domain.split(".")
+            self.webdriver.get(netcraft_url)
+
+            link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
+            links_list = link_regx.findall(self.webdriver.page_source)
+            for x in links_list:
+                dom_name = x.split("/")[2].split(".")
+                if (dom_name[len(dom_name) - 1] == target_dom_name[1]) and \
+                (dom_name[len(dom_name) - 2] == target_dom_name[0]):
+                    results.append(x.split("/")[2])
+            num_regex = re.compile('Found (.*) site')
+            num_subdomains = num_regex.findall(self.webdriver.page_source)
+            if not num_subdomains:
+                num_regex = re.compile('First (.*) sites returned')
+                num_subdomains = num_regex.findall(self.webdriver.page_source)
+            if num_subdomains:
+                if num_subdomains[0] != str(0):
+                    num_pages = int(num_subdomains[0]) // 20 + 1
+                    if num_pages > 1:
+                        last_regex = re.compile(
+                            '<td align="left">%s.</td><td align="left">\n<a href="(.*)" rel="nofollow">' % (20))
+                        last_item = last_regex.findall(self.webdriver.page_source)[0].split("/")[2]
+                        next_page = 21
+
+                        for x in range(2, num_pages):
+                            url = "http://searchdns.netcraft.com/?host=%s&last=%s&from=%s&restriction=/site%%20contains" % (domain, last_item, next_page)
+                            self.webdriver.get(url)
+                            link_regx = re.compile(
+                                '<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
+                            links_list = link_regx.findall(self.webdriver.page_source)
+                            for y in links_list:
+                                dom_name1 = y.split("/")[2].split(".")
+                                if (dom_name1[len(dom_name1) - 1] == target_dom_name[1]) and \
+                                (dom_name1[len(dom_name1) - 2] == target_dom_name[0]):
+                                    results.append(y.split("/")[2])
+                            last_item = links_list[len(links_list) - 1].split("/")[2]
+                            next_page = 20 * x + 1
+                else:
+                    pass
+            else:
+                pass
+
+        return results
+
+    def fetch_netcraft_domain_history(self, domain):
+        """Function to fetch a domain's IP address history from NetCraft."""
+        # TODO: See if the "Last Seen" and other data can be easily collected for here
+        ip_history = []
+        time.sleep(1)
+        endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % (domain)
+        self.webdriver.get(endpoint)
+
+        soup = BeautifulSoup(self.webdriver.page_source, 'html.parser')
+        urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
+
+        for url in urls_parsed:
+            if urls_parsed.index(url) != 0:
+                result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
+                str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
+                ip_history.append(result)
+
+        return ip_history
+
     def enumerate_aws(self, client, domain, wordlist=None):
-        """Function to search for AWS S3 buckets and accounts.
-        Default search terms are the client, domain, and domain
-        without its TLD. A wordlist is optional.
+        """Function to search for AWS S3 buckets and accounts. Default search terms are the
+        client, domain, and domain without its TLD. A wordlist is optional.
 
         This is based on modules from aws_pwn by dagrz on GitHub.
         """
-        if self.aws_session is not None:
-            search_terms = [domain, client, domain.split(".")[0]]
-            bucket_results = []
-            account_results = []
-            for term in search_terms:
-                # Strip out any spaces that might've been included in client name
-                term = "".join(term.split())
-                # Check for buckets
-                result = self.validate_bucket('head', term)
-                bucket_results.append(result)
-                # Check for accounts
-                result = self.validate_account("signin", term)
-                account_results.append(result)
+        # Take the user input as the initial list of keywords here
+        # Both example.com and example are valid bucket names, so domain+tld and domain are tried
+        search_terms = [domain, domain.split(".")[0], client.replace(" ", "").lower()]
+        bucket_results = []
+        account_results = []
 
-            if wordlist is not None:
-                with open(wordlist, "r") as bucket_list:
-                    for name in bucket_list:
-                        name = name.strip()
-                        if name and not name.startswith('#'):
-                            # Enumerate buckets from wordlist
-                            result = self.validate_bucket('head', name)
-                            bucket_results.append(result)
-                            # Enumerate accounts from wordlist
-                            result = self.validate_account("signin", name)
-                            account_results.append(result)
+        if wordlist is not None:
+            with open(wordlist, "r") as bucket_list:
+                for name in bucket_list:
+                    name = name.strip()
+                    if name and not name.startswith('#'):
+                        search_terms.append(name)
 
-            return bucket_results, account_results
-        else:
-            return None, None
+        search_terms = list(set(search_terms))
 
-    def validate_bucket(self, validation_type, bucket_name):
-        """Function to be used with enumerate_aws() to evaluate
-        the AWS response for a bucket name.
+        for term in search_terms:
+            # Check for buckets
+            result = self.validate_bucket(term)
+            bucket_results.append(result)
+            # Check for accounts
+            result = self.validate_account(term)
+            account_results.append(result)
 
-        This is based on modules from aws_pwn by dagrz on GitHub.
-        """
-        validation_functions = {
-            'head': self.validate_bucket_head
-        }
-        if validation_functions[validation_type]:
-            return validation_functions[validation_type](bucket_name)
+        return bucket_results, account_results
 
-
-    def validate_bucket_head(self, bucket_name):
-        """Function to be used with validate_bucket() to evaluate
-        the AWS response for a bucket name. This determines if
-        AWS' response confirms the existence of a bucket name.
-
-        This is based on modules from aws_pwn by dagrz on GitHub.
-        """
-        # This test requires authentication
-        # Warning: Check credentials before use
-        error_values = {
-            '400': True,
-            '403': True,
-            '404': False
-        }
+    def validate_bucket(self, bucket_name):
+        """Function to check a string to see if it exists as the name of an Amazon S3 bucket."""
+        bucket_uri = "http://" + bucket_name + ".s3.amazonaws.com"
         result = {
             'bucketName': bucket_name,
-            'bucketUri': 'http://' + bucket_name + '.s3.amazonaws.com',
+            'bucketUri': bucket_uri,
             'arn': 'arn:aws:s3:::' + bucket_name,
-            'exists': False
+            'exists': False,
+            'public': False
         }
 
-        client = self.aws_session.client('s3')
         try:
-            client.head_bucket(Bucket=bucket_name)
-            result['exists'] = True
-        except ClientError as error:
-            result['exists'] = error_values[error.response['Error']['Code']]
+            # Request the bucket to check the response
+            request = requests.get(bucket_uri)
+            # All bucket names will get something, so look for the NoSuchBucket status
+            if "NoSuchBucket" in request.text:
+                result['exists'] = False
+            else:
+                result['exists'] = True
+            # Check for a 200 OK to indicate a publicly listable bucket
+            if request.status_code == 200:
+                result['public'] = True
+        except requests.exceptions.RequestException as error:
+            result['exists'] = False
+
         return result
 
-    def check_bucket_access(self, uri):
-        """Function to request an S3 bucket's URI and check if
-        the bucket is publicly accessible (HTTP 200 OK).
-        """
-        try:
-            request = requests.get(uri)
-            if request.status_code == 200:
-                return True
-            else:
-                return False
-        except requests.exceptions.RequestException as error:
-            print(red("[!] There was an error checking an S3 bucket's URI"))
-            # print(red("L...Details: {}".formt(result['error'] = error)))
-
-    def validate_account(self, validation_type, account):
-        """Function to be used with enumerate_aws() to evaluate
-        the AWS response for an account name or alias.
-
-        This is based on modules from aws_pwn by dagrz on GitHub.
-        """
-        validation_functions = {
-            'signin': self.validate_account_signin
-        }
-        if validation_functions[validation_type]:
-            return validation_functions[validation_type](account)
-
-    def validate_account_signin(self, account):
-        """Function to be used with validate_account() to evaluate
-        the AWS response for an account name or alias.
-
-        This is based on modules from aws_pwn by dagrz on GitHub.
-        """
+    def validate_account(self, account):
+        """Function to check a string to see if it exists as the name of an AWS alias."""
         result = {
             'accountAlias': None,
             'accountId': None,
@@ -687,7 +693,7 @@ this.".format(domain[1])))
             'exists': False,
             'error': None
         }
-
+        # Check if the provided account name is a string of numbers (an ID) or not (an alias)
         if re.match(r'\d{12}', account):
             result['accountId'] = account
         else:
@@ -698,8 +704,10 @@ this.".format(domain[1])))
             return result
 
         try:
-            r = requests.get(result['signinUri'], allow_redirects=False)
-            if r.status_code == 302:
+            # Request the sign-in URL and don't allow the redirect
+            request = requests.get(result['signinUri'], allow_redirects=False)
+            # If we have a redirect, not a 404, we have a valid account alias for AWS
+            if request.status_code == 302:
                 result['exists'] = True
         except requests.exceptions.RequestException as error:
             result['error'] = error
@@ -750,3 +758,5 @@ this.".format(domain[1])))
             return ip_json
         else:
             print(red("[!] The provided IP for Robtex address is invalid!"))
+
+    
