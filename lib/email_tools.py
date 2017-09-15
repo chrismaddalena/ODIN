@@ -211,18 +211,22 @@ for {} at {}".format(target, company)))
 
         A free EmailHunter API key is required.
         """
-        emailhunter_api_url = "https://api.hunter.io/v2/domain-search?\
+        results = None
+
+        if self.emailhunter_api_key:
+            emailhunter_api_url = "https://api.hunter.io/v2/domain-search?\
 domain={}&api_key={}".format(domain, self.emailhunter_api_key)
-        request = requests.get(emailhunter_api_url)
-        results = request.json()
+            request = requests.get(emailhunter_api_url)
+            results = request.json()
 
-        if "errors" in results:
-            print(red("[!] The request to EmailHunter returned an error!"))
-            print(red("L.. Details: {}".format(results['errors'])))
-            return None
+            if "errors" in results:
+                print(red("[!] The request to EmailHunter returned an error!"))
+                print(red("L.. Details: {}".format(results['errors'])))
+                return None
 
-        print(green("[+] Hunter has contact data for {} \
+            print(green("[+] Hunter has contact data for {} \
 people.".format(len(results['data']['emails']))))
+
         return results
 
     def process_harvested_lists(self, harvester_emails, harvester_people,\
@@ -242,27 +246,28 @@ people.".format(len(results['data']['emails']))))
             temp_emails.append(email)
 
         # Process emails and people found by Hunter
-        for result in hunter_json['data']['emails']:
-            email = result['value'].lower()
-            temp_emails.append(email)
+        if hunter_json:
+            for result in hunter_json['data']['emails']:
+                email = result['value'].lower()
+                temp_emails.append(email)
 
-            if "first_name" in result and "last_name" in result:
-                if result['first_name'] is not None and result['last_name'] is not None:
-                    person = result['first_name'] + " " + result['last_name']
-                    harvester_people.append(person)
-                    if "position" in result:
-                        if result['position'] is not None:
-                            job_titles[person] = result['position']
-                    if "linkedin" in result:
-                        if result['linkedin'] is not None:
-                            linkedin[person] = result['linkedin']
-                    if "phone_number" in result:
-                        if result['phone_number'] is not None:
-                            phone_nums[person] = result['phone_number']
+                if "first_name" in result and "last_name" in result:
+                    if result['first_name'] is not None and result['last_name'] is not None:
+                        person = result['first_name'] + " " + result['last_name']
+                        harvester_people.append(person)
+                        if "position" in result:
+                            if result['position'] is not None:
+                                job_titles[person] = result['position']
+                        if "linkedin" in result:
+                            if result['linkedin'] is not None:
+                                linkedin[person] = result['linkedin']
+                        if "phone_number" in result:
+                            if result['phone_number'] is not None:
+                                phone_nums[person] = result['phone_number']
 
-            if "twitter" in email:
-                if result['twitter'] is not None:
-                    harvester_twitter.append(result['twitter'])
+                if "twitter" in email:
+                    if result['twitter'] is not None:
+                        harvester_twitter.append(result['twitter'])
 
         # Remove any duplicate results
         unique = set(temp_emails)
