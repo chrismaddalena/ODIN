@@ -82,13 +82,13 @@ class DomainCheck(object):
             print(yellow("[!] Did not find a Censys API ID/secret."))
 
         try:
-            chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
-            if chrome_driver_path:
-                self.webdriver = webdriver.Chrome(chrome_driver_path)
-            else:
-                self.webdriver = None    
+            self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+            # if chrome_driver_path:
+            #     self.webdriver = webdriver.Chrome(chrome_driver_path)
+            # else:
+            #     self.webdriver = None    
         except:
-            self.webdriver = None
+            # self.webdriver = None
             self.chrome_driver_path = None
 
     def generate_scope(self, scope_file):
@@ -561,38 +561,39 @@ this.".format(domain[1])))
         """
         results = []
         # If the WebDriver path is empty, we cannot continue with NetCraft
-        if self.webdriver:
+        if self.chrome_driver_path:
+            driver = webdriver.Chrome(self.chrome_driver_path)
             netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
             target_dom_name = domain.split(".")
-            self.webdriver.get(netcraft_url)
+            driver.get(netcraft_url)
 
             link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-            links_list = link_regx.findall(self.webdriver.page_source)
+            links_list = link_regx.findall(driver.page_source)
             for x in links_list:
                 dom_name = x.split("/")[2].split(".")
                 if (dom_name[len(dom_name) - 1] == target_dom_name[1]) and \
                 (dom_name[len(dom_name) - 2] == target_dom_name[0]):
                     results.append(x.split("/")[2])
             num_regex = re.compile('Found (.*) site')
-            num_subdomains = num_regex.findall(self.webdriver.page_source)
+            num_subdomains = num_regex.findall(driver.page_source)
             if not num_subdomains:
                 num_regex = re.compile('First (.*) sites returned')
-                num_subdomains = num_regex.findall(self.webdriver.page_source)
+                num_subdomains = num_regex.findall(driver.page_source)
             if num_subdomains:
                 if num_subdomains[0] != str(0):
                     num_pages = int(num_subdomains[0]) // 20 + 1
                     if num_pages > 1:
                         last_regex = re.compile(
                             '<td align="left">%s.</td><td align="left">\n<a href="(.*)" rel="nofollow">' % (20))
-                        last_item = last_regex.findall(self.webdriver.page_source)[0].split("/")[2]
+                        last_item = last_regex.findall(driver.page_source)[0].split("/")[2]
                         next_page = 21
 
                         for x in range(2, num_pages):
                             url = "http://searchdns.netcraft.com/?host=%s&last=%s&from=%s&restriction=/site%%20contains" % (domain, last_item, next_page)
-                            self.webdriver.get(url)
+                            driver.get(url)
                             link_regx = re.compile(
                                 '<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-                            links_list = link_regx.findall(self.webdriver.page_source)
+                            links_list = link_regx.findall(driver.page_source)
                             for y in links_list:
                                 dom_name1 = y.split("/")[2].split(".")
                                 if (dom_name1[len(dom_name1) - 1] == target_dom_name[1]) and \
@@ -612,17 +613,19 @@ this.".format(domain[1])))
         # TODO: See if the "Last Seen" and other data can be easily collected for here
         ip_history = []
         time.sleep(1)
-        endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % (domain)
-        self.webdriver.get(endpoint)
+        if self.chrome_driver_path:
+            driver = webdriver.Chrome(self.chrome_driver_path)
+            endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % (domain)
+            driver.get(endpoint)
 
-        soup = BeautifulSoup(self.webdriver.page_source, 'html.parser')
-        urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
 
-        for url in urls_parsed:
-            if urls_parsed.index(url) != 0:
-                result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
-                str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
-                ip_history.append(result)
+            for url in urls_parsed:
+                if urls_parsed.index(url) != 0:
+                    result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
+                    str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
+                    ip_history.append(result)
 
         return ip_history
 
