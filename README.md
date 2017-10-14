@@ -5,11 +5,13 @@
 
 ![ODIN](https://github.com/chrismaddalena/viper/raw/origin/dev/ODIN.jpg)
 
+```
 Current version: v1.0 Muninn
 
->A Python tool for automating intelligence gathering, testing and reporting. O.D.I.N. is still in active development and is incomplete. Feedback on issues is welcome!
+A Python tool for automating intelligence gathering, testing and reporting. O.D.I.N. is still in active development and is incomplete. Feedback on issues is welcome!
 
-> Note: O.D.I.N. is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files, is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information.
+Note: O.D.I.N. is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files, is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information.
+```
 
 ## First Things First
 O.D.I.N. is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify. All this developer did was assemble the tools, convert some of them to Python 3, and stitch them together.
@@ -28,10 +30,7 @@ O.D.I.N. is still very much in development, but it aims to automate many of the 
 ## Getting Started
 1. Review the keys.config.sample file to fill-in your API keys and create a keys.config file.
 2. `cd` into the /setup directory and run `setup_check.py` to make sure your keys.config file is in order.
-3. Install any missing libraries by running pip with the requirements.txt file in the /setup directory: `pip3 install -r requirements.txt` or `python3 -m pip install -r requirements.txt`
-
-### Optional AWS Setup
-If you'd like to have O.D.I.N. do recon against AWS you will need an IAM user account and the associated ID and Secret. Get this from your AWS console. Typically, you will place this in ~/.aws/credentials, but it's nice to keep everything in one place. O.D.I.N. will use your keys.config file, but Amazon's Boto3 library for AWS may still look at ~/.aws/credentials. If that file has errors, Boto3 may log an error and quit. Just be aware of this possibility in case you have/use ~/.aws/credentials.
+3. Install any missing libraries by running `pip3` with the requirements.txt file in the /setup directory: `pip3 install -r requirements.txt` or `python3 -m pip install -r requirements.txt`
 
 ### The APIs and Services
 O.D.I.N. uses several APIs to gather information. Some of these require an API key, but they're mostly free. That is to say, you can get a free key or pay for more requests/day. Shodan is a good example of this.
@@ -110,9 +109,11 @@ Sign-up for an account to get your API key: [app.fullcontact.com](https://app.fu
 #### AWS
 Yes, Amazon Web Services. O.D.I.N. will perform recon against AWS to find things like S3 buckets and accounts names and aliases. Account names are strings of numbers, so you will need some idea of what you're looking for there. Aliases, however, can be anything, like a company name, and those can be validated as existing or not.
 
-By default, O.D.I.N. uses the client (`-c`) name and domain (`-d`) for searches. O.D.I.N. will search for the name with spaces stripped out, the domain with the TLD, and the domain without the TLD. An optional wordlist can be provided with `--aws`. Keywords can be anything, really. Consider assembling a list of related words or running a tool like `cEWL` to generate one.
+By default, O.D.I.N. uses the client (`-c`) name and domain (`-d`) for searches. O.D.I.N. will search for the name with spaces stripped out, the domain with the TLD, and the domain without the TLD. Then O.D.I.N. will add some common suffices and rpefixes, like "downloads-" or "-apps" to these keywords.
 
-No Amaon account or API key is needed.
+An optional wordlist can be provided with `--aws`. Keywords can be anything, really. Consider assembling a list of related words or running a tool like `cEWL` to generate one.
+
+No Amazon account or API key is needed.
 
 ## FAQ
 **I get this syntax error. What's the deal?**
@@ -121,13 +122,13 @@ Please make sure you are using Python 3, not Python 2.7 or earlier. I don't writ
 
 **I get an error when O.D.I.N. tries to import a library. What's wrong?**
 
-Like above, please make sure you are using Python 3. O.D.I.N. must be run in Python 3 and the requirements must be installed using `pip` for Python 3. To ensure Python 3 is used, just in case your `pip` command are tied to another version, run this command: `python3 -m pip install -r requirements.txt`
+Like above, please make sure you are using Python 3. O.D.I.N. must be run in Python 3 and the requirements must be installed using `pip` or `pip3` for Python 3. To ensure Python 3 is used, just in case your `pip` command is tied to another version, run this command: `python3 -m pip install -r requirements.txt`
 
 **Why do you not like "why not" questions?**
 
-If you ask "why not use X API," that's not very helpful. Presumably, the question is meant to convey the idea that X API would be a good addition and inquire about any reason it is not currently supported. The answer is most likely "I wasn't aware of this API." That also means I don't know anything about it.
+If you ask "why not use X API" or "why no do Y like this," that's not very helpful. Presumably, the question is meant to convey the idea that X API would be a good addition or Y is a bad way to accomplish a task and you want to know the reason it is not currently supported. The answer is most likely "I wasn't aware of this." That also means I don't know anything about it.
 
-If you have a suggestion for a service or API, please explain what it does and provide some details explaining why you think it would be a good addition.
+If you have a suggestion for a change, service, or API, please explain what it does and provide some details explaining why you think it would be a good addition.
 
 **Why not add support for the Clearbit API?**
 
@@ -146,10 +147,6 @@ Adding support for BuiltWith hasn't been ruled out, but the goal is to make O.D.
 **Why not use Full Contact's People API?**
 
 Currently only the Company API is used. There are plans to incorproate the People API in the future.
-
-**Why not use NetCraft?**
-
-NetCraft is awesome, but it doesn't have an API. There are changes in the works to make use of web requests and BeautifulSoup to parse the results. This will come in a later release.
 
 **Does O.D.I.N. perform DNS brute forcing?**
 

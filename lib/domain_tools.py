@@ -640,7 +640,10 @@ this.".format(domain[1])))
         search_terms = [domain, domain.split(".")[0], client.replace(" ", "").lower()]
         bucket_results = []
         account_results = []
+        prefixes = ["apps-", "downloads-"]
+        suffixes = ["-apps", "-downloads"]
 
+        # Add wordlist terms to our list of search terms
         if wordlist is not None:
             with open(wordlist, "r") as bucket_list:
                 for name in bucket_list:
@@ -648,8 +651,17 @@ this.".format(domain[1])))
                     if name and not name.startswith('#'):
                         search_terms.append(name)
 
-        search_terms = list(set(search_terms))
+        # Modify search terms with some common prefixes and suffixes
+        for fix in prefixes:
+            for term in search_terms:
+                search_terms.append(fix + term)
 
+        for fix in suffixes:
+            for term in search_terms:
+                search_terms.append(term + fix)
+
+        # Ensure we have only unique search terms in our list and start hunting
+        search_terms = list(set(search_terms))
         for term in search_terms:
             # Check for buckets
             result = self.validate_bucket(term)
