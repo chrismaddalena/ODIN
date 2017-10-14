@@ -120,8 +120,35 @@ except Exception as error:
     print("L.. Details: {}".format(error))
     how_do_we_look += 1
 
+try:
+    HUNTER_API = config_section_map("EmailHunter")["api_key"]
+    if HUNTER_API == "":
+        print("[!] No EmailHunter API key!")
+        how_do_we_look += 1
+    else:
+        print("[+] Found EmailHunter API info:")
+        print("... API Key:\t\t{}".format(HUNTER_API))
+except Exception as error:
+    print("[!] Could not get the EmailHunter API key!")
+    print("L.. Details: {}".format(error))
+    how_do_we_look += 1
+
+try:
+    CONTACT_API = config_section_map("Full Contact")["api_key"]
+    if CONTACT_API == "":
+        print("[!] No Full Contact API key!")
+        how_do_we_look += 1
+    else:
+        print("[+] Found Full Contact API info:")
+        print("... API Key:\t\t{}".format(CONTACT_API))
+except Exception as error:
+    print("[!] Could not get the Full Contact API key!")
+    print("L.. Details: {}".format(error))
+    how_do_we_look += 1
+
 if how_do_we_look == 0:
     print("[+] Looks like ../auth/keys.config and all the API keys are good to go! \
 Just check to make sure those keys are correct!")
 else:
-    print("[!] Looks like there is still some work to do before API access is ready :(")
+    print("[!] Looks like there is still some work to do before API access is ready. No API keys \
+are required, but using them is encouraged!")
