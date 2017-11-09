@@ -424,16 +424,17 @@ will be skipped."))
                                     dom_worksheet.write(row, 1, "Contact's Address:")
                                     dom_worksheet.write(row, 2, address[0]['value'])
                                     row += 1
+
+                # Check Robtex for results for the current target
+                robtex = self.DC.lookup_robtex_ipinfo(target_ip)
+                if robtex:
+                    results = []
+                    for result in robtex['pas']:
+                        results.append(result['o'])
+                    dom_worksheet.write(row, 6, ", ".join(results))
             except Exception as error:
                 print(red("[!] The RDAP lookup failed for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
-
-            robtex = self.DC.lookup_robtex_ipinfo(target_ip)
-            if robtex:
-                results = []
-                for result in robtex['pas']:
-                    results.append(result['o'])
-                dom_worksheet.write(row, 6, ", ".join(results))
 
         # Add buffer rows for the next table
         row += 2
