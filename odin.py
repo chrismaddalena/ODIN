@@ -2,29 +2,29 @@
 # -*- coding: utf-8 -*-
 
 """
- :::====     :::====     :::    :::= ===
- :::  ===    :::  ===    :::    :::=====
- ===  ===    ===  ===    ===    ========
- ===  ===    ===  ===    ===    === ====
-  ======  :: =======  :: === :: ===  === ::
+ :::====   :::====   :::  :::= ===
+ :::  ===  :::  ===  :::  :::=====
+ ===  ===  ===  ===  ===  ========
+ ===  ===  ===  ===  ===  === ====
+  ======   =======   ===  ===  ===
 
 Developer:   Chris "cmaddy" Maddalena
+Version:     1.5 "Muninn"
 Description: Observation, Detection, and Investigation of Networks
-             O.D.I.N. is an evolution of Codename:Viper. As with any project that uses a codename,
-             it must eventually get a real name and evolve. O.D.I.N. was designed to assist with
-             OSINT automation for penetration testing clients and their networks, both the types
-             with IP address and social. Provide a client's name, IPs, and domain(s) to gather
-             information from sources like whois, DNS, Shodan, and much, much more.
+             ODIN was designed to assist with OSINT automation for penetration testing clients and
+             their networks, both the types with IP address and social. Provide a client's name,
+             IPs, and domain(s) to gather information from sources like whois, DNS, Shodan, and
+             much more.
 
-             O.D.I.N. is made possible through the help, input, and work provided by others.
-             Therefore, this project is entirely open source and available to all to use/modify.
+             ODIN is made possible through the help, input, and work provided by others. Therefore,
+             this project is entirely open source and available to all to use/modify.
 """
 
 import os
-from colors import red, green
-from lib import reporter, asciis, verification, ssl_checker
+import multiprocess
 import click
-import xlsxwriter
+from colors import red, green, yellow
+from lib import reporter, asciis, verification, ssl_checker
 
 
 def setup_reports(client):
@@ -110,25 +110,67 @@ Several API keys are required for all of the look-ups: Twitter, Censys, Shodan, 
 and Cymon.
     """
     asciis.print_art()
-
     print(green("[+] OSINT Module Selected: O.D.I.N. will run all recon modules."))
 
-    setup_reports(client)
-    output_report = "reports/{}/OSINT_Report.xlsx".format(client)
-    report = reporter.Reporter()
-    scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
-    with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_company_info_worksheet(workbook, domain)
-        report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
-        report.create_urlcrazy_worksheet(workbook, client, domain)
-        report.create_shodan_worksheet(workbook, ip_list, domains_list)
-        report.create_censys_worksheet(workbook, scope, verbose)
-        report.create_people_worksheet(workbook, domain, client)
-        report.create_cloud_worksheet(workbook, client, domain, aws)
-        if files:
-            report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
+    if verbose:
+        print(yellow("[*] Verbose output Enabled -- Enumeration of RDAP contact information \
+is enabled, so you may get a lot of it if scope includes a large cloud provider."))
+    else:
+        print(yellow("[*] Verbose output Disabled -- Enumeration of contact information \
+will be skipped."))
 
-    print(green("[+] Job's done! Your results are in {}.".format(output_report)))
+    # Perform prep work for reporting
+    setup_reports(client)
+    output_report = "reports/{}/OSINT_DB.db".format(client)
+
+    if __name__ == "__main__":
+        report = reporter.Reporter(output_report)
+        scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
+
+        # Create empty job queue
+        jobs = []
+        company_info = multiprocess.Process(name="Company Info Report",
+                                            target=report.create_company_info_table,
+                                            args=(domain,))
+        jobs.append(company_info)
+        employee_report = multiprocess.Process(name="Employee Report",
+                                               target=report.create_people_table,
+                                               args=(domain, client))
+        jobs.append(employee_report)
+        domain_report = multiprocess.Process(name="Domains Report",
+                                             target=report.create_domain_report_table,
+                                             args=(scope, ip_list, domains_list, verbose))
+        jobs.append(domain_report)
+        # urlcrazy_report = multiprocess.Process(name="Domain Squatting Report",
+        #                                        target=report.create_urlcrazy_table,
+        #                                        args=(client, domain))
+        # jobs.append(urlcrazy_report)
+        shodan_report = multiprocess.Process(name="Shodan Report",
+                                            target=report.create_shodan_table,
+                                            args=(ip_list, domains_list))
+        jobs.append(shodan_report)
+        censys_report = multiprocess.Process(name="Censys Report",
+                                             target=report.create_censys_table,
+                                             args=(scope, verbose))
+        jobs.append(censys_report)
+        cloud_report = multiprocess.Process(name="Cloud Report",
+                                            target=report.create_cloud_table,
+                                            args=(client, domain, aws))
+        jobs.append(cloud_report)
+        if files:
+            files_report = multiprocess.Process(name="File Metadata Report",
+                                                target=report.create_foca_table,
+                                                args=(domain, ext, delete, verbose))
+            jobs.append(files_report)
+
+        for job in jobs:
+            print(green("[+] Starting new process: {}".format(job.name)))
+            job.start()
+        for job in jobs:
+            job.join()
+
+        report.close_out_reporting()
+        print(green("[+] Job's done! Your results are in {}.".format(output_report)))
 
 
 # The DOMAINS module -- Forget social and focus on IPs and domain names
@@ -159,25 +201,64 @@ Several API keys are required for all of the look-ups: Censys, FullContact, Shod
 Cymon.
     """
     asciis.print_art()
-
     print(green("[+] Domain Module Selected: O.D.I.N. will run only domain and IP-related \
 modules."))
+    if verbose:
+        print(yellow("[*] Verbose output Enabled -- Enumeration of RDAP contact information \
+is enabled, so you may get a lot of it if scope includes a large cloud provider."))
+    else:
+        print(yellow("[*] Verbose output Disabled -- Enumeration of contact information \
+will be skipped."))
 
+    # Perform prep work for reporting
     setup_reports(client)
-    output_report = "reports/{}/Domain_Report.xlsx".format(client)
-    report = reporter.Reporter()
-    scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
-    with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_company_info_worksheet(workbook, domain)
-        report.create_domain_report(workbook, scope, ip_list, domains_list, verbose)
-        report.create_urlcrazy_worksheet(workbook, client, domain)
-        report.create_shodan_worksheet(workbook, ip_list, domains_list)
-        report.create_censys_worksheet(workbook, scope, verbose)
-        report.create_cloud_worksheet(workbook, client, domain, aws)
-        if files:
-            report.create_foca_worksheet(workbook, domain, ext, delete, verbose)
+    output_report = "reports/{}/OSINT_DB.db".format(client)
 
-    print(green("[+] Job's done! Your results are in {}.".format(output_report)))
+    if __name__ == "__main__":
+        report = reporter.Reporter(output_report)
+        scope, ip_list, domains_list = report.prepare_scope(scope_file, domain)
+
+        # Create empty job queue
+        jobs = []
+        workbook = "boo"
+        company_info = multiprocess.Process(name="Company Info Report",
+                                            target=report.create_company_info_table,
+                                            args=(domain,))
+        jobs.append(company_info)
+        domain_report = multiprocess.Process(name="Domains Report",
+                                             target=report.create_domain_report_table,
+                                             args=(scope, ip_list, domains_list, verbose))
+        jobs.append(domain_report)
+        # urlcrazy_report = multiprocess.Process(name="Domain Squatting Report",
+        #                                        target=report.create_urlcrazy_table,
+        #                                        args=(workbook, client, domain))
+        # jobs.append(urlcrazy_report)
+        shodan_report = multiprocess.Process(name="Shodan Report",
+                                             target=report.create_shodan_table,
+                                             args=(workbook, ip_list, domains_list))
+        jobs.append(shodan_report)
+        censys_report = multiprocess.Process(name="Censys Report",
+                                             target=report.create_censys_table,
+                                             args=(scope, verbose))
+        jobs.append(censys_report)
+        cloud_report = multiprocess.Process(name="Cloud Report",
+                                            target=report.create_cloud_table,
+                                            args=(client, domain, aws))
+        jobs.append(cloud_report)
+        if files:
+            files_report = multiprocess.Process(name="File Metadata Report",
+                                                target=report.create_foca_table,
+                                                args=(workbook, domain, ext, delete, verbose))
+            jobs.append(files_report)
+
+        for job in jobs:
+            print(green("[+] Starting new process: {}".format(job.name)))
+            job.start()
+        for job in jobs:
+            job.join()
+
+        report.close_out_reporting()
+        print(green("[+] Job's done! Your results are in {}.".format(output_report)))
 
 
 # The PEOPLE module -- Primarily email hunting with some Twitter and LinkedIn sprinkled in
@@ -198,18 +279,35 @@ breaches, pastes, and social media accounts.\n
 Several API keys are required for all of the look-ups: EmailHunter and Twitter.
     """
     asciis.print_art()
-
     print(green("[+] People Module Selected: O.D.I.N. will run only modules for email addresses \
 and social media."))
 
+    # Perform prep work for reporting
     setup_reports(client)
-    output_report = "reports/{}/People_Report.xlsx".format(client)
-    report = reporter.Reporter()
-    with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_company_info_worksheet(workbook, domain)
-        report.create_people_worksheet(workbook, domain, client)
+    output_report = "reports/{}/OSINT_DB.db".format(client)
 
-    print(green("[+] Job's done! Your results are in {}.".format(output_report)))
+    if __name__ == "__main__":
+        report = reporter.Reporter(output_report)
+
+        # Create empty job queue
+        jobs = []
+        company_info = multiprocess.Process(name="Company Info Report",
+                                            target=report.create_company_info_table,
+                                            args=(domain,))
+        jobs.append(company_info)
+        employee_report = multiprocess.Process(name="Employee Report",
+                                               target=report.create_people_table,
+                                               args=(domain, client))
+        jobs.append(employee_report)
+
+        for job in jobs:
+            print(green("[+] Starting new process: {}".format(job.name)))
+            job.start()
+        for job in jobs:
+            job.join()
+
+        report.close_out_reporting()
+        print(green("[+] Job's done! Your results are in {}.".format(output_report)))
 
 
 # The SHODAN module -- Mostly a Shodan CLI
@@ -217,8 +315,8 @@ and social media."))
 and your API key.")
 @click.option('-sf', '--scope-file', help="Name of the file with your IP addresses.", 
               type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
-@click.option('-o', '--output', default="Shodan_Report.xlsx", help="Name of the output xlsx file \
-for the information. Default is Shodan_Report.xlsx.")
+@click.option('-o', '--output', default="Shodan_DB.db", help="Name of the output DB file for the \
+results. Default is Shodan_DB.db.")
 @click.pass_context
 
 def shodan(self, scope_file, output):
@@ -228,18 +326,28 @@ Look-up information on the target IP address(es) using Shodan's API.\n
 A Shodan API key is required.
     """
     asciis.print_art()
-
     print(green("[+] Shodan Module Selected: O.D.I.N. will check Shodan for the provided domains \
 and IPs."))
 
-    output_report = output
-    report = reporter.Reporter()
-    scope, ip_list, domains_list = report.prepare_scope(scope_file)
-    with xlsxwriter.Workbook(output_report) as workbook:
-        report.create_shodan_worksheet(workbook, ip_list, domains_list)
+    if __name__ == "__main__":
+        report = reporter.Reporter(output)
+        scope, ip_list, domains_list = report.prepare_scope(scope_file)
 
-    print(green("[+] Job's done! Your Shodan results are in {}.".format(output)))
+        # Create empty job queue
+        jobs = []
+        shodan_report = multiprocess.Process(name="Shodan Report",
+                                            target=report.create_shodan_table,
+                                            args=(ip_list, domains_list))
+        jobs.append(shodan_report)
 
+        for job in jobs:
+            print(green("[+] Starting new process: {}".format(job.name)))
+            job.start()
+        for job in jobs:
+            job.join()
+
+        report.close_out_reporting()
+        print(green("[+] Job's done! Your results are in {}.".format(output)))
 
 # The VERIFY module -- No OSINT, just a way to check a ownership of a list of IPs
 @odin.command(name='verify', short_help='Verify an external pen test scope. This returns a csv \
@@ -298,31 +406,31 @@ the provided IP addresses."))
 # Everything below here is under construction and a little bit janky ¯\_(ツ)_/¯
 
 # The SSL module -- Run SSLLabs' scanner against the target domain
-@odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
-@click.option('-t', '--target', help='IP address with the certificate. \
-Include the port if it is not 443, e.g. IP:8080', required=True)
-@click.option('--labs', is_flag=True, help='Query Qualys SSL Labs in \
-addition to pulling the certificate.')
-@click.option('--cache', is_flag=True, help='Try to get cached scan data from \
-a completed SSL Labs scan, if available.')
-def ssl(target, labs, cache):
-    """
-    This module can be used to quickly pull an SSL certificate's information for easy reference.
-    It can also be used to run an SSLLabs scan on the target (coming soon).
-    """
-    asciis.print_art()
-    print(green("[+] SSL Module Selected: O.D.I.N. will pull SSL certificate \
-information for the provided IP and port."))
+# @odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
+# @click.option('-t', '--target', help='IP address with the certificate. \
+# Include the port if it is not 443, e.g. IP:8080', required=True)
+# @click.option('--labs', is_flag=True, help='Query Qualys SSL Labs in \
+# addition to pulling the certificate.')
+# @click.option('--cache', is_flag=True, help='Try to get cached scan data from \
+# a completed SSL Labs scan, if available.')
+# def ssl(target, labs, cache):
+#     """
+#     This module can be used to quickly pull an SSL certificate's information for easy reference.
+#     It can also be used to run an SSLLabs scan on the target (coming soon).
+#     """
+#     asciis.print_art()
+#     print(green("[+] SSL Module Selected: O.D.I.N. will pull SSL certificate \
+# information for the provided IP and port."))
     
-    ssl_checker.check_ssl(target)
-    if labs:
-        if cache:
-            print(green("[+] Checking SSL Labs' cache data for this host."))
-            ssl_checker.get_results(target, 2)
-        else:
-            print(green("[+] SSL Labs scanning was enabled, so requesting \
-information from Qualys."))
-            ssl_checker.get_results(target, 1)
+#     ssl_checker.check_ssl(target)
+#     if labs:
+#         if cache:
+#             print(green("[+] Checking SSL Labs' cache data for this host."))
+#             ssl_checker.get_results(target, 2)
+#         else:
+#             print(green("[+] SSL Labs scanning was enabled, so requesting \
+# information from Qualys."))
+#             ssl_checker.get_results(target, 1)
 
 
 # The REP module -- Check a target's reputation against Cymon and URLVoid records

@@ -32,19 +32,19 @@ class PeopleCheck(object):
             twit_auth = tweepy.OAuthHandler(consumer_key, consumer_key_secret)
             twit_auth.set_access_token(access_token, access_token_secret)
             self.twit_api = tweepy.API(twit_auth)
-        except:
+        except Exception:
             self.twit_api = None
             print(yellow("[!] Could not setup OAuth for Twitter API."))
 
         try:
             self.emailhunter_api_key = helpers.config_section_map("EmailHunter")["api_key"]
-        except:
+        except Exception:
             self.emailhunter_api_key = ""
             print(yellow("[!] Could not fetch EmailHunter API key."))
 
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
-        except:
+        except Exception:
             self.contact_api_key = ""
             print(yellow("[!] Could not fetch Full Contact API key."))
 
@@ -62,24 +62,22 @@ class PeopleCheck(object):
             return []
 
     def paste_check(self, email):
-        """Use HIBP's API to check for the target's email in pastes across multiple
-        paste websites, e.g. slexy, ghostbin, pastebin.
+        """Use HIBP's API to check for the target's email in pastes across multiple paste websites.
+        This includes sites like Slexy, Ghostbin, Pastebin.
         """
         paste_api_endpoint = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
         try:
             request = requests.get(paste_api_endpoint)
             return request.text
         except requests.exceptions.RequestException as error:
-            print(red("[!] Error with HIBP request: {}".format(error)))
+            print(red("[!] Error with HaveIBeenPwned request: {}".format(error)))
             return []
         except ValueError:
             # This is likely an "all clear" -- no hits in HIBP
             return []
 
     def full_contact_email(self, email):
-        """Use the Full Contact API to collect social information
-        for the target email address.
-        """
+        """Use the Full Contact API to collect social information for the target email address."""
         if self.contact_api_key is None:
             print(red("[!] No Full Contact API key, so skipping these searches."))
         else:
@@ -107,7 +105,7 @@ class PeopleCheck(object):
         harvest_limit = 100
         harvest_start = 0
 
-        print(green("[+] Running The Harvester"))
+        print(green("[+] Beginning the harvesting of email addresses..."))
         # Search through most of Harvester's supported engines
         # No Baidu because it always seems to hang or take way too long
         print(green("[-] Harvesting Google"))
@@ -144,8 +142,8 @@ class PeopleCheck(object):
         all_emails = google_harvest + bing_harvest + yahoo_harvest
         all_people = link_harvest + jigsaw_harvest
 
-        print(green("[+] TheHarvester has found {} emails, {} names, and \
-{} Twitter handles.".format(len(all_emails), len(all_people), len(twit_harvest))))
+        print(green("[+] The search engines returned {} emails, {} names, and {} Twitter \
+handles.".format(len(all_emails), len(all_people), len(twit_harvest))))
 
         # Return the results for emails, people, and Twitter accounts
         return all_emails, all_people, twit_harvest
@@ -153,8 +151,8 @@ class PeopleCheck(object):
     def harvest_twitter(self, handle):
         """Function to lookup the provided handle on Twitter using Tweepy."""
         if self.twit_api is None:
-            print(yellow("[*] Twitter API access is not setup, \
-so skipping Twitter handle lookups."))
+            print(yellow("[*] Twitter API access is not setup, so skipping Twitter handle \
+lookups."))
         else:
             # Drop the lonely @ Harvester often includes and common false positives
             if handle == '@' or handle == '@-moz-keyframes' or \

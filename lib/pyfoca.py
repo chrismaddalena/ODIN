@@ -113,7 +113,7 @@ class Metaparser:
                 # Appends each piece of information
                 # Output will show ONLY if at least ONE file has data in a column
                 self.container.append([curr_file, created, author, producer, modded, last_saved])
-            except:
+            except Exception:
                 return
         else:
             try:
@@ -233,7 +233,7 @@ searches...").format(len(files), total_count))
             print(green("[+] Please wait..."))
 
         # Download each file that has been added to the 'files' variable
-        print(green("-------------------------------"))
+        # print(green("-------------------------------"))
         for item in files:
             if "..." in item:
                 del files[files.index(item)]

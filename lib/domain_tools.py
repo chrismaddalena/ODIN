@@ -11,6 +11,7 @@ from xml.etree import ElementTree as ET
 import csv
 import base64
 import re
+import time
 import shodan
 from cymon import Cymon
 import censys.certificates
@@ -23,7 +24,6 @@ from colors import red, green, yellow
 from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 import validators
-import time
 from selenium import webdriver
 from lib import helpers
 
@@ -46,7 +46,7 @@ class DomainCheck(object):
         try:
             shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
             self.shoAPI = shodan.Shodan(shodan_api_key)
-        except:
+        except Exception:
             self.shoAPI = None
             print(yellow("[!] Did not find a Shodan API key."))
 
@@ -59,13 +59,13 @@ class DomainCheck(object):
 
         try:
             self.urlvoid_api_key = helpers.config_section_map("URLVoid")["api_key"]
-        except:
+        except Exception:
             self.urlvoid_api_key = ""
             print(yellow("[!] Did not find a URLVoid API key."))
 
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
-        except:
+        except Exception:
             self.contact_api_key = None
             print(yellow("[!] Did not find a Full Contact API key."))
 
@@ -76,19 +76,14 @@ class DomainCheck(object):
                 api_id=censys_api_id, api_secret=censys_api_secret)
             self.cenAddAPI = censys.ipv4.CensysIPv4(
                 api_id=censys_api_id, api_secret=censys_api_secret)
-        except:
+        except Exception:
             self.cenCertAPI = None
             self.cenAddAPI = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
 
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
-            # if chrome_driver_path:
-            #     self.webdriver = webdriver.Chrome(chrome_driver_path)
-            # else:
-            #     self.webdriver = None    
-        except:
-            # self.webdriver = None
+        except Exception:
             self.chrome_driver_path = None
 
     def generate_scope(self, scope_file):
@@ -128,15 +123,15 @@ class DomainCheck(object):
                         startrange = a[0]
                         endrange = a[1]
                         ip_list = list(iter_iprange(startrange, endrange))
-                        for i in ip_list:
-                            a = str(i)
-                            scope.append(a)
+                        for address in ip_list:
+                            str_address = str(address)
+                            scope.append(str_address)
                     elif "/" in i:
                         print(green("[+] {} is a CIDR - converting...".format(i.rstrip())))
                         i = i.rstrip()
                         ip_list = list(IPNetwork(i))
-                        for e in sorted(ip_list):
-                            st = str(e)
+                        for address in sorted(ip_list):
+                            st = str(address)
                             scope.append(st)
                     else:
                         scope.append(i.rstrip())
@@ -298,7 +293,7 @@ class DomainCheck(object):
                     except Exception as error:
                         malicious_ip = 0
                         print(red("[!] There was an error checking {} with Cymon.io!"
-                              .format(domain[1])))
+                                  .format(domain[1])))
 
                     if malicious_domain == 1:
                         cymon_result = "Yes"
@@ -388,7 +383,7 @@ this.".format(domain[1])))
             ip_results = data['results']
             print(green("[+] Cymon search completed!"))
             return domains_results, ip_results
-        except:
+        except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
     def search_cymon_domain(self, target):
@@ -403,7 +398,7 @@ this.".format(domain[1])))
             results = self.cyAPI.domain_lookup(target)
             print(green("[+] Cymon search completed!"))
             return results
-        except:
+        except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
     def run_censys_search_cert(self, target):
@@ -428,7 +423,7 @@ this.".format(domain[1])))
                 print(red("L.. Details: {}".format(error)))
 
     def run_censys_search_address(self, target):
-        """Collect open port/protocol information from Censys for the target IP address. This 
+        """Collect open port/protocol information from Censys for the target IP address. This
         returns a dictionary of protocol information.
 
         A free API key is required.
@@ -508,7 +503,7 @@ this.".format(domain[1])))
             val = soup.find('img', attrs={'class': 'img-responsive'})['src']
             tmp_url = "{}{}".format(dnsdumpster_url, val)
             image_data = base64.b64encode(requests.get(tmp_url).content)
-        except:
+        except Exception:
             image_data = None
         finally:
             results['image_data'] = image_data
@@ -651,6 +646,7 @@ this.".format(domain[1])))
                         search_terms.append(name)
 
         # Modify search terms with some common prefixes and suffixes
+        # We use this new list to avoid endlessly looping
         final_search_terms = []
         for fix in fixes:
             for term in search_terms:
@@ -658,13 +654,20 @@ this.".format(domain[1])))
                 final_search_terms.append(term + "-" + fix)
                 final_search_terms.append(fix + term)
                 final_search_terms.append(term + fix)
+        # Now include our original list of base terms
+        for term in search_terms:
+            final_search_terms.append(term)
 
         # Ensure we have only unique search terms in our list and start hunting
         final_search_terms = list(set(final_search_terms))
 
         for term in final_search_terms:
-            # Check for buckets
-            result = self.validate_bucket(term)
+            # Check for buckets and spaces
+            result = self.validate_aws_bucket(term)
+            bucket_results.append(result)
+            result = self.validate_do_space("ams3", term)
+            bucket_results.append(result)
+            result = self.validate_do_space("nyc3", term)
             bucket_results.append(result)
             # Check for accounts
             result = self.validate_account(term)
@@ -672,7 +675,7 @@ this.".format(domain[1])))
 
         return bucket_results, account_results
 
-    def validate_bucket(self, bucket_name):
+    def validate_aws_bucket(self, bucket_name):
         """Function to check a string to see if it exists as the name of an Amazon S3 bucket."""
         bucket_uri = "http://" + bucket_name + ".s3.amazonaws.com"
         result = {
@@ -694,7 +697,34 @@ this.".format(domain[1])))
             # Check for a 200 OK to indicate a publicly listable bucket
             if request.status_code == 200:
                 result['public'] = True
-        except requests.exceptions.RequestException as error:
+        except requests.exceptions.RequestException:
+            result['exists'] = False
+
+        return result
+
+    def validate_do_space(self, region, space_name):
+        """Function to check a string to see if it exists as the name of a Digital Ocean Space."""
+        space_uri = "http://" + space_name + region + ".digitaloceanspaces.com"
+        result = {
+            'bucketName': space_name,
+            'bucketUri': space_uri,
+            'arn': 'arn:aws:s3:::' + space_name,
+            'exists': False,
+            'public': False
+        }
+
+        try:
+            # Request the Space to check the response
+            request = requests.get(space_uri)
+            # All Space names will get something, so look for the NoSuchBucket status
+            if "NoSuchBucket" in request.text:
+                result['exists'] = False
+            else:
+                result['exists'] = True
+            # Check for a 200 OK to indicate a publicly listable Space
+            if request.status_code == 200:
+                result['public'] = True
+        except requests.exceptions.RequestException:
             result['exists'] = False
 
         return result
@@ -761,17 +791,18 @@ this.".format(domain[1])))
                         return "Level 3: {}".format(target)
                     elif "cloudflare" in target:
                         return "Cloudflare: {}".format(target)
-        except:
-            pass
+                    elif 'unbouncepages.com' in target:
+                        return "Unbounce: {}".format(target)
+                    elif 'secure.footprint.net' in target:
+                        return "Level 3: {}".format(target)
+        except Exception:
+            return "No"
 
     def lookup_robtex_ipinfo(self, ip_address):
         """Function to lookup information about a target IP address with Robtex."""
         if helpers.is_ip(ip_address):
             request = requests.get(self.robtex_api + ip_address)
             ip_json = request.json()
-            
             return ip_json
         else:
             print(red("[!] The provided IP for Robtex address is invalid!"))
-
-    
