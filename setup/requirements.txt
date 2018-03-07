@@ -16,3 +16,5 @@ dnslib
 validators
 lxml
 selenium
+multiprocess
+boto3

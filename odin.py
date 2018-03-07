@@ -9,7 +9,7 @@
   ======   =======   ===  ===  ===
 
 Developer:   Chris "cmaddy" Maddalena
-Version:     1.5 "Muninn"
+Version:     1.6 "Muninn"
 Description: Observation, Detection, and Investigation of Networks
              ODIN was designed to assist with OSINT automation for penetration testing clients and
              their networks, both the types with IP address and social. Provide a client's name,
@@ -24,7 +24,7 @@ import os
 import multiprocess
 import click
 from colors import red, green, yellow
-from lib import reporter, asciis, verification, ssl_checker
+from lib import reporter, asciis, verification
 
 
 def setup_reports(client):
@@ -85,7 +85,7 @@ titles.", required=True)
 @click.option('-d', '--domain', help="The target's domain, such as example.com.", required=True)
 @click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, \
               resolve_path=True), help="A text file containing your in-scope IP addresses and \
-              domain names. List each one on a new line.", required=True)
+domain names. List each one on a new line.", required=True)
 @click.option('--files', is_flag=True, help="Use this option to use Google to search for files \
 under the provided domain (-d) and extract metadata.")
 @click.option('-e', '--ext', default="all", help="File extensions to look for with --file. \
@@ -96,9 +96,11 @@ if you want the downloaded files with --file to be deleted after analysis.")
 too much) domain contact info, Censys certificate information, and additional status messages.")
 @click.option('-w', '--aws', help="A list of AWS S3 bucket names to validate.",  \
               type=click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-wf', '--aws-fixes', help="A list of strings to be added to the start and end of \
+AWS S3 bucket names.", type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.pass_context
 
-def osint(self, client, domain, files, ext, delete, scope_file, aws, verbose):
+def osint(self, client, domain, files, ext, delete, scope_file, aws, aws_fixes, verbose):
     """
 The full O.D.I.N. toolkit:\n
 This module runs all OSINT modules together. O.D.I.N. uses TheHarvester and Hunter.io
@@ -141,10 +143,10 @@ will be skipped."))
                                              target=report.create_domain_report_table,
                                              args=(scope, ip_list, domains_list, verbose))
         jobs.append(domain_report)
-        # urlcrazy_report = multiprocess.Process(name="Domain Squatting Report",
-        #                                        target=report.create_urlcrazy_table,
-        #                                        args=(client, domain))
-        # jobs.append(urlcrazy_report)
+        urlcrazy_report = multiprocess.Process(name="Domain Squatting Report",
+                                               target=report.create_urlcrazy_table,
+                                               args=(client, domain))
+        jobs.append(urlcrazy_report)
         shodan_report = multiprocess.Process(name="Shodan Report",
                                             target=report.create_shodan_table,
                                             args=(ip_list, domains_list))
@@ -155,7 +157,7 @@ will be skipped."))
         jobs.append(censys_report)
         cloud_report = multiprocess.Process(name="Cloud Report",
                                             target=report.create_cloud_table,
-                                            args=(client, domain, aws))
+                                            args=(client, domain, aws, aws_fixes))
         jobs.append(cloud_report)
         if files:
             files_report = multiprocess.Process(name="File Metadata Report",
@@ -191,9 +193,11 @@ files with --file to be deleted after analysis.")
 too much) domain contact info, Censys certificate information, and additional status messages.")
 @click.option('-w', '--aws', help="A list of AWS S3 bucket names to validate.", \
               type=click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-wf', '--aws-fixes', help="A list of strings to be added to the start and end of \
+AWS S3 bucket names.", type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.pass_context
 
-def domains(self, client, domain, files, ext, delete, scope_file, aws, verbose):
+def domains(self, client, domain, files, ext, delete, scope_file, aws, aws_fixes, verbose):
     """
 The Domain module uses various tools and APIs to collect information on the provided IP addresses
 and/or domains.\n
@@ -229,10 +233,10 @@ will be skipped."))
                                              target=report.create_domain_report_table,
                                              args=(scope, ip_list, domains_list, verbose))
         jobs.append(domain_report)
-        # urlcrazy_report = multiprocess.Process(name="Domain Squatting Report",
-        #                                        target=report.create_urlcrazy_table,
-        #                                        args=(workbook, client, domain))
-        # jobs.append(urlcrazy_report)
+        urlcrazy_report = multiprocess.Process(name="Domain Squatting Report",
+                                               target=report.create_urlcrazy_table,
+                                               args=(workbook, client, domain))
+        jobs.append(urlcrazy_report)
         shodan_report = multiprocess.Process(name="Shodan Report",
                                              target=report.create_shodan_table,
                                              args=(workbook, ip_list, domains_list))
@@ -243,7 +247,7 @@ will be skipped."))
         jobs.append(censys_report)
         cloud_report = multiprocess.Process(name="Cloud Report",
                                             target=report.create_cloud_table,
-                                            args=(client, domain, aws))
+                                            args=(client, domain, aws, aws_fixes))
         jobs.append(cloud_report)
         if files:
             files_report = multiprocess.Process(name="File Metadata Report",
@@ -367,7 +371,7 @@ def verify(self, scope_file, output, cidr, client):
     """
 The Verify module:
 Uses reverse DNS, ARIN, and SSL certificate information to help you verify a testing scope.
-Sometimes clients provide a bad IP address or two and you may not realize it. ¯\_(ツ)_/¯\n
+Sometimes clients provide a bad IP address or two and you may not realize it.\n
 
 This is only for verifying IP addresses. Domains may not have public ownership information
 available. Compare the IP ownership information from ARIN and any certificate information that

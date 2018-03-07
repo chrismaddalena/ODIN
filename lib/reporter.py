@@ -11,6 +11,8 @@ import sqlite3
 from xml.etree import ElementTree  as ET
 from colors import red, green, yellow
 from lib import domain_tools, email_tools, pyfoca, helpers
+import sys
+import os
 
 
 class Reporter(object):
@@ -28,6 +30,13 @@ class Reporter(object):
         self.DC = domain_tools.DomainCheck()
         self.PC = email_tools.PeopleCheck()
         # Create the report database -- NOT in memory to allow for multiprocessing and archiving
+        if os.path.isfile(report_name):
+            confirm = input(red("[!] A report for this client already exists. Are you sure you want to overwrite it? (Y\\N)"))
+            if confirm == "Y" or confirm == "y":
+                os.remove(report_name)
+            else:
+                print(red("[!] Exiting..."))
+                exit()
         self.conn = sqlite3.connect(report_name)
         self.c = self.conn.cursor()
 
@@ -144,18 +153,24 @@ the company's primary domain used for their website.".format(domain)))
         # Create the DNS table for holding the domains' DNS records
         self.c.execute('''CREATE TABLE 'DNS'
                     ('Domain' text, 'NSRecords' text, 'ARecords' text, 'MXRecords' text,
-                    'TXTRecords' text, 'SOARecords' text)''')
+                    'TXTRecords' text, 'SOARecords' text, 'VulnerableCacheSnooping' text)''')
 
         # Get the DNS records for each domain
         for domain in domains_list:
             # Get the NS records
             try:
                 temp = []
-                ns_records = self.DC.get_dns_record(domain, "NS")
-                for rdata in ns_records.response.answer:
+                ns_records_list = self.DC.get_dns_record(domain, "NS")
+                for rdata in ns_records_list.response.answer:
                     for item in rdata.items:
                         temp.append(item.to_text())
                 ns_records = ", ".join(temp)
+                # Record name server that resolve cached queries
+                vulnerable_dns_servers = []
+                for nameserver in temp:
+                    result = self.DC.check_dns_cache(nameserver.strip("."))
+                    if result:
+                        vulnerable_dns_servers.append(result)
             except:
                 ns_records = "None"
             # Get the A records
@@ -199,9 +214,12 @@ the company's primary domain used for their website.".format(domain)))
             except:
                 soa_records = "None"
             # INSERT the DNS records into the table
-            self.c.execute("INSERT INTO 'DNS' VALUES (?,?,?,?,?,?)",
-                           (domain, ns_records, a_records, mx_records, txt_records, soa_records))
+            self.c.execute("INSERT INTO 'DNS' VALUES (?,?,?,?,?,?,?)",
+                           (domain, ns_records, a_records, mx_records, txt_records, soa_records,
+                            ", ".join(vulnerable_dns_servers)))
             self.conn.commit()
+
+            sys.exit()
 
         # Create the Subdomains table for recording subdomain info for each domain
         self.c.execute('''CREATE TABLE 'Subdomains'
@@ -453,7 +471,6 @@ the company's primary domain used for their website.".format(domain)))
                 except:
                     print(red("[!] There was an error getting the data for {}.".format(domain)))
 
-    # TODO: Convert URLCrazy to new database storage
     def create_urlcrazy_table(self, client, domain):
         """Function to add a worksheet for URLCrazy results."""
         # Check if urlcrazy is available and proceed with recording results
@@ -461,25 +478,19 @@ the company's primary domain used for their website.".format(domain)))
         if not urlcrazy_results:
             pass
         else:
-            # Setup urlcrazy worksheet
-            urlcrazy_worksheet = workbook.add_worksheet("URLCrazy")
-            bold = workbook.add_format({'bold': True, 'font_color': 'blue'})
-            row = 0
-
-            # Write headers for typosquatting domain table
-            urlcrazy_worksheet.write(row, 0, "Typosquatting", bold)
-            row += 1
-            urlcrazy_worksheet.write(row, 0, "Domain", bold)
-            urlcrazy_worksheet.write(row, 1, "A-Records", bold)
-            urlcrazy_worksheet.write(row, 2, "MX-Records", bold)
-            urlcrazy_worksheet.write(row, 3, "Malicious", bold)
-            row += 1
+            # Prepare for URLCrazy searches
+            self.c.execute('''CREATE TABLE 'UrlcrazyResults'
+                        ('Domain' text, 'A' text, 'MX' text, 'Malicious' text)''')
+            # Record each typosquatted domain
             for result in urlcrazy_results:
-                urlcrazy_worksheet.write(row, 0, result['domain'])
-                urlcrazy_worksheet.write(row, 1, result['a-records'])
-                urlcrazy_worksheet.write(row, 2, result['mx-records'])
-                urlcrazy_worksheet.write(row, 3, result['malicious'])
-                row += 1
+                domain = result['domain']
+                a_records = result['a-records']
+                mx_records = result['mx-records']
+                malicious = result['malicious']
+
+                self.c.execute("INSERT INTO UrlcrazyResults VALUES (?,?,?,?)",
+                                (domain, a_records, mx_records, malicious))
+                self.conn.commit()
 
     def create_shodan_table(self, ip_addresses, domains_list):
         """Function to create a Shodan table with Shodan search results."""
@@ -513,7 +524,6 @@ the company's primary domain used for their website.".format(domain)))
         self.c.execute('''CREATE TABLE 'ShodanHostLookups'
                     ('IP' text, 'OS' text, 'Organization' text, 'Port' text, 'Banner' text)''')
 
-        vuln_data = []
         for ip in ip_addresses:
             try:
                 results = self.DC.run_shodan_lookup(ip)
@@ -531,6 +541,7 @@ the company's primary domain used for their website.".format(domain)))
                 pass
 
         # TODO: Figure out why this data is so often wrong/oudated and if it should be included going forward
+        # vuln_data = []
         #         try:
         #             # Check for any vulns Shodan knows about
         #             for item in results["vulns"]:
@@ -585,9 +596,6 @@ the company's primary domain used for their website.".format(domain)))
             try:
                 results = self.DC.run_censys_search_address(target)
                 for result in results:
-                    host = target
-                    ip_address = result['ip']
-                    location = result['location.country']
                     ports = []
                     for port in result["protocols"]:
                         ports.append(port)
@@ -817,10 +825,10 @@ Please try again."))
 
         print(green("[+] Cymon search completed!"))
 
-    def create_cloud_table(self, client, domain, wordlist=None):
+    def create_cloud_table(self, client, domain, wordlist=None, fix_wordlist=None):
         """Function to add a cloud worksheet for findings related to AWS."""
         print(green("[+] Looking for AWS buckets and accounts for target..."))
-        verified_buckets, verified_accounts = self.DC.enumerate_aws(client, domain, wordlist)
+        verified_buckets, verified_accounts = self.DC.enumerate_buckets(client, domain, wordlist, fix_wordlist)
 
         if verified_buckets and verified_accounts:
             # Setup cloud table

@@ -48,6 +48,12 @@ class PeopleCheck(object):
             self.contact_api_key = ""
             print(yellow("[!] Could not fetch Full Contact API key."))
 
+        try:
+            self.pwned_password_list = helpers.config_section_map("PwnedPasswords")["list_file"]
+        except Exception:
+            self.pwned_password_list = ""
+            print(yellow("[!] No Pwned passwords list was found. Refer to https://haveibeenpwned.com/Passwords."))
+
     def pwn_check(self, email):
         """Use HIBP's API to check for the target's email in public security breaches."""
         pwned_api_endpoint = "https://haveibeenpwned.com/api/breachedaccount/{}".format(email)
@@ -75,6 +81,18 @@ class PeopleCheck(object):
         except ValueError:
             # This is likely an "all clear" -- no hits in HIBP
             return []
+
+    def password_check(self, keyword):
+        """Search a copy of the HaveIBeenPwned passwords list for passwords that include the
+        provided keyword. This can be something like the client's name, initials, etc.
+        """
+        # password_api_endpoint = "https://api.pwnedpasswords.com/pwnedpassword/"
+        if self.pwned_password_list:
+            # Do Something
+            print("Nothing to see here")
+        else:
+            return None
+
 
     def full_contact_email(self, email):
         """Use the Full Contact API to collect social information for the target email address."""

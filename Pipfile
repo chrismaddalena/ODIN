@@ -1,0 +1,34 @@
+[[source]]
+
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+
+shodan = "*"
+python-whois = "*"
+bs4 = "*"
+ansicolors = "*"
+netaddr = "*"
+cymon = "*"
+tweepy = "*"
+ipwhois = "*"
+pyopenssl = "*"
+IPy = "*"
+dnspython = "*"
+censys = "*"
+PyPDF2 = "*"
+dnslib = "*"
+validators = "*"
+lxml = "*"
+selenium = "*"
+multiprocess = "*"
+boto3 = "*"
+
+[dev-packages]
+
+
+[requires]
+
+python_version = "3.6"

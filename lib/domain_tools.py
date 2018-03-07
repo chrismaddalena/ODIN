@@ -17,6 +17,8 @@ from cymon import Cymon
 import censys.certificates
 import censys.ipv4
 import whois
+import boto3
+from botocore.exceptions import ClientError
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
 import requests
@@ -158,11 +160,73 @@ class DomainCheck(object):
                 return resp.text.encode('ascii', 'ignore')
 
     def get_dns_record(self, domain, record_type):
-        """Simple function to get the specified DNS record for the
-        target domain.
-        """
+        """Simple function to get the specified DNS record for the target domain."""
         answer = dns.resolver.query(domain, record_type)
         return answer
+
+    def check_dns_cache(self, name_server):
+        """Function to check if the given name server is vulnerable to DNS cache snooping.
+
+        Code adapted for ODIN from work done by z0mbiehunt3r with DNS Snoopy.
+        https://github.com/z0mbiehunt3r/dns-snoopy
+        """
+        vulnerable_dns_servers = ""
+        # Domains that are commonly resolved and can be used for testing DNS servers
+        common_domains = ["google.es", "google.com", "facebook.com", "youtube.com", "yahoo.com",
+                          "live.com", "baidu.com", "wikipedia.org", "blogger.com", "msn.com",
+                          "twitter.com", "wordpress.com", "amazon.com", "adobe.com",
+                          "microsoft.com", "amazon.co.uk", "facebook.com"]
+
+        answers = self.get_dns_record(name_server, "A")
+        nameserver_ip = str(answers.rrset[0])
+        for domain in common_domains:
+            if self.dns_cache_request(domain, nameserver_ip):
+                print(green("[+] {} resolved a cached query for {}.".format(name_server, domain)))
+                vulnerable_dns_servers = name_server
+                break
+
+        return vulnerable_dns_servers
+
+    def dns_cache_request(self, domain, nameserver_ip, checkttl=False, dns_snooped=False):
+        """Function to perform cache requests against the name server for the provided domain."""
+        resolver = dns.resolver
+        query = dns.message.make_query(domain, dns.rdatatype.A, dns.rdataclass.IN)
+        # Negate recursion desired bit
+        query.flags ^= dns.flags.RD
+        dns_response = dns.query.udp(q=query, where=nameserver_ip)
+        """
+        Check length major of 0 to avoid those answers with root servers in authority section
+        ;; QUESTION SECTION:
+        ;www.facebook.com.        IN    A
+        
+        ;; AUTHORITY SECTION:
+        com.            123348    IN    NS    d.gtld-servers.net.
+        com.            123348    IN    NS    m.gtld-servers.net.
+        [...]
+        com.            123348    IN    NS    a.gtld-servers.net.
+        com.            123348    IN    NS    g.gtld-servers.net.    `
+        """
+        if len(dns_response.answer) > 0 and checkttl:
+            # Get cached TTL
+            ttl_cached = dns_response.answer[0].ttl
+            # First, get NS for the first cached domain
+            cached_domain_dns = self.get_dns_record(domain, "NS")[0]
+            # After, resolve its IP address
+            cached_domain_dns_IP = self.get_dns_record(cached_domain_dns, "A")
+            # Now, obtain original TTL
+            query = dns.message.make_query(domain, dns.rdatatype.A, dns.rdataclass.IN)
+            query.flags ^= dns.flags.RD
+
+            dns_response = dns.query.udp(q=query, where=cached_domain_dns_IP)
+            ttl_original = dns_response.answer[0].ttl
+            cached_ago = ttl_original-ttl_cached
+            print("[+] %s was cached about %s ago aprox. [%s]" %
+                  (domain, time.strftime('%H:%M:%S', time.gmtime(cached_ago)), dns_snooped), "plus")
+
+        elif len(dns_response.answer) > 0:
+            return 1
+
+        return 0
 
     def run_whois(self, domain):
         """Perform a whois lookup for the provided target domain. The whois results are returned
@@ -220,7 +284,7 @@ class DomainCheck(object):
         """
         # Check to see if urlcrazy is available
         try:
-            subprocess.call("urlcrazy")
+            subprocess.call("/Users/cmaddy/Lab/URLCrazy/urlcrazy")
             urlcrazy_present = True
         except OSError as error:
             if error.errno == os.errno.ENOENT:
@@ -244,7 +308,7 @@ class DomainCheck(object):
             squatted = {}
             print(green("[+] Running urlcrazy for {}".format(target)))
             try:
-                cmd = "urlcrazy -f csv -o '{}' {}".format(outfile, target)
+                cmd = "/Users/cmaddy/Lab/URLCrazy/urlcrazy -f csv -o '{}' {}".format(outfile, target)
                 with open(os.devnull, "w") as devnull:
                     subprocess.check_call(cmd, stdout=devnull, shell=True)
                 with open(outfile, "r") as results:
@@ -624,7 +688,7 @@ this.".format(domain[1])))
 
         return ip_history
 
-    def enumerate_aws(self, client, domain, wordlist=None):
+    def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
         """Function to search for AWS S3 buckets and accounts. Default search terms are the
         client, domain, and domain without its TLD. A wordlist is optional.
 
@@ -633,17 +697,28 @@ this.".format(domain[1])))
         # Take the user input as the initial list of keywords here
         # Both example.com and example are valid bucket names, so domain+tld and domain are tried
         search_terms = [domain, domain.split(".")[0], client.replace(" ", "").lower()]
+        # Potentially valid and interesting keywords that might be used a prefix or suffix
+        fixes = ["apps", "downloads", "software", "deployment", "qa", "dev", "test", "vpn",
+                 "secret", "user", "confidential", "invoice", "config", "backup", "bak",
+                 "xls", "csv", "ssn", "resources", "web", "testing"]
         bucket_results = []
         account_results = []
-        fixes = ["apps", "downloads", "software", "deployment"]
 
-        # Add wordlist terms to our list of search terms
+        # Add user-provided wordlist terms to our list of search terms
         if wordlist is not None:
             with open(wordlist, "r") as bucket_list:
                 for name in bucket_list:
                     name = name.strip()
                     if name and not name.startswith('#'):
                         search_terms.append(name)
+
+        # Add user-provided list of pre/suffixes to our list of fixes
+        if fix_wordlist is not None:
+            with open(fix_wordlist, "r") as new_fixes:
+                for fix in new_fixes:
+                    fix = fix.strip()
+                    if fix and not fix.startswith('#'):
+                        fixes.append(fix)
 
         # Modify search terms with some common prefixes and suffixes
         # We use this new list to avoid endlessly looping
@@ -663,11 +738,13 @@ this.".format(domain[1])))
 
         for term in final_search_terms:
             # Check for buckets and spaces
-            result = self.validate_aws_bucket(term)
+            result = self.validate_bucket('head', term)
             bucket_results.append(result)
             result = self.validate_do_space("ams3", term)
             bucket_results.append(result)
             result = self.validate_do_space("nyc3", term)
+            bucket_results.append(result)
+            result = self.validate_do_space("sgp1", term)
             bucket_results.append(result)
             # Check for accounts
             result = self.validate_account(term)
@@ -675,8 +752,65 @@ this.".format(domain[1])))
 
         return bucket_results, account_results
 
-    def validate_aws_bucket(self, bucket_name):
-        """Function to check a string to see if it exists as the name of an Amazon S3 bucket."""
+    def validate_bucket(self, validation_type, bucket_name):
+        """Helper function used by validate_bucket_head()."""
+        validation_functions = {
+            'head': self.validate_bucket_head
+        }
+        if validation_functions[validation_type]:
+            return validation_functions[validation_type](bucket_name)
+
+
+    def validate_bucket_head(self, bucket_name):
+        """Function to check a string to see if it exists as the name of an Amazon S3 bucket. This
+        version uses awscli to identify a bucket and then uses Requests to check public access. The
+        benefit of this is awscli will gather information from buckets that are otherwise
+        inaccessible via web requests.
+        """
+        # This test requires authentication
+        # Warning: Check credentials before use
+        error_values = {
+            '400': True,
+            '403': True,
+            '404': False
+        }
+        result = {
+            'bucketName': bucket_name,
+            'bucketUri': 'http://' + bucket_name + '.s3.amazonaws.com',
+            'arn': 'arn:aws:s3:::' + bucket_name,
+            'exists': False,
+            'public': False
+        }
+
+        client = boto3.client('s3')
+        try:
+            client.head_bucket(Bucket=bucket_name)
+            result['exists'] = True
+            try:
+                # Request the bucket to check the response
+                request = requests.get(result['bucketUri'])
+                # All bucket names will get something, so look for the NoSuchBucket status
+                if "NoSuchBucket" in request.text:
+                    result['exists'] = False
+                else:
+                    result['exists'] = True
+                # Check for a 200 OK to indicate a publicly listable bucket
+                if request.status_code == 200:
+                    result['public'] = True
+                    print(yellow("[*] Found a public bucket -- {}".format(result['buckerName'])))
+            except requests.exceptions.RequestException:
+                result['exists'] = False
+        except ClientError as e:
+            result['exists'] = error_values[e.response['Error']['Code']]
+
+        return result
+
+    def validate_bucket_noncli(self, bucket_name):
+        """Function to check a string to see if it exists as the name of an Amazon S3 bucket. This
+        version uses only Requests and the bucket's URL.
+
+        This is deprecated, but here just in case.
+        """
         bucket_uri = "http://" + bucket_name + ".s3.amazonaws.com"
         result = {
             'bucketName': bucket_name,
@@ -708,7 +842,7 @@ this.".format(domain[1])))
         result = {
             'bucketName': space_name,
             'bucketUri': space_uri,
-            'arn': 'arn:aws:s3:::' + space_name,
+            'arn': 'arn:do:space:::' + space_name,
             'exists': False,
             'public': False
         }
