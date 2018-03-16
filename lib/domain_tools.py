@@ -284,7 +284,7 @@ class DomainCheck(object):
         """
         # Check to see if urlcrazy is available
         try:
-            subprocess.call("/Users/cmaddy/Lab/URLCrazy/urlcrazy")
+            subprocess.call("urlcrazy")
             urlcrazy_present = True
         except OSError as error:
             if error.errno == os.errno.ENOENT:
@@ -308,7 +308,7 @@ class DomainCheck(object):
             squatted = {}
             print(green("[+] Running urlcrazy for {}".format(target)))
             try:
-                cmd = "/Users/cmaddy/Lab/URLCrazy/urlcrazy -f csv -o '{}' {}".format(outfile, target)
+                cmd = "urlcrazy -f csv -o '{}' {}".format(outfile, target)
                 with open(os.devnull, "w") as devnull:
                     subprocess.check_call(cmd, stdout=devnull, shell=True)
                 with open(outfile, "r") as results:
