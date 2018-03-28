@@ -219,8 +219,6 @@ the company's primary domain used for their website.".format(domain)))
                             ", ".join(vulnerable_dns_servers)))
             self.conn.commit()
 
-            sys.exit()
-
         # Create the Subdomains table for recording subdomain info for each domain
         self.c.execute('''CREATE TABLE 'Subdomains'
             ('Domain' text, 'Subdomain' text, 'IP' text, 'ASN' text, 'Provider' text,
