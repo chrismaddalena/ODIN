@@ -102,9 +102,6 @@ class Metaparser:
                 if "\\" in curr_file:
                     curr_file = curr_file.replace("\\", "")
 
-                # Trim information if it's too long
-                if len(curr_file) > 15:
-                    curr_file = curr_file[:15] + "..." + curr_file[-13:]
                 if len(producer) > 30:
                     producer = producer[:20] + " [snipped] "
                 if len(author) > 20:
@@ -163,10 +160,6 @@ install extract' in terminal."))
                 if "\\" in curr_file:
                     curr_file = curr_file.replace("\\", "")
 
-                # Trim the file name if it's longer than 15 characters
-                if len(curr_file) > 15:
-                    curr_file = curr_file[:9] + "..." + curr_file[-13:]
-
                 if author != "-" or date != "-" or generator != "-" or created != "-" or \
                     producer != "-" or modded != "-" or last_saved != "-":
                     self.container.append([" | " + curr_file, created, author,
@@ -221,10 +214,7 @@ searches...").format(len(files), total_count))
         spaces = 0
         for item in files:
             item = item[item.rfind("/")+1:]
-            if len(item) > 10:
-                short_file = item[:10] + "..." + item[-10:]
-            else:
-                short_file = item
+            short_file = item
             if len(short_file) > spaces:
                 spaces = len(short_file) + 3
 
@@ -233,7 +223,6 @@ searches...").format(len(files), total_count))
             print(green("[+] Please wait..."))
 
         # Download each file that has been added to the 'files' variable
-        # print(green("-------------------------------"))
         for item in files:
             if "..." in item:
                 del files[files.index(item)]
@@ -245,10 +234,7 @@ searches...").format(len(files), total_count))
                 with open('reports/pyfoca-downloads/%s' % pdf_name, 'wb') as file_descriptor:
                     file_descriptor.write(source)
                 pdf_name = pdf_name.replace("(", "\(").replace(")", "\)")
-                if len(pdf_name) > 10:
-                    short_file = pdf_name[:10] + "..." + pdf_name[-10:]
-                else:
-                    short_file = pdf_name
+                short_file = pdf_name
             except Exception as error:
                 print(red("[!] There was an error downloading a file from this URL:\n{}"
                       .format(item)))
