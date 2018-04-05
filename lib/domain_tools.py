@@ -797,7 +797,7 @@ this.".format(domain[1])))
                 # Check for a 200 OK to indicate a publicly listable bucket
                 if request.status_code == 200:
                     result['public'] = True
-                    print(yellow("[*] Found a public bucket -- {}".format(result['buckerName'])))
+                    print(yellow("[*] Found a public bucket -- {}".format(result['bucketName'])))
             except requests.exceptions.RequestException:
                 result['exists'] = False
         except ClientError as e:
