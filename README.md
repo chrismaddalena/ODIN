@@ -174,7 +174,7 @@ Currently only the Company API is used. There are plans to incorproate the Peopl
 
 No, but it is being considered. However, brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into ODIN without just running the commands for those tools. For subdomain discovery, it's hard to beat Aquatone right now and there's alwas Fierce and DNSRecon.
 
-For now, ODIN leverages DNS Dumpster, DNSRail, and NetCraft to collect subdomains to get you started.
+For now, ODIN leverages DNS Dumpster, DNSTrail, and NetCraft to collect subdomains to get you started.
 
 **I don't have X API key, can I still use ODIN?**
 
