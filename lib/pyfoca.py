@@ -177,9 +177,6 @@ in terminal."))
         global TOTAL_FILES
         files = []
 
-        print(green("[+] Domain: {}".format(self.domain_name)))
-        print(green("[+] Attempting to gather links from Google searches..."))
-
         total_count = 0
 
         for extension in self.exts:
