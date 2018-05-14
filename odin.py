@@ -9,7 +9,7 @@
   ======   =======   ===  ===  ===
 
 Developer:   Chris "cmaddy" Maddalena
-Version:     1.6 "Muninn"
+Version:     1.7 "Muninn"
 Description: Observation, Detection, and Investigation of Networks
              ODIN was designed to assist with OSINT automation for penetration testing clients and
              their networks, both the types with IP address and social. Provide a client's name,
@@ -93,7 +93,7 @@ Default is 'all' or you can pick from key, pdf, doc, docx, xls, xlsx, and ppt.")
 @click.option('-x', '--delete', is_flag=True, help="Set this option \
 if you want the downloaded files with --file to be deleted after analysis.")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output for more (maybe way \
-too much) domain contact info, Censys certificate information, and additional status messages.")
+too much) domain contact info.")
 @click.option('-w', '--aws', help="A list of AWS S3 bucket names to validate.",  \
               type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.option('-wf', '--aws-fixes', help="A list of strings to be added to the start and end of \
@@ -151,10 +151,6 @@ will be skipped."))
                                             target=report.create_shodan_table,
                                             args=(ip_list, domains_list))
         jobs.append(shodan_report)
-        censys_report = multiprocess.Process(name="Censys Report",
-                                             target=report.create_censys_table,
-                                             args=(scope, verbose))
-        jobs.append(censys_report)
         cloud_report = multiprocess.Process(name="Cloud Report",
                                             target=report.create_cloud_table,
                                             args=(client, domain, aws, aws_fixes))
@@ -190,7 +186,7 @@ Default is 'all' or you can pick from key, pdf, doc, docx, xls, xlsx, and ppt.")
 @click.option('-x', '--delete', is_flag=True, help="Set this option if you want the downloaded \
 files with --file to be deleted after analysis.")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output for more (maybe way \
-too much) domain contact info, Censys certificate information, and additional status messages.")
+too much) domain contact info.")
 @click.option('-w', '--aws', help="A list of AWS S3 bucket names to validate.", \
               type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.option('-wf', '--aws-fixes', help="A list of strings to be added to the start and end of \
@@ -241,10 +237,6 @@ will be skipped."))
                                              target=report.create_shodan_table,
                                              args=(workbook, ip_list, domains_list))
         jobs.append(shodan_report)
-        censys_report = multiprocess.Process(name="Censys Report",
-                                             target=report.create_censys_table,
-                                             args=(scope, verbose))
-        jobs.append(censys_report)
         cloud_report = multiprocess.Process(name="Cloud Report",
                                             target=report.create_cloud_table,
                                             args=(client, domain, aws, aws_fixes))
