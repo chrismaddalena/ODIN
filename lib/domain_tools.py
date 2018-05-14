@@ -14,8 +14,6 @@ import re
 import time
 import shodan
 from cymon import Cymon
-import censys.certificates
-import censys.ipv4
 import whois
 import boto3
 from botocore.exceptions import ClientError
@@ -28,6 +26,7 @@ import dns.resolver
 import validators
 from selenium import webdriver
 from lib import helpers
+import click
 
 
 class DomainCheck(object):
@@ -38,7 +37,7 @@ class DomainCheck(object):
     # Sleep time for Google and Shodan
     sleep = 10
     # Cymon.io API endpoint
-    cymon_api = "https://cymon.io/api/nexus/v1"
+    cymon_api = "https://api.cymon.io/v2"
     # Robtex's free API endpoint
     robtex_api = "https://freeapi.robtex.com/ipquery/"
 
@@ -72,12 +71,9 @@ class DomainCheck(object):
             print(yellow("[!] Did not find a Full Contact API key."))
 
         try:
-            censys_api_id = helpers.config_section_map("Censys")["api_id"]
-            censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
-            self.cenCertAPI = censys.certificates.CensysCertificates(
-                api_id=censys_api_id, api_secret=censys_api_secret)
-            self.cenAddAPI = censys.ipv4.CensysIPv4(
-                api_id=censys_api_id, api_secret=censys_api_secret)
+            self.censys_api_id = helpers.config_section_map("Censys")["api_id"]
+            self.censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
+            self.CEN_API_URL = "https://censys.io/api/v1"
         except Exception:
             self.cenCertAPI = None
             self.cenAddAPI = None
@@ -87,6 +83,14 @@ class DomainCheck(object):
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
         except Exception:
             self.chrome_driver_path = None
+
+        try:
+            self.boto3_client = boto3.client('s3')
+            # Test connecting to S3 with the creds supplied to `aws configure`
+            self.boto3_client.head_bucket(Bucket="hostmenow")
+        except Exception:
+            self.boto3_client = None
+            print(yellow("[!] Could not create an AWS client with the supplied secrets."))
 
     def generate_scope(self, scope_file):
         """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
@@ -311,7 +315,7 @@ class DomainCheck(object):
                 cmd = "urlcrazy -f csv -o '{}' {}".format(outfile, target)
                 with open(os.devnull, "w") as devnull:
                     subprocess.check_call(cmd, stdout=devnull, shell=True)
-                with open(outfile, "r") as results:
+                with open(outfile, "r", encoding = "ISO-8859-1") as results:
                     reader = csv.DictReader(row.replace("\0", "") for row in results)
                     for row in reader:
                         if len(row) != 0:
@@ -333,11 +337,14 @@ class DomainCheck(object):
                 urlcrazy_results = []
                 for domain in squatted:
                     try:
-                        request = session.get(cymon_api + "/domain/" + domain[0])
+                        request = session.get(cymon_api + "/ioc/search/domain/" + domain[0])
                         # results = json.loads(r.text)
 
                         if request.status_code == 200:
-                            malicious_domain = 1
+                            if request.json()['total'] > 0:
+                                malicious_domain = 1
+                            else:
+                                malicious_domain = 0
                         else:
                             malicious_domain = 0
                     except Exception as error:
@@ -347,26 +354,25 @@ class DomainCheck(object):
 
                     # Search for domains and IP addresses tied to the A-record IP
                     try:
-                        r = session.get(cymon_api + "/ip/" + domain[1])
+                        r = session.get(cymon_api + "/ioc/search/ip/" + domain[1])
                         # results = json.loads(r.text)
 
                         if r.status_code == 200:
-                            malicious_ip = 1
+                            if request.json()['total'] > 0:
+                                malicious_ip = 1
+                            else:
+                                malicious_ip = 0
                         else:
                             malicious_ip = 0
                     except Exception as error:
                         malicious_ip = 0
                         print(red("[!] There was an error checking {} with Cymon.io!"
-                                  .format(domain[1])))
+                                    .format(domain[1])))
 
                     if malicious_domain == 1:
                         cymon_result = "Yes"
-                        print(yellow("[*] {} was flagged as malicious, so consider looking into \
-this.".format(domain[0])))
                     elif malicious_ip == 1:
                         cymon_result = "Yes"
-                        print(yellow("[*] {} was flagged as malicious, so consider looking into \
-this.".format(domain[1])))
                     else:
                         cymon_result = "No"
 
@@ -378,7 +384,6 @@ this.".format(domain[1])))
                     urlcrazy_results.append(temp)
 
                 os.rename(outfile, final_csv)
-                print(green("[+] The full urlcrazy results are in {}.".format(final_csv)))
                 return urlcrazy_results
 
             except Exception as error:
@@ -437,7 +442,6 @@ this.".format(domain[1])))
 
         An API key is not required, but is recommended.
         """
-        print(green("[+] Checking Cymon for domains associated with the provided IP address."))
         try:
             # Search for IP and domains tied to the IP
             data = self.cyAPI.ip_domains(target)
@@ -456,7 +460,6 @@ this.".format(domain[1])))
 
         An API key is not required, but is recommended.
         """
-        print(green("[+] Checking Cymon for domains associated with the provided IP address."))
         try:
             # Search for domains and IP addresses tied to the domain
             results = self.cyAPI.domain_lookup(target)
@@ -474,17 +477,39 @@ this.".format(domain[1])))
 
         A free API key is required.
         """
-        if self.cenCertAPI is None:
+        if self.CEN_API_URL is None:
             pass
         else:
             print(green("[+] Performing Censys certificate search for {}".format(target)))
+            params = {"query" : target}
             try:
                 fields = ["parsed.subject_dn", "parsed.issuer_dn"]
-                certs = self.cenCertAPI.search(target, fields=fields)
+                results = requests.post(self.CEN_API_URL + "/search/certificates", json = params, auth=(self.censys_api_id, self.censys_api_secret))
+                certs = results.json()
                 return certs
             except Exception as error:
                 print(red("[!] Error collecting Censys certificate data for {}.".format(target)))
                 print(red("L.. Details: {}".format(error)))
+
+    def parse_cert_subdomains(self, certdata):
+        """Accepts Censys certificate data and parses out subdomain information."""
+        subdomains = []
+        for cert in certdata['results']:
+            if "," in cert["parsed.subject_dn"]:
+                pos = cert["parsed.subject_dn"].find('CN=')+3
+            else:
+                pos = 3
+            tmp = cert["parsed.subject_dn"][pos:]
+            if "," in tmp:
+                pos = tmp.find(",")
+                tmp = tmp[:pos]
+            if "." not in tmp:
+                continue
+            
+            subdomains.append(tmp)
+
+        subdomains = set(subdomains)
+        return subdomains
 
     def run_censys_search_address(self, target):
         """Collect open port/protocol information from Censys for the target IP address. This
@@ -512,7 +537,6 @@ this.".format(domain[1])))
         if not helpers.is_ip(domain):
             try:
                 if self.urlvoid_api_key != "":
-                    print(green("[+] Checking reputation for {} with URLVoid".format(domain)))
                     url = "http://api.urlvoid.com/api1000/{}/host/{}"\
                         .format(self.urlvoid_api_key, domain)
                     response = requests.get(url)
@@ -736,19 +760,23 @@ this.".format(domain[1])))
         # Ensure we have only unique search terms in our list and start hunting
         final_search_terms = list(set(final_search_terms))
 
-        for term in final_search_terms:
-            # Check for buckets and spaces
-            result = self.validate_bucket('head', term)
-            bucket_results.append(result)
-            result = self.validate_do_space("ams3", term)
-            bucket_results.append(result)
-            result = self.validate_do_space("nyc3", term)
-            bucket_results.append(result)
-            result = self.validate_do_space("sgp1", term)
-            bucket_results.append(result)
-            # Check for accounts
-            result = self.validate_account(term)
-            account_results.append(result)
+        with click.progressbar(final_search_terms,
+                               label="Enuemrating AWS Keywords",
+                               length=len(final_search_terms)) as bar:
+            for term in bar:
+                # Check for buckets and spaces
+                if self.boto3_client is not None:
+                    result = self.validate_bucket('head', term)
+                    bucket_results.append(result)
+                result = self.validate_do_space("ams3", term)
+                bucket_results.append(result)
+                result = self.validate_do_space("nyc3", term)
+                bucket_results.append(result)
+                result = self.validate_do_space("sgp1", term)
+                bucket_results.append(result)
+                # Check for accounts
+                result = self.validate_account(term)
+                account_results.append(result)
 
         return bucket_results, account_results
 
@@ -781,10 +809,9 @@ this.".format(domain[1])))
             'exists': False,
             'public': False
         }
-
-        client = boto3.client('s3')
+        
         try:
-            client.head_bucket(Bucket=bucket_name)
+            self.boto3_client.head_bucket(Bucket=bucket_name)
             result['exists'] = True
             try:
                 # Request the bucket to check the response
