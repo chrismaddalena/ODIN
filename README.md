@@ -6,7 +6,7 @@
 ![ODIN](https://github.com/chrismaddalena/viper/raw/origin/dev/ODIN.jpg)
 
 ```
-Current version: v1.6 "Muninn"
+Current version: v1.7 "Muninn"
 
 A Python tool for automating intelligence gathering, testing and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
 
@@ -31,7 +31,7 @@ ODIN is still very much in development, but it aims to automate many of the comm
 ### Installing ODIN
 ODIN requires **Python 3**. Using `pipenv` for managing the required libraries is the best option to avoid Python installations getting mixed-up.
 
-1. Run `pip3 install --user pipenv` or `python3 -m pip install --user pipenv`.
+1. Run `pip3 install --user pipenv` or `python3 -m pip install --user pipenv`. 
 2. Run `git clone https://github.com/chrismaddalena/ODIN.git`.
 3. Run `cd ODIN && pipenv install`.
 4. Run `pipenv shell` to get started using ODIN.
@@ -41,6 +41,8 @@ ODIN requires **Python 3**. Using `pipenv` for managing the required libraries i
 * Install virtualenv
 * Install pew
 * Install pipenv
+
+**Note 2:** If you're running as root on something like Kali Linux, you'll want to drop the `--user` portion of the `pip` commands above. That seems to call issues for actually using `pipenv` commands, at least on Kali.
 
 ### Setup API Keys
 1. Review the keys.config.sample file to fill-in your API keys and create a keys.config file.
@@ -70,13 +72,6 @@ Censys is very much like Shodan, except less information about open ports/servic
 
 Sign-up for an account to get your API key: [censys.io](https://www.censys.io/)
 
-### URLVoid
-URLVoid offers reputation data for domains, including Alexa and Google rankings, domain age, and location data. It also keeps track of domains that have been flagged for malicious activity by various entities (e.g. Fortinet, Avira).
-
-This may be the most "skippable" of the APIs, but some of the data can be useful and worthwhile. It's included for those occasions.
-
-Sign-up for an account to get your API key: [urlvoid.com/api](http://api.urlvoid.com/)
-
 ### Twitter
 If you setup a Twitter app for ODIN, the tokens can be used with Tweepy to collect account data (e.g. real name, location, follower count, and user description) from Twitter profiles ODIN has linked to the target organization.
 
@@ -90,6 +85,13 @@ eSentire's Cymon is used to check domains and IP addresses to see if the target 
 Note that appearing in a threat feed doesn't mean something is wrong or that Cymon has bad data. A domain may have been used for phishing, been detected and seized, and is now dormant with the old malicious A records. Then you have things like cloud service IPs that change hands often. Events like that can lead to a domain or IP being used for malicious activities one day and safe the next. Always investigate these findings before crying wolf to your client.
 
 Sign-up for an account to get your API key: [cymon.io](https://www.cymon.io/)
+
+### URLVoid
+URLVoid offers reputation data for domains, including Alexa and Google rankings, domain age, and location data. It also keeps track of domains that have been flagged for malicious activity by various entities (e.g. Fortinet, Avira).
+
+Like Cymon, this may help you identify typosqautted domains (identified via URCrazy) that are/have been linked to malicious activity.
+
+Sign-up for an account to get your API key: [urlvoid.com/api](http://api.urlvoid.com/)
 
 ### HaveIBeenPwned
 Email addresses are checked against HIBP to determine if any email addresses for the organization have been mentioned in any pastes or been involved in any security breaches.
@@ -172,9 +174,9 @@ Currently only the Company API is used. There are plans to incorproate the Peopl
 
 **Does ODIN perform DNS brute forcing?**
 
-No, but it is being considered. However, brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into ODIN without just running the commands for those tools. For subdomain discovery, it's hard to beat Aquatone right now and there's alwas Fierce and DNSRecon.
+No, but it is being considered. However, brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into ODIN without just running the commands for those tools. For subdomain discovery via guessing, it's hard to beat Aquatone right now and there's alwas Fierce and DNSRecon.
 
-For now, ODIN leverages DNS Dumpster, DNSRail, and NetCraft to collect subdomains to get you started.
+For now, ODIN leverages DNS Dumpster, Netcraft, and SSL/TLS certificate data to collect subdomains to get you started. That should get you a good number of subdomains to get started.
 
 **I don't have X API key, can I still use ODIN?**
 
@@ -197,6 +199,18 @@ And to these folks who have created/maintained some of the tools integrated into
 * TrullJ - For making the slick [SSL Labs Scanner module](https://github.com/TrullJ/ssllabs).
 
 ### Change Log
+#### May 13, 2018
+* Full SSL/TLS certificates from Censys are now stored in their own table by default (not only verbose mode).
+* Subdomains pulled from Censys certificate data is now added to the Subdomains table.
+* Subdomains in the DB should now be unique and the table now includes a "Sources" column.
+* Fixed an issue tha could cause Censys query credits to be gobbled up if your target has a lot of certificates.
+* Cymon API searches now use Cymon API v2.
+* Added a progress bar for AWS S3 Bucket and Digital Ocean Spaces hunting.
+    * Known Issue: This causes messy terminal output, but better than nothing for when large wordlists are used.
+* URLVoid is now used for URLCrazy typosqautted domains, like the Cymon API.
+* URLVoid is no longer has its own table and there will be no ore searches for domains in scope because, really, that just didn't make sense. URLVoid is for malware/malicious domains, not domains that are in scope for testing.
+* Added a check to make sure boto3 and AWS credentials are setup prior to attempting S3 bucket hunting using awscli.
+
 #### March 6, 2018
 * Added support for detecting oportunities for DNS cache snooping.
 * Added a new option to provide a wordlist of terms to be used as prefixes and suffixes for S3 bucket hunting.
