@@ -222,7 +222,11 @@ the company's primary domain used for their website.".format(domain)))
         # Create the Subdomains table for recording subdomain info for each domain
         self.c.execute('''CREATE TABLE 'Subdomains'
             ('Domain' text, 'Subdomain' text, 'IP' text, 'ASN' text, 'Provider' text,
-            'DomainFrontable' text)''')
+            'DomainFrontable' text, 'Source' text)''')
+
+        # Create Certificate table for recording full certificates collected for subdomains
+        self.c.execute('''CREATE TABLE 'Certificates'
+                    ('Host' text, 'Subject' text, 'Issuer' text)''')
 
         # Collect the subdomain information from DNS Dumpster and NetCraft
         for domain in domains_list:
@@ -261,17 +265,39 @@ the company's primary domain used for their website.".format(domain)))
                     frontable = self.DC.check_domain_fronting(result['domain'])
 
                     # INSERT the subdomain info into the table
-                    self.c.execute("INSERT INTO Subdomains VALUES (?,?,?,?,?,?)",
-                                (domain, subdomain, ip, asn, provider, frontable))
+                    self.c.execute("INSERT INTO 'Subdomains' VALUES (?,?,?,?,?,?,?)",
+                                (domain, subdomain, ip, asn, provider, frontable, "DNS Dumpster"))
                     self.conn.commit()
 
             # INSERT the subdomain info collected from NetCraft
             if netcraft_results:
                 for result in netcraft_results:
-                    frontable = self.DC.check_domain_fronting(result)
-                    self.c.execute("INSERT INTO Subdomains VALUES (?,?,NULL,NULL,NULL,?)",
-                                   (domain, result, frontable))
+                    if not result in dumpster_results['dns_records']['host']:
+                        frontable = self.DC.check_domain_fronting(result)
+                        self.c.execute("INSERT INTO 'Subdomains' VALUES (?,?,NULL,NULL,NULL,?,?)",
+                                    (domain, result, frontable, "Netcraft"))
+                        self.conn.commit()
+
+            # Try to collect certificate data for the domain
+            try:
+                cert_data = self.DC.run_censys_search_cert(domain)
+                for cert in cert_data['results']:
+                    self.c.execute("INSERT INTO 'Certificates' VALUES (?,?,?)",
+                                    (domain, cert["parsed.subject_dn"], cert["parsed.issuer_dn"]))
                     self.conn.commit()
+
+                cert_subdomains = self.DC.parse_cert_subdomains(cert_data)
+                for sub in cert_subdomains:
+                    if not sub in dumpster_results['dns_records']['host'] or sub in netcraft_results:
+                        frontable = self.DC.check_domain_fronting(sub)
+                        self.c.execute("INSERT INTO 'Subdomains' VALUES (?,?,NULL,NULL,NULL,?,?)",
+                                    (domain, sub, frontable, "Certificate"))
+                        self.conn.commit()
+            except:
+                pass
+
+            # Take a break for Censys's rate limits
+            time.sleep(self.sleep)
 
         # Create IPHistory table for historical data collected from NetCraft
         self.c.execute('''CREATE TABLE 'IPHistory'
@@ -422,74 +448,6 @@ the company's primary domain used for their website.".format(domain)))
                 print(red("[!] The RDAP lookup failed for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
-        # Create the URLVoid table
-        self.c.execute('''CREATE TABLE 'URLVoidResults'
-                    ('Domain' text, 'IP' text, 'Hostname(s)' text, 'DomainAge' text,
-                    'GoogleRank' text, 'AlexaRank' text, 'ASN' text, 'AsnName' text,
-                    'MaliciousCount' text, 'MaliciousEngines' text)''')
-
-        # Check each domain with URLVoid for reputation and some Alexa data
-        for domain in domains_list:
-            tree = self.DC.run_urlvoid_lookup(domain)
-            count = ""
-            engines = ""
-            if tree is not None:
-                # Check to see if urlvoid shows the domain flagged by any engines
-                try:
-                    for child in tree:
-                        malicious_check = child.tag
-                        if malicious_check == "detections":
-                            detections = tree[1]
-                            engines = detections[0]
-                            count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
-                            temp = []
-                            for engine in engines:
-                                temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
-                            engines = ", ".join(temp)
-
-                            print(yellow("[*] URLVoid found malicious activity reported for \
-                                        {}!".format(domain)))
-
-                    rep_data = tree[0]
-                    ip_data = rep_data[11]
-
-                    target = ET.tostring(rep_data[0], method='text').rstrip().decode('ascii')
-                    ip_add = ET.tostring(ip_data[0], method='text').rstrip().decode('ascii')
-                    hostnames = ET.tostring(ip_data[1], method='text').rstrip().decode('ascii')
-                    domain_age = ET.tostring(rep_data[3], method='text').rstrip().decode('ascii')
-                    google_rank = ET.tostring(rep_data[4], method='text').rstrip().decode('ascii')
-                    alexa_rank = ET.tostring(rep_data[5], method='text').rstrip().decode('ascii')
-                    asn = ET.tostring(ip_data[2], method='text').rstrip().decode('ascii')
-                    asn_name = ET.tostring(ip_data[3], method='text').rstrip().decode('ascii')
-
-                    self.c.execute("INSERT INTO URLVoidResults VALUES (?,?,?,?,?,?,?,?,?,?)",
-                                   (target, ip_add, hostnames, domain_age, google_rank,
-                                   alexa_rank, asn, asn_name, count, engines))
-                    self.conn.commit()
-                except:
-                    print(red("[!] There was an error getting the data for {}.".format(domain)))
-
-    def create_urlcrazy_table(self, client, domain):
-        """Function to add a worksheet for URLCrazy results."""
-        # Check if urlcrazy is available and proceed with recording results
-        urlcrazy_results = self.DC.run_urlcrazy(client, domain)
-        if not urlcrazy_results:
-            pass
-        else:
-            # Prepare for URLCrazy searches
-            self.c.execute('''CREATE TABLE 'UrlcrazyResults'
-                        ('Domain' text, 'A' text, 'MX' text, 'Malicious' text)''')
-            # Record each typosquatted domain
-            for result in urlcrazy_results:
-                domain = result['domain']
-                a_records = result['a-records']
-                mx_records = result['mx-records']
-                malicious = result['malicious']
-
-                self.c.execute("INSERT INTO UrlcrazyResults VALUES (?,?,?,?)",
-                                (domain, a_records, mx_records, malicious))
-                self.conn.commit()
-
     def create_shodan_table(self, ip_addresses, domains_list):
         """Function to create a Shodan table with Shodan search results."""
         # Prepare for Shodan searches
@@ -581,47 +539,6 @@ the company's primary domain used for their website.".format(domain)))
         #         shodan_worksheet.write(row, 1, vuln['cve'])
         #         shodan_worksheet.write(row, 2, vuln['cve_description'])
         #         row += 1
-
-    def create_censys_table(self, scope, verbose):
-        """Function to add a Censys.io table to the DB with Censys host information and certificate
-        details.
-        """
-        # Create the Censys table
-        self.c.execute('''CREATE TABLE CensysResults
-                    ('Host' text, 'IP' text, 'Country' text, 'Ports' text)''')
-
-        for target in scope:
-            try:
-                results = self.DC.run_censys_search_address(target)
-                for result in results:
-                    ports = []
-                    for port in result["protocols"]:
-                        ports.append(port)
-                    self.c.execute("INSERT INTO CensysResults VALUES (?,?,?,?)",
-                                   (target, result['ip'], result['location.country'], ', '.join(ports)))
-                    self.conn.commit()
-            except:
-                pass
-
-            # Take a break for Censys's rate limits
-            time.sleep(self.sleep)
-
-        # Collect certificate data from Censys if verbose is set
-        if verbose:
-            self.c.execute('''CREATE TABLE 'Certificates'
-                        ('Host' text, 'Subject' text, 'Issuer' text)''')
-            for target in scope:
-                try:
-                    cert_data = self.DC.run_censys_search_cert(target)
-                    for cert in cert_data:
-                        self.c.execute("INSERT INTO 'Certificates' VALUES (?,?,?)",
-                                       (target, cert["parsed.subject_dn"], cert["parsed.issuer_dn"]))
-                        self.conn.commit()
-                except:
-                    pass
-
-                # Take a break for Censys's rate limits
-                time.sleep(self.sleep)
 
     def create_people_table(self, domain, client):
         """Function to add tables of publicly available information related to individuals, including
@@ -784,48 +701,95 @@ Please try again."))
                 (result[0],result[1],result[2],result[3],result[4]))
                 self.conn.commit()
 
-    # TODO: Update this with URLCrazy for the new database storage
-    def create_cymon_worksheet(self, target):
-        """Function to check the provided the target against Cymon.io's database of threat feeds
-        and then print the results.
-        """
-        if helpers.is_ip(target):
-            domains_results, ip_results = self.DC.search_cymon_ip(target)
-            if domains_results:
-                print(yellow("\n[+] Associated Domains:"))
-                # Print out associated domains for the IP
-                for result in domains_results:
-                    print("URL:\t %s" % result['name'])
-                    print("Created: %s" % result['created'])
-                    print("Updated: %s\n" % result['updated'])
-            if ip_results:
-                print(yellow("[+] Recorded Malicious Events:"))
-                # Print out security events for the IP
-                for result in ip_results:
-                    print("Title:\t\t %s" % result['title'])
-                    print("Description:\t %s" % result['description'])
-                    print("Created:\t %s" % result['created'])
-                    print("Updated:\t %s" % result['updated'])
-                    print("Details:\t %s\n" % result['details_url'])
+    def create_urlcrazy_table(self, client, domain):
+        """Function to add a worksheet for URLCrazy results."""
+        # Check if urlcrazy is available and proceed with recording results
+        urlcrazy_results = self.DC.run_urlcrazy(client, domain)
+        if not urlcrazy_results:
+            pass
         else:
-            results = self.DC.search_cymon_domain(target)
-            # Print out information for the domain
-            if results:
-                print(yellow("\n[+] Cymon.io events for %s" % target))
-                print("URL:\t %s" % results['name'])
-                print("Created: %s" % results['created'])
-                print("Updated: %s" % results['updated'])
-                for source in results['sources']:
-                    print("Source:\t {}".format(source))
-                for ip in results['ips']:
-                    print("IP:\t {}".format(ip))
-                print("")
+            # Prepare for URLCrazy searches
+            self.c.execute('''CREATE TABLE 'UrlcrazyResults'
+                        ('Domain' text, 'ARecord' text, 'MXRecord' text, 'CymonMalicious' text,
+                        'URLVoidIP' text, 'Hostname(s)' text, 'DomainAge' text, 'GoogleRank' text,
+                        'AlexaRank' text, 'ASN' text, 'AsnName' text, 'MaliciousCount' text,
+                        'MaliciousEngines' text)''')
 
-        print(green("[+] Cymon search completed!"))
+            # Create the URLVoid table
+            # self.c.execute('''CREATE TABLE 'URLVoidResults'
+            #             ('Domain' text, 'IP' text, 'Hostname(s)' text, 'DomainAge' text,
+            #             'GoogleRank' text, 'AlexaRank' text, 'ASN' text, 'AsnName' text,
+            #             'MaliciousCount' text, 'MaliciousEngines' text)''')
+                        
+            # Record each typosquatted domain
+            for result in urlcrazy_results:
+                domain = result['domain']
+                a_records = result['a-records']
+                mx_records = result['mx-records']
+                malicious = result['malicious']
+
+                self.c.execute("INSERT INTO UrlcrazyResults VALUES (?,?,?,?,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
+                                (domain, a_records, mx_records, malicious))
+                self.conn.commit()
+
+                # Check each domain with URLVoid for reputation data
+                tree = self.DC.run_urlvoid_lookup(domain)
+                count = ""
+                engines = ""
+                if tree is not None:
+                    # Check to see if urlvoid shows the domain flagged by any engines
+                    # try:
+                    for child in tree:
+                        malicious_check = child.tag
+                        if malicious_check == "detections":
+                            detections = tree[1]
+                            engines = detections[0]
+                            count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
+                            temp = []
+                            for engine in engines:
+                                temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
+                            engines = ", ".join(temp)
+
+                    rep_data = tree[0]
+                    if len(rep_data) == 0:
+                        pass
+                    else:
+                        target = ET.tostring(rep_data[0], method='text').rstrip().decode('ascii')
+                        domain_age = ET.tostring(rep_data[3], method='text').rstrip().decode('ascii')
+                        google_rank = ET.tostring(rep_data[4], method='text').rstrip().decode('ascii')
+                        alexa_rank = ET.tostring(rep_data[5], method='text').rstrip().decode('ascii')
+
+                        if rep_data[11]:
+                            ip_data = rep_data[11]
+                            ip_add = ET.tostring(ip_data[0], method='text').rstrip().decode('ascii')
+                            hostnames = ET.tostring(ip_data[1], method='text').rstrip().decode('ascii')
+                            asn = ET.tostring(ip_data[2], method='text').rstrip().decode('ascii')
+                            asn_name = ET.tostring(ip_data[3], method='text').rstrip().decode('ascii')
+                        else:
+                            ip_add = None
+                            hostnames = None
+                            asn = None
+                            asn_name = None
+
+                        self.c.execute('''UPDATE UrlCrazyResults
+                                          SET 'URLVoidIP'=?,
+                                              'Hostname(s)'=?,
+                                              'DomainAge'=?,
+                                              'GoogleRank'=?,
+                                              'AlexaRank'=?,
+                                              'ASN'=?,
+                                              'AsnName'=?,
+                                              'MaliciousCount'=?,
+                                              'MaliciousEngines'=?
+                                          WHERE Domain = ?''',
+                                    (ip_add, hostnames, domain_age, google_rank, alexa_rank, asn,
+                                    asn_name, count, engines, target))
+                        self.conn.commit()
+                    # except:
+                    #     print(red("[!] There was an error getting the data for {}.".format(domain)))
 
     def create_cloud_table(self, client, domain, wordlist=None, fix_wordlist=None):
         """Function to add a cloud worksheet for findings related to AWS."""
-        print(green("[+] Looking for AWS buckets and accounts for target..."))
         verified_buckets, verified_accounts = self.DC.enumerate_buckets(client, domain, wordlist, fix_wordlist)
 
         if verified_buckets and verified_accounts:
@@ -861,3 +825,31 @@ Please try again."))
             print(green("[+] AWS searches are complete and results are in the Cloud worksheet."))
         else:
             print(yellow("[*] Could not access the AWS API to enumerate S3 buckets and accounts."))
+
+    def create_censys_table(self, scope):
+        """Function to add a Censys.io table to the DB with Censys host information and certificate
+        details.
+
+        POSSIBLY UNNECESSARY: Censys is primarily useful for certificate data. Shodan has open
+        ports covered. This seems like an unnecessary use of Censys API calls now that Censys
+        limits users to 250/month.
+        """
+        # Create the Censys table
+        self.c.execute('''CREATE TABLE CensysResults
+                    ('Host' text, 'IP' text, 'Country' text, 'Ports' text)''')
+
+        for target in scope:
+            try:
+                results = self.DC.run_censys_search_address(target)
+                for result in results:
+                    ports = []
+                    for port in result["protocols"]:
+                        ports.append(port)
+                    self.c.execute("INSERT INTO CensysResults VALUES (?,?,?,?)",
+                                   (target, result['ip'], result['location.country'], ', '.join(ports)))
+                    self.conn.commit()
+            except:
+                pass
+
+            # Take a break for Censys's rate limits
+            time.sleep(self.sleep)
