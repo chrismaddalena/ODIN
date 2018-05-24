@@ -5,6 +5,7 @@
 domain names.
 """
 
+import warnings
 import os
 import subprocess
 from xml.etree import ElementTree as ET
@@ -46,16 +47,16 @@ class DomainCheck(object):
         # Collect the API keys from the config file
         try:
             shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
-            self.shoAPI = shodan.Shodan(shodan_api_key)
+            self.shodan_api = shodan.Shodan(shodan_api_key)
         except Exception:
-            self.shoAPI = None
+            self.shodan_api = None
             print(yellow("[!] Did not find a Shodan API key."))
 
         try:
             self.cymon_api_key = helpers.config_section_map("Cymon")["api_key"]
-            self.cyAPI = Cymon(self.cymon_api_key)
+            self.cymon_api = Cymon(self.cymon_api_key)
         except Exception:
-            self.cyAPI = Cymon()
+            self.cymon_api = Cymon()
             print(yellow("[!] Did not find a Cymon API key, so proceeding without API auth."))
 
         try:
@@ -73,10 +74,11 @@ class DomainCheck(object):
         try:
             self.censys_api_id = helpers.config_section_map("Censys")["api_id"]
             self.censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
-            self.CEN_API_URL = "https://censys.io/api/v1"
+            self.censys_api_endpoint = "https://censys.io/api/v1"
         except Exception:
-            self.cenCertAPI = None
-            self.cenAddAPI = None
+            self.censys_api_id = None
+            self.censys_api_secret = None
+            self.censys_api_endpoint = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
 
         try:
@@ -156,8 +158,8 @@ class DomainCheck(object):
         if self.contact_api_key == "":
             print(red("[!] No Full Contact API key, so skipping these searches."))
         else:
-            base_url = "https://api.fullcontact.com/v2/company/lookup.json"
-            payload = {'domain':domain, 'apiKey':self.contact_api_key}
+            base_url = "https://api.fullcontact.com/v3/company.enrich"
+            payload = {'domain':domain, 'Authorization':'Bearer ' + self.contact_api_key}
             resp = requests.get(base_url, params=payload)
 
             if resp.status_code == 200:
@@ -193,7 +195,6 @@ class DomainCheck(object):
 
     def dns_cache_request(self, domain, nameserver_ip, checkttl=False, dns_snooped=False):
         """Function to perform cache requests against the name server for the provided domain."""
-        resolver = dns.resolver
         query = dns.message.make_query(domain, dns.rdatatype.A, dns.rdataclass.IN)
         # Negate recursion desired bit
         query.flags ^= dns.flags.RD
@@ -202,7 +203,7 @@ class DomainCheck(object):
         Check length major of 0 to avoid those answers with root servers in authority section
         ;; QUESTION SECTION:
         ;www.facebook.com.        IN    A
-        
+
         ;; AUTHORITY SECTION:
         com.            123348    IN    NS    d.gtld-servers.net.
         com.            123348    IN    NS    m.gtld-servers.net.
@@ -267,8 +268,11 @@ class DomainCheck(object):
         and groups. RDAP also provides more detailed network information.
         """
         try:
-            rdapwho = IPWhois(ip_address)
-            results = rdapwho.lookup_rdap(depth=1)
+            with warnings.catch_warnings():
+                # Hide the 'allow_permutations has been deprecated' warning until ipwhois removes it
+                warnings.filterwarnings("ignore", category=UserWarning)
+                rdapwho = IPWhois(ip_address)
+                results = rdapwho.lookup_rdap(depth=1)
 
             return results
         except Exception as error:
@@ -350,7 +354,7 @@ class DomainCheck(object):
                     except Exception as error:
                         malicious_domain = 0
                         print(red("[!] There was an error checking {} with Cymon.io!"
-                            .format(domain[0])))
+                                   .format(domain[0])))
 
                     # Search for domains and IP addresses tied to the A-record IP
                     try:
@@ -367,7 +371,7 @@ class DomainCheck(object):
                     except Exception as error:
                         malicious_ip = 0
                         print(red("[!] There was an error checking {} with Cymon.io!"
-                                    .format(domain[1])))
+                                   .format(domain[1])))
 
                     if malicious_domain == 1:
                         cymon_result = "Yes"
@@ -398,12 +402,12 @@ class DomainCheck(object):
 
         A Shodan API key is required.
         """
-        if self.shoAPI is None:
+        if self.shodan_api is None:
             pass
         else:
             print(green("[+] Performing Shodan domain search for {}.".format(target)))
             try:
-                target_results = self.shoAPI.search(target)
+                target_results = self.shodan_api.search(target)
                 return target_results
             except shodan.APIError as error:
                 print(red("[!] Error fetching Shodan info for {}!".format(target)))
@@ -420,12 +424,12 @@ class DomainCheck(object):
         # resolved = requests.get(dnsResolve)
         # target_ip = resolved.json()[target]
 
-        if self.shoAPI is None:
+        if self.shodan_api is None:
             pass
         else:
             print(green("[+] Performing Shodan IP lookup for {}.".format(target)))
             try:
-                target_results = self.shoAPI.host(target)
+                target_results = self.shodan_api.host(target)
                 return target_results
             except shodan.APIError as error:
                 print(red("[!] Error fetching Shodan info for {}!".format(target)))
@@ -433,7 +437,7 @@ class DomainCheck(object):
 
     def run_shodan_exploit_search(self, CVE):
         """Function to lookup CVEs through Shodan and return the results."""
-        exploits = self.shoAPI.exploits.search(CVE)
+        exploits = self.shodan_api.exploits.search(CVE)
         return exploits
 
     def search_cymon_ip(self, target):
@@ -444,10 +448,10 @@ class DomainCheck(object):
         """
         try:
             # Search for IP and domains tied to the IP
-            data = self.cyAPI.ip_domains(target)
+            data = self.cymon_api.ip_domains(target)
             domains_results = data['results']
             # Search for security events for the IP
-            data = self.cyAPI.ip_events(target)
+            data = self.cymon_api.ip_events(target)
             ip_results = data['results']
             print(green("[+] Cymon search completed!"))
             return domains_results, ip_results
@@ -462,7 +466,7 @@ class DomainCheck(object):
         """
         try:
             # Search for domains and IP addresses tied to the domain
-            results = self.cyAPI.domain_lookup(target)
+            results = self.cymon_api.domain_lookup(target)
             print(green("[+] Cymon search completed!"))
             return results
         except Exception:
@@ -477,14 +481,13 @@ class DomainCheck(object):
 
         A free API key is required.
         """
-        if self.CEN_API_URL is None:
+        if self.censys_api_endpoint is None:
             pass
         else:
             print(green("[+] Performing Censys certificate search for {}".format(target)))
             params = {"query" : target}
             try:
-                fields = ["parsed.subject_dn", "parsed.issuer_dn"]
-                results = requests.post(self.CEN_API_URL + "/search/certificates", json = params, auth=(self.censys_api_id, self.censys_api_secret))
+                results = requests.post(self.censys_api_endpoint + "/search/certificates", json = params, auth=(self.censys_api_id, self.censys_api_secret))
                 certs = results.json()
                 return certs
             except Exception as error:
@@ -505,28 +508,10 @@ class DomainCheck(object):
                 tmp = tmp[:pos]
             if "." not in tmp:
                 continue
-            
             subdomains.append(tmp)
 
         subdomains = set(subdomains)
         return subdomains
-
-    def run_censys_search_address(self, target):
-        """Collect open port/protocol information from Censys for the target IP address. This
-        returns a dictionary of protocol information.
-
-        A free API key is required.
-        """
-        if self.cenAddAPI is None:
-            pass
-        else:
-            print(green("[+] Performing Censys open port search for {}".format(target)))
-            try:
-                data = self.cenAddAPI.search(target)
-                return data
-            except Exception as error:
-                print(red("[!] Error collecting Censys data for {}.".format(target)))
-                print(red("L.. Details: {}".format(error)))
 
     def run_urlvoid_lookup(self, domain):
         """Collect reputation data from URLVoid for the target domain. This returns an ElementTree
@@ -689,6 +674,7 @@ class DomainCheck(object):
             else:
                 pass
 
+        driver.close()
         return results
 
     def fetch_netcraft_domain_history(self, domain):
@@ -710,6 +696,7 @@ class DomainCheck(object):
                     str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
                     ip_history.append(result)
 
+        driver.close()
         return ip_history
 
     def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
@@ -761,7 +748,7 @@ class DomainCheck(object):
         final_search_terms = list(set(final_search_terms))
 
         with click.progressbar(final_search_terms,
-                               label="Enuemrating AWS Keywords",
+                               label="Enumerating AWS Keywords",
                                length=len(final_search_terms)) as bar:
             for term in bar:
                 # Check for buckets and spaces
@@ -809,7 +796,7 @@ class DomainCheck(object):
             'exists': False,
             'public': False
         }
-        
+
         try:
             self.boto3_client.head_bucket(Bucket=bucket_name)
             result['exists'] = True
@@ -956,8 +943,10 @@ class DomainCheck(object):
                         return "Unbounce: {}".format(target)
                     elif 'secure.footprint.net' in target:
                         return "Level 3: {}".format(target)
+                    else:
+                        return False
         except Exception:
-            return "No"
+            return False
 
     def lookup_robtex_ipinfo(self, ip_address):
         """Function to lookup information about a target IP address with Robtex."""
@@ -967,3 +956,24 @@ class DomainCheck(object):
             return ip_json
         else:
             print(red("[!] The provided IP for Robtex address is invalid!"))
+
+    def run_censys_search_address(self, target):
+        """Collect open port/protocol information from Censys for the target IP address. This
+        returns a dictionary of protocol information.
+
+        A free API key is required.
+
+        POSSIBLY UNNECESSARY: Censys is primarily useful for certificate data. Shodan has open
+        ports covered. This seems like an unnecessary use of Censys API calls now that Censys
+        limits users to 250/month.
+        """
+        if self.cenAddAPI is None:
+            pass
+        else:
+            print(green("[+] Performing Censys open port search for {}".format(target)))
+            try:
+                data = self.cenAddAPI.search(target)
+                return data
+            except Exception as error:
+                print(red("[!] Error collecting Censys data for {}.".format(target)))
+                print(red("L.. Details: {}".format(error)))

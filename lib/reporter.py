@@ -4,7 +4,7 @@
 """This module brings the other modules together for generating an SQLite3 database."""
 
 import socket
-import time
+from time import sleep
 import base64
 import datetime
 import sqlite3
@@ -19,8 +19,6 @@ class Reporter(object):
     """A class that can be used to call upon the other modules to collect results and then format
     a report saved as a SQLite3 database for easy review and queries.
     """
-    ip_addresses = []
-    domains_list = []
     sleep = 10
     hibp_sleep = 3
 
@@ -31,7 +29,8 @@ class Reporter(object):
         self.PC = email_tools.PeopleCheck()
         # Create the report database -- NOT in memory to allow for multiprocessing and archiving
         if os.path.isfile(report_name):
-            confirm = input(red("[!] A report for this client already exists. Are you sure you want to overwrite it? (Y\\N)"))
+            confirm = input(red("[!] A report for this client already exists. Are you sure you \
+want to overwrite it? (Y\\N) "))
             if confirm == "Y" or confirm == "y":
                 os.remove(report_name)
             else:
@@ -50,11 +49,12 @@ class Reporter(object):
         # Close the connection to the database
         self.conn.close()
 
-    def prepare_scope(self, scope_file, domain=None):
+    def prepare_scope(self, ip_list, domain_list, scope_file=None, domain=None):
         """Function to split the user's scope file into IP addresses and domain names."""
         # Generate the scope lists from the supplied scope file, if there is one
         scope = []
-        scope = self.DC.generate_scope(scope_file)
+        if scope_file:
+            scope = self.DC.generate_scope(scope_file)
 
         if domain:
             # Just in case the domain is not in the scope file, it's added here
@@ -66,19 +66,20 @@ it has been added to the scope for OSINT.".format(domain)))
         # Create lists of IP addresses and domain names from scope
         for item in scope:
             if helpers.is_ip(item):
-                self.ip_addresses.append(item)
+                ip_list.append(item)
             elif item == "":
                 pass
             else:
-                self.domains_list.append(item)
+                domain_list.append(item)
 
         # Record the scope being used in the database
-        self.c.execute('''CREATE TABLE 'ReportScope' ('Target' text)''')
+        self.c.execute('''CREATE TABLE 'hosts' ('id' INTEGER PRIMARY KEY, 'host_address' text,
+                       'in_scope_file' text, 'source' text)''')
         for target in scope:
-            self.c.execute("INSERT INTO ReportScope VALUES (?)", (target,))
+            self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)", (target, True, "Scope File"))
             self.conn.commit()
 
-        return scope, self.ip_addresses, self.domains_list
+        return scope, ip_list, domain_list
 
     def create_company_info_table(self, domain):
         """Function to generate a table of company information provided via Full Contact."""
@@ -87,46 +88,58 @@ it has been added to the scope for OSINT.".format(domain)))
 
         if info_json is not None:
             try:
-                # Create the CompanyInfo table
-                self.c.execute('''CREATE TABLE 'CompanyInfo'
-                            ('CompanyName' text, 'Logo' text, 'Website' text, 'ApproxEmployees' text,
-                            'YearFounded' text, 'WebsiteOverview' text, 'CorporateKeywords' text,
-                            'EmailAddresses' text, 'PhoneNumbers' text, 'PhysicalAddresses' text
+                # Create the company_info table
+                self.c.execute('''CREATE TABLE 'company_info'
+                            ('company_name' text, 'logo' text, 'website' text, 'employees' text,
+                            'year_founded' text, 'website_overview' text, 'corporate_keyword' text,
+                            'email_address' text, 'phone_number' text, 'physical_address' text
                             )''')
                 # INSERT the data from Full Contact
                 name = info_json['organization']['name']
                 logo = info_json['logo']
                 website = info_json['website']
-                approx_employees = info_json['organization']['approxEmployees']
-                year_founded = info_json['organization']['founded']
-                website_overview = info_json['organization']['overview']
-                corp_keywords= ", ".join(info_json['organization']['keywords'])
+                if "approxEmployees" in info_json['organization']:
+                    approx_employees = info_json['organization']['approxEmployees']
+                else:
+                    approx_employees = None
+                if "founded" in info_json['organization']:
+                    year_founded = info_json['organization']['founded']
+                else:
+                    year_founded = None
+                if "overview" in info_json['organization']:
+                    website_overview = info_json['organization']['overview']
+                else:
+                    website_overview = None
+                if "keywords" in info_json['organization']:
+                    corp_keywords= ", ".join(info_json['organization']['keywords'])
+                else:
+                    corp_keywords = None
                 # The NULLS will be replaced below if the data is available
-                self.c.execute("INSERT INTO CompanyInfo VALUES (?,?,?,?,?,?,?,NULL,NULL,NULL)",
+                self.c.execute("INSERT INTO company_info VALUES (?,?,?,?,?,?,?,NULL,NULL,NULL)",
                                 (name, logo, website, approx_employees, year_founded, website_overview,
-                                corp_keywords))
+                                    corp_keywords))
                 self.conn.commit()
 
                 # If Full Contact returned any social media info, add columns for the service
                 for profile in info_json['socialProfiles']:
                     service = profile['typeName']
                     profile_url = profile['url']
-                    self.c.execute("ALTER TABLE CompanyInfo ADD COLUMN " + service + " text")
-                    self.c.execute("UPDATE CompanyInfo SET '%s' = '%s'" % (service, profile_url))
+                    self.c.execute("ALTER TABLE company_info ADD COLUMN " + service + " text")
+                    self.c.execute("UPDATE company_info SET '%s' = '%s'" % (service, profile_url))
                     self.conn.commit()
-                
+
                 # Update the table with information that is not always available
                 if "emailAddresses" in info_json['organization']['contactInfo']:
                     email_addresses = []
                     for email in info_json['organization']['contactInfo']['emailAddresses']:
                         email_addresses.append(email['value'])
-                    self.c.execute("UPDATE CompanyInfo SET EmailAddresses = '%s'" % (', '.join(email_addresses)))
+                    self.c.execute("UPDATE company_info SET email_address = '%s'" % (', '.join(email_addresses)))
                     self.conn.commit()
                 if "phoneNumbers" in info_json['organization']['contactInfo']:
                     phone_numbers = []
                     for number in info_json['organization']['contactInfo']['phoneNumbers']:
                         phone_numbers.append(number['number'])
-                    self.c.execute("UPDATE CompanyInfo SET PhoneNumbers = '%s'" % (', '.join(phone_numbers)))
+                    self.c.execute("UPDATE company_info SET phone_number = '%s'" % (', '.join(phone_numbers)))
                     self.conn.commit()
                 if "addresses" in info_json['organization']['contactInfo']:
                     for address in info_json['organization']['contactInfo']['addresses']:
@@ -140,23 +153,25 @@ it has been added to the scope for OSINT.".format(domain)))
                                 pass
                             else:
                                 complete += "{}, ".format(value)
-                    self.c.execute("UPDATE CompanyInfo SET PhysicalAddresses = '%s'" % (complete))
+                    self.c.execute("UPDATE company_info SET physical_address = '%s'" % (complete))
                     self.conn.commit()
             except:
                 print(red("[!] No data found for {} in Full Contact's database. This may not be \
 the company's primary domain used for their website.".format(domain)))
 
-    def create_domain_report_table(self, scope, ip_addresses, domains_list, verbose):
+    def create_domain_report_table(self, scope, ip_list, domain_list, verbose):
         """Function to generate a domain report consisting of information like DNS records and
         subdomains.
         """
         # Create the DNS table for holding the domains' DNS records
-        self.c.execute('''CREATE TABLE 'DNS'
-                    ('Domain' text, 'NSRecords' text, 'ARecords' text, 'MXRecords' text,
-                    'TXTRecords' text, 'SOARecords' text, 'VulnerableCacheSnooping' text)''')
+        self.c.execute('''CREATE TABLE 'dns'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'ns_record' text, 'a_record' text,
+                    'mx_record' text, 'txt_record' text, 'soa_record' text, 'dmarc' text,
+                    'vulnerable_cache_snooping' text)''')
 
         # Get the DNS records for each domain
-        for domain in domains_list:
+        for domain in domain_list:
+            vulnerable_dns_servers = []
             # Get the NS records
             try:
                 temp = []
@@ -164,9 +179,8 @@ the company's primary domain used for their website.".format(domain)))
                 for rdata in ns_records_list.response.answer:
                     for item in rdata.items:
                         temp.append(item.to_text())
-                ns_records = ", ".join(temp)
+                ns_records = ", ".join(x.strip(".") for x in temp)
                 # Record name server that resolve cached queries
-                vulnerable_dns_servers = []
                 for nameserver in temp:
                     result = self.DC.check_dns_cache(nameserver.strip("."))
                     if result:
@@ -179,7 +193,17 @@ the company's primary domain used for their website.".format(domain)))
                 a_records = self.DC.get_dns_record(domain, "A")
                 for rdata in a_records.response.answer:
                     for item in rdata.items:
+                        # Add A record IP to a temp list
                         temp.append(item.to_text())
+                        # Check if this a known IP and add it to hosts if not
+                        self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (item.to_text(),))
+                        res = self.c.fetchone()
+                        if res[0] == 0:
+                            self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                            (item.to_text(), False, "Scope File Domain DNS"))
+                            self.conn.commit()
+                            # Also add it to our list of IP addresses
+                            ip_list.append(item.to_text())
                 a_records = ", ".join(temp)
             except:
                 a_records = "None"
@@ -190,7 +214,7 @@ the company's primary domain used for their website.".format(domain)))
                 for rdata in mx_records.response.answer:
                     for item in rdata.items:
                         temp.append(item.to_text())
-                mx_records = ", ".join(temp)
+                mx_records = ", ".join(x.strip(".") for x in temp)
             except:
                 mx_records = "None"
             # Get the TXT records
@@ -213,24 +237,36 @@ the company's primary domain used for their website.".format(domain)))
                 soa_records = ", ".join(temp)
             except:
                 soa_records = "None"
+            # Get the _DMARC TXT record
+            try:
+                temp = []
+                dmarc_record = self.DC.get_dns_record("_dmarc." + domain, "TXT")
+                for rdata in dmarc_record.response.answer:
+                    for item in rdata.items:
+                        temp.append(item.to_text())
+                dmarc_record = ", ".join(temp)
+            except:
+                dmarc_record = "None"
             # INSERT the DNS records into the table
-            self.c.execute("INSERT INTO 'DNS' VALUES (?,?,?,?,?,?,?)",
+            self.c.execute("INSERT INTO 'dns' VALUES (NULL,?,?,?,?,?,?,?,?)",
                            (domain, ns_records, a_records, mx_records, txt_records, soa_records,
-                            ", ".join(vulnerable_dns_servers)))
+                            dmarc_record, ", ".join(vulnerable_dns_servers)))
             self.conn.commit()
 
         # Create the Subdomains table for recording subdomain info for each domain
-        self.c.execute('''CREATE TABLE 'Subdomains'
-            ('Domain' text, 'Subdomain' text, 'IP' text, 'ASN' text, 'Provider' text,
-            'DomainFrontable' text, 'Source' text)''')
+        # self.c.execute('''CREATE TABLE 'subdomains'
+        #     ('id' INTEGER PRIMARY KEY,'domain' text, 'subdomain' text, 'ip_address' text, 'asn' text,
+        #     'provider' text, 'domain_frontable' text, 'source' text)''')
+        self.c.execute('''CREATE TABLE 'subdomains'
+            ('id' INTEGER PRIMARY KEY,'domain' text, 'subdomain' text, 'ip_address' text,
+            'domain_frontable' text, 'source' text)''')
 
         # Create Certificate table for recording full certificates collected for subdomains
-        self.c.execute('''CREATE TABLE 'Certificates'
-                    ('Host' text, 'Subject' text, 'Issuer' text)''')
+        self.c.execute('''CREATE TABLE 'certificates'
+                    ('id' INTEGER PRIMARY KEY, 'host' text, 'subject' text, 'issuer' text)''')
 
         # Collect the subdomain information from DNS Dumpster and NetCraft
-        for domain in domains_list:
-            print(green("[+] Checking DNS Dumpster and NetCraft for {}".format(domain)))
+        for domain in domain_list:
             dumpster_results = []
             netcraft_results = []
             try:
@@ -241,7 +277,7 @@ the company's primary domain used for their website.".format(domain)))
                 netcraft_results = self.DC.check_netcraft(domain)
             except:
                 print(red("[!] There was a problem collecting results from NetCraft for {}.".format(domain)))
-            
+
             if dumpster_results:
                 # See if we can save the domain map from DNS Dumpster
                 if dumpster_results['image_data']:
@@ -250,60 +286,100 @@ the company's primary domain used for their website.".format(domain)))
                 # Record the info from DNS Dumpster
                 for result in dumpster_results['dns_records']['host']:
                     if result['reverse_dns']:
-                        # TODO: Reverse DNS
                         subdomain = result['domain']
                         ip = result['ip']
-                        asn = result['as']
-                        provider = result['provider']
+                        # asn = result['as']
+                        # provider = result['provider']
                     else:
                         subdomain = result['domain']
                         ip = result['ip']
-                        asn = result['as']
-                        provider = result['provider']
+                        # asn = result['as']
+                        # provider = result['provider']
+
+                    # Check if this a known IP and add it to hosts if not
+                    self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (result['ip'],))
+                    res = self.c.fetchone()
+                    if res[0] == 0:
+                        self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                       (result['ip'], False, "DNS Dumpster"))
+                        self.conn.commit()
+                        # Also add it to our list of IP addresses
+                        ip_list.append(result['ip'])
 
                     # Check the subdomain for domain fronting possibilties
                     frontable = self.DC.check_domain_fronting(result['domain'])
 
                     # INSERT the subdomain info into the table
-                    self.c.execute("INSERT INTO 'Subdomains' VALUES (?,?,?,?,?,?,?)",
-                                (domain, subdomain, ip, asn, provider, frontable, "DNS Dumpster"))
+                    # self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?,?,?)",
+                    #             (domain, subdomain, ip, asn, provider, frontable, "DNS Dumpster"))
+                    self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?)",
+                                    (domain, subdomain, ip, frontable, "DNS Dumpster"))
                     self.conn.commit()
 
             # INSERT the subdomain info collected from NetCraft
             if netcraft_results:
                 for result in netcraft_results:
                     if not result in dumpster_results['dns_records']['host']:
+                        try:
+                            ip_address = socket.gethostbyname(result)
+                            # Check if this a known IP and add it to hosts if not
+                            self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
+                            res = self.c.fetchone()
+                            if res[0] == 0:
+                                self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                                (ip_address, False, "Netcraft DNS"))
+                                self.conn.commit()
+                                # Also add it to our list of IP addresses
+                                ip_list.append(ip_address)
+                        except:
+                            ip_address = "Lookup Failed"
                         frontable = self.DC.check_domain_fronting(result)
-                        self.c.execute("INSERT INTO 'Subdomains' VALUES (?,?,NULL,NULL,NULL,?,?)",
-                                    (domain, result, frontable, "Netcraft"))
+                        self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?)",
+                                       (domain, result, ip_address, frontable, "Netcraft"))
                         self.conn.commit()
 
             # Try to collect certificate data for the domain
             try:
                 cert_data = self.DC.run_censys_search_cert(domain)
                 for cert in cert_data['results']:
-                    self.c.execute("INSERT INTO 'Certificates' VALUES (?,?,?)",
-                                    (domain, cert["parsed.subject_dn"], cert["parsed.issuer_dn"]))
+                    self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,?,?)",
+                                   (domain, cert["parsed.subject_dn"], cert["parsed.issuer_dn"]))
                     self.conn.commit()
 
                 cert_subdomains = self.DC.parse_cert_subdomains(cert_data)
                 for sub in cert_subdomains:
                     if not sub in dumpster_results['dns_records']['host'] or sub in netcraft_results:
-                        frontable = self.DC.check_domain_fronting(sub)
-                        self.c.execute("INSERT INTO 'Subdomains' VALUES (?,?,NULL,NULL,NULL,?,?)",
-                                    (domain, sub, frontable, "Certificate"))
-                        self.conn.commit()
+                        # Check for wildcard subdomains from certificates and ignore them for this
+                        if not "*" in sub:
+                            try:
+                                ip_address = socket.gethostbyname(sub)
+                                # Check if this a known IP and add it to hosts if not
+                                self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
+                                res = self.c.fetchone()
+                                if res[0] == 0:
+                                    self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                                    (ip_address, False, "Certificate Lookup"))
+                                    self.conn.commit()
+                                    # Also add it to our list of IP addresses
+                                    ip_list.append(ip_address)
+                            except:
+                                ip_address = "Lookup Failed"
+                            frontable = self.DC.check_domain_fronting(sub)
+                            self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?)",
+                                           (domain, sub, ip_address, frontable, "Certificate"))
+                            self.conn.commit()
             except:
                 pass
 
             # Take a break for Censys's rate limits
-            time.sleep(self.sleep)
+            sleep(self.sleep)
 
         # Create IPHistory table for historical data collected from NetCraft
-        self.c.execute('''CREATE TABLE 'IPHistory'
-                    ('Domain' text, 'Netblock Owner' text, 'IP' text)''')
+        self.c.execute('''CREATE TABLE 'ip_history'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'netblock_owner' text,
+                    'ip_address' text)''')
 
-        for domain in domains_list:
+        for domain in domain_list:
             ip_history = []
             try:
                 ip_history = self.DC.fetch_netcraft_domain_history(domain)
@@ -313,24 +389,31 @@ the company's primary domain used for their website.".format(domain)))
             if ip_history:
                 for result in ip_history:
                     net_owner = result[0]
-                    ip = result[1]
-                    self.c.execute("INSERT INTO IPHistory VALUES (?,?,?)",
-                                   (domain, net_owner, ip))
+                    ip_address = result[1]
+                    self.c.execute("INSERT INTO ip_history VALUES (NULL,?,?,?)",
+                                   (domain, net_owner, ip_address))
                     self.conn.commit()
+                    # Check if this a known IP and add it to hosts if not
+                    self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
+                    res = self.c.fetchone()
+                    if res[0] == 0:
+                        self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                       (ip_address, False, "Netcraft Domain IP History"))
+                        self.conn.commit()
+                        # Also add it to our list of IP addresses
+                        ip_list.append(ip_address)
 
         # Create the WhoisData table
-        self.c.execute('''CREATE TABLE 'WhoisData'
-                    ('Domain' text, 'Registrar' text, 'Expiration' text, 'Organization' text,
-                    'Registrant' text, 'AdminContact' text, 'TectContact' text, 'Address' text,
-                    'DNSSec' text)''')
+        self.c.execute('''CREATE TABLE 'whois_data'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'registrar' text, 'expiration' text,
+                    'organization' text, 'registrant' text, 'admin_contact' text,
+                    'tech_contact' text, 'address' text, 'dns_sec' text)''')
 
         # The whois lookups are only for domain names
-        for domain in domains_list:
+        for domain in domain_list:
             try:
                 # Run whois lookup
-                print(green("[+] Running whois for {}".format(domain)))
                 results = self.DC.run_whois(domain)
-                # Log whois results to domain report
                 if results:
                     # Check if more than one expiration date is returned
                     if isinstance(results['expiration_date'], datetime.date):
@@ -348,35 +431,41 @@ the company's primary domain used for their website.".format(domain)))
                     admin_email = results['admin_email']
                     tech_email = results['tech_email']
                     address = results['address'].rstrip()
-                    dnssec = ', '.join(results['dnssec'])
+                    if results['dnssec'] == "unsigned":
+                        dnssec = results['dnssec']
+                    else:
+                        dnssec = ', '.join(results['dnssec'])
 
-                    self.c.execute("INSERT INTO WhoisData VALUES (?,?,?,?,?,?,?,?,?)",
-                                   (domain, registrar, expiration_date, org, registrant,
-                                   admin_email, tech_email, address, dnssec))
+                    self.c.execute("INSERT INTO whois_data VALUES (NULL,?,?,?,?,?,?,?,?,?)",
+                                    (domain, registrar, expiration_date, org, registrant,
+                                    admin_email, tech_email, address, dnssec))
                     self.conn.commit()
             except Exception as error:
                 print(red("[!] There was an error running whois for {}!".format(domain)))
                 print(red("L.. Details: {}".format(error)))
 
         # Create RDAP table
-        self.c.execute('''CREATE TABLE 'RDAPData'
-                    ('IP' text, 'RDAPSource' text, 'Organization' text, 'NetworkCIDRs' text,
-                    'ASN' text, 'CountryCode' text, 'RobtexRelatedDomains' text)''')
+        self.c.execute('''CREATE TABLE 'rdap_data'
+                    ('id' INTEGER PRIMARY KEY, 'ip_address' text, 'rdap_source' text,
+                    'organization' text, 'network_cidr' text, 'asn' text, 'country_code' text,
+                    'robtex_related_domains' text)''')
 
         # The RDAP lookups are only for IPs, but we get the IPs for each domain name, too
-        for target in scope:
+        self.c.execute("SELECT host_address FROM hosts")
+        collected_hosts = self.c.fetchall()
+        # for target in scope:
+        for target in collected_hosts:
             try:
-                # Slightly change output and recorded target if it's a domain
+                # Slightly change output and record target if it's a domain
+                target = target[0]
                 if helpers.is_ip(target):
                     target_ip = target
-                    for_output = target
-                    print(green("[+] Running RDAP lookup for {}".format(for_output)))
+                    # for_output = target
                 elif target == "":
                     pass
                 else:
                     target_ip = socket.gethostbyname(target)
-                    for_output = "{} ({})".format(target_ip, target)
-                    print(green("[+] Running RDAP lookup for {}".format(for_output)))
+                    # for_output = "{} ({})".format(target_ip, target)
 
                 # Log RDAP lookups
                 results = self.DC.run_rdap(target_ip)
@@ -440,33 +529,34 @@ the company's primary domain used for their website.".format(domain)))
                     else:
                         robtex_results = "None"
 
-                    self.c.execute("INSERT INTO RDAPData VALUES (?,?,?,?,?,?,?)",
-                                   (for_output, rdap_source, org, net_cidr, asn, country_code,
-                                   robtex_results))
+                    self.c.execute("INSERT INTO rdap_data VALUES (NULL,?,?,?,?,?,?,?)",
+                                   (target_ip, rdap_source, org, net_cidr, asn, country_code,
+                                    robtex_results))
                     self.conn.commit()
             except Exception as error:
                 print(red("[!] The RDAP lookup failed for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
-    def create_shodan_table(self, ip_addresses, domains_list):
+    def create_shodan_table(self, ip_list, domain_list):
         """Function to create a Shodan table with Shodan search results."""
         # Prepare for Shodan searches
-        self.c.execute('''CREATE TABLE 'ShodanSearchResults'
-                    ('IP' text, 'Hostname(s)' text, 'OS' text, 'Port' text, 'Data' text)''')
+        self.c.execute('''CREATE TABLE 'shodan_search'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'ip_address' text, 'hostname' text,
+                    'os' text, 'port' text, 'banner_data' text)''')
 
-        for domain in domains_list:
+        for domain in domain_list:
             try:
                 results = self.DC.run_shodan_search(domain)
                 if results['total'] > 0:
                     for result in results['matches']:
-                        ip = result['ip_str']
+                        ip_address = result['ip_str']
                         hostnames = ", ".join(result['hostnames'])
                         operating_system = result['os']
                         port = result['port']
                         data = result['data']
 
-                        self.c.execute("INSERT INTO ShodanSearchResults VALUES (?,?,?,?,?)",
-                                       (ip, hostnames, operating_system, port, data))
+                        self.c.execute("INSERT INTO shodan_search VALUES (NULL,?,?,?,?,?,?)",
+                                       (domain, ip_address, hostnames, operating_system, port, data))
                         self.conn.commit()
                 else:
                     print(yellow("[*] No results for {}.".format(domain)))
@@ -474,75 +564,35 @@ the company's primary domain used for their website.".format(domain)))
                 pass
 
             # Take a break for Shodan's rate limits
-            time.sleep(self.sleep)
+            sleep(self.sleep)
 
         # Now perform Shodan host lookups
-        self.c.execute('''CREATE TABLE 'ShodanHostLookups'
-                    ('IP' text, 'OS' text, 'Organization' text, 'Port' text, 'Banner' text)''')
+        self.c.execute('''CREATE TABLE 'shodan_host_lookup'
+                    ('id' INTEGER PRIMARY KEY, 'ip_address' text, 'os' text, 'organization' text,
+                    'port' text, 'banner_data' text)''')
 
-        for ip in ip_addresses:
+        for ip in ip_list:
             try:
                 results = self.DC.run_shodan_lookup(ip)
-                ip = results['ip_str']
+                ip_address = results['ip_str']
                 operating_system = results.get('os', 'n/a')
                 org = results.get('org', 'n/a')
                 # Collect the banners
                 for item in results['data']:
                     port = item['port']
                     data = item['data'].rstrip()
-                    self.c.execute("INSERT INTO ShodanHostLookups VALUES (?,?,?,?,?)",
-                                   (ip, operating_system, org, port, data))
+                    self.c.execute("INSERT INTO shodan_host_lookup VALUES (NULL,?,?,?,?,?)",
+                                   (ip_address, operating_system, org, port, data))
                     self.conn.commit()
             except:
                 pass
 
-        # TODO: Figure out why this data is so often wrong/oudated and if it should be included going forward
-        # vuln_data = []
-        #         try:
-        #             # Check for any vulns Shodan knows about
-        #             for item in results["vulns"]:
-        #                 temp = {}
-        #                 cve = item.replace("!", "")
-        #                 print(yellow("[!] This host is flagged for {}".format(cve)))
-        #                 # Shodan API requires at least a one second delay between requests
-        #                 time.sleep(5)
-        #                 exploits = self.DC.run_shodan_exploit_search(cve)
-        #                 for vuln in exploits["matches"]:
-        #                     if vuln.get("cve")[0] == cve:
-        #                         cve_description = vuln.get("description")
-        #                         temp['host'] = ip
-        #                         temp['cve'] = cve
-        #                         temp['cve_description'] = cve_description
-        #                         vuln_data.append(temp)
-        #         except:
-        #             pass
-        #     except:
-        #         pass
-
-        #     # Take a break for Shodan's rate limits
-        #     time.sleep(self.sleep)
-
-        # # Add buffer rows for the next table
-        # row += 2
-
-        # if vuln_data:
-        #     # Write headers for Shodan Vuln search table
-        #     shodan_worksheet.write(row, 0, "Shodan Vulnerabilities", bold)
-        #     row += 1
-        #     shodan_worksheet.write(row, 0, "IP Address", bold)
-        #     shodan_worksheet.write(row, 1, "CVE", bold)
-        #     shodan_worksheet.write(row, 2, "Description", bold)
-        #     row += 1
-
-        #     for vuln in vuln_data:
-        #         shodan_worksheet.write(row, 0, vuln['host'])
-        #         shodan_worksheet.write(row, 1, vuln['cve'])
-        #         shodan_worksheet.write(row, 2, vuln['cve_description'])
-        #         row += 1
+            # Take a break for Shodan's rate limits
+            sleep(self.sleep)
 
     def create_people_table(self, domain, client):
-        """Function to add tables of publicly available information related to individuals, including
-        email addresses and social media profiles.
+        """Function to add tables of publicly available information related to individuals,
+        including email addresses and social media profiles.
         """
         # Setup lists for holding results
         unique_emails = None
@@ -560,58 +610,59 @@ the company's primary domain used for their website.".format(domain)))
 
         # If we have emails, record them and check HaveIBeenPwned
         if unique_emails:
-            self.c.execute('''CREATE TABLE 'PublicEmailAddresses' 
-                           ('Email_Address' text, 'Breaches' text, 'Pastes' text)''')
+            self.c.execute('''CREATE TABLE 'email_addresses'
+                           ('email_address' text, 'breaches' text, 'pastes' text)''')
 
             print(green("[+] Checking emails with HaveIBeenPwned."))
 
-            try:
-                for email in unique_emails:
-                    # Make sure we drop that @domain.com result Harvester often includes
-                    if email == '@' + domain or email == " ":
-                        pass
+            # try:
+            for email in unique_emails:
+                # Make sure we drop that @domain.com result Harvester often includes
+                if email == '@' + domain or email == " ":
+                    pass
+                else:
+                    pwned = self.PC.pwn_check(email)
+                    pastes = self.PC.paste_check(email)
+                    if pwned:
+                        hits = []
+                        for pwn in pwned:
+                            hits.append(pwn['Name'])
+                        pwned_results = ", ".join(hits)
                     else:
-                        pwned = self.PC.pwn_check(email)
-                        pastes = self.PC.paste_check(email)
-                        if pwned:
-                            hits = []
-                            for pwn in pwned:
-                                hits.append(pwn)
-                            pwned_results = ", ".join(hits)
-                        else:
-                            pwned_results = "None Found"
+                        pwned_results = "None Found"
 
-                        if pastes:
-                            pastes_results = pastes
-                        else:
-                            pastes_results = "None Found"
+                    if pastes:
+                        pastes_results = pastes
+                    else:
+                        pastes_results = "None Found"
 
-                        self.c.execute("INSERT INTO PublicEmailAddresses VALUES (?,?,?)",
-                                        (email, pwned_results, pastes_results))
-                        self.conn.commit()
+                    self.c.execute("INSERT INTO email_addresses VALUES (?,?,?)",
+                                    (email, pwned_results, pastes_results))
+                    self.conn.commit()
 
-                    # Give HIBP a rest for a few seconds
-                    time.sleep(self.hibp_sleep)
-            except Exception as error:
-                print(red("[!] Error checking emails with HaveIBeenPwned's database!"))
-                print(red("L.. Detail: {}".format(error)))
+                # Give HIBP a rest for a few seconds
+                sleep(self.hibp_sleep)
+            # except Exception as error:
+            #     print(red("[!] Error checking emails with HaveIBeenPwned's database!"))
+            #     print(red("L.. Detail: {}".format(error)))
+            self.PC.webdriver_cleanup
 
         print(green("[+] Gathering Twitter account data for identified profiles."))
 
         # If we have Twitter handles, check Twitter for user data
         if unique_twitter:
             # Setup Twitter Profiles table
-            self.c.execute('''CREATE TABLE 'TwitterProfiles' 
-                           ('Handle' text, 'RealName' text, 'FollowerCount' text, 'Location' text,
-                           'Description' text)''')
+            self.c.execute('''CREATE TABLE 'twitter' 
+                           ('handle' text, 'real_name' text, 'follower_count' text, 'location' text,
+                           'description' text)''')
 
             try:
                 # Collect any available Twitter info for discovered handles
                 for handle in unique_twitter:
                     data = self.PC.harvest_twitter(handle)
                     if data:
-                        self.c.execute("INSERT INTO TwitterProfiles VALUES (?,?,?,?,?)",
-                                        (data['handle'], data['real_name'], data['followers'],
+                        self.c.execute("INSERT INTO twitter VALUES (?,?,?,?,?)",
+                                       (data['handle'], data['real_name'], data['followers'],
                                         data['location'],  data['user_description']))
                         self.conn.commit()
             except:
@@ -620,29 +671,30 @@ the company's primary domain used for their website.".format(domain)))
         # If we have names, try to find LinkedIn profiles for them
         if unique_people:
             # Create the EmployeeData table
-            self.c.execute('''CREATE TABLE 'EmployeeData' 
-                           ('Name' text, 'JobTitle' text, 'PhoneNumber' text, 'LinkedIn' text)''')
+            self.c.execute('''CREATE TABLE 'employee_data' 
+                           ('name' text, 'job_title' text, 'phone_number' text,
+                           'linkedin_url' text)''')
 
             try:
                 # Try to find possible LinkedIn profiles for people
                 for person in unique_people:
                     # Insert the name into the table to start
-                    self.c.execute("INSERT INTO EmployeeData VALUES (?,NULL,NULL,NULL)", (person,))
+                    self.c.execute("INSERT INTO employee_data VALUES (?,NULL,NULL,NULL)", (person,))
                     self.conn.commit()
                     # Record their job title, if we have one from Hunter
                     if person in job_titles:
                         for name, title in job_titles.items():
                             if name == person:
-                                self.c.execute("UPDATE EmployeeData SET JobTitle = ? WHERE Name = ?",
-                                                (title, person))
+                                self.c.execute("UPDATE employee_data SET JobTitle = ? WHERE Name = ?",
+                                               (title, person))
                                 self.conn.commit()
 
                     # Record their phone number, if we have one from Hunter
                     if person in phone_nums:
                         for name, number in phone_nums.items():
                             if name == person:
-                                self.c.execute("UPDATE EmployeeData SET PhoneNumber = ? WHERE Name = ?",
-                                                (number, person))
+                                self.c.execute("UPDATE employee_data SET PhoneNumber = ? WHERE Name = ?",
+                                               (number, person))
                                 self.conn.commit()
 
                     # Record their verified LinkedIn profile, if we have one from Hunter
@@ -650,8 +702,8 @@ the company's primary domain used for their website.".format(domain)))
                         print(green("[+] Hunter has a LinkedIn link for {}.".format(person)))
                         for name, link in linkedin.items():
                             if name == person:
-                                self.c.execute("UPDATE EmployeeData SET LinkedIn = ? WHERE Name = ?",
-                                                (link, person))
+                                self.c.execute("UPDATE employee_data SET LinkedIn = ? WHERE Name = ?",
+                                               (link, person))
                                 self.conn.commit()
 
                     # If all else fails, search for LinkedIn profile links and record all candidates
@@ -659,8 +711,8 @@ the company's primary domain used for their website.".format(domain)))
                         data = self.PC.harvest_linkedin(person, client)
                         if data:
                             linkedin_results = ", ".join(data)
-                            self.c.execute("UPDATE EmployeeData SET LinkedIn = ? WHERE Name = ?",
-                                            (linkedin_results, person))
+                            self.c.execute("UPDATE employee_data SET LinkedIn = ? WHERE Name = ?",
+                                           (linkedin_results, person))
                             self.conn.commit()
             except:
                 pass
@@ -693,12 +745,13 @@ Please try again."))
 
         if metadata:
             # Setup the file metadata table
-            self.c.execute('''CREATE TABLE 'FoundFileMetadata'
-                           ('Filename' text, 'CreationDate' text, 'Author' text, 'ProducedBy' text, 'ModificationDate' text)''')
+            self.c.execute('''CREATE TABLE 'file_metadata'
+                           ('filename' text, 'creation_date' text, 'author' text, 'produced_by' text,
+                           'modification_date' text)''')
             # Write out the metadata for each found file
             for result in metadata:
-                self.c.execute("INSERT INTO FoundFileMetadata VALUES (?,?,?,?,?)",
-                (result[0],result[1],result[2],result[3],result[4]))
+                self.c.execute("INSERT INTO file_metadata VALUES (?,?,?,?,?)",
+                               (result[0],result[1],result[2],result[3],result[4]))
                 self.conn.commit()
 
     def create_urlcrazy_table(self, client, domain):
@@ -709,18 +762,12 @@ Please try again."))
             pass
         else:
             # Prepare for URLCrazy searches
-            self.c.execute('''CREATE TABLE 'UrlcrazyResults'
-                        ('Domain' text, 'ARecord' text, 'MXRecord' text, 'CymonMalicious' text,
-                        'URLVoidIP' text, 'Hostname(s)' text, 'DomainAge' text, 'GoogleRank' text,
-                        'AlexaRank' text, 'ASN' text, 'AsnName' text, 'MaliciousCount' text,
-                        'MaliciousEngines' text)''')
+            self.c.execute('''CREATE TABLE 'urlcrazy'
+                        ('domain' text, 'a_record' text, 'mx_record' text, 'cymon_hit' text,
+                        'urlvoid_ip' text, 'hostname' text, 'domain_age' text, 'google_rank' text,
+                        'alexa_rank' text, 'asn' text, 'asn_name' text, 'urlvoid_hits' text,
+                        'urlvoid_engines' text)''')
 
-            # Create the URLVoid table
-            # self.c.execute('''CREATE TABLE 'URLVoidResults'
-            #             ('Domain' text, 'IP' text, 'Hostname(s)' text, 'DomainAge' text,
-            #             'GoogleRank' text, 'AlexaRank' text, 'ASN' text, 'AsnName' text,
-            #             'MaliciousCount' text, 'MaliciousEngines' text)''')
-                        
             # Record each typosquatted domain
             for result in urlcrazy_results:
                 domain = result['domain']
@@ -728,8 +775,8 @@ Please try again."))
                 mx_records = result['mx-records']
                 malicious = result['malicious']
 
-                self.c.execute("INSERT INTO UrlcrazyResults VALUES (?,?,?,?,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
-                                (domain, a_records, mx_records, malicious))
+                self.c.execute("INSERT INTO urlcrazy VALUES (?,?,?,?,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
+                               (domain, a_records, mx_records, malicious))
                 self.conn.commit()
 
                 # Check each domain with URLVoid for reputation data
@@ -738,55 +785,55 @@ Please try again."))
                 engines = ""
                 if tree is not None:
                     # Check to see if urlvoid shows the domain flagged by any engines
-                    # try:
-                    for child in tree:
-                        malicious_check = child.tag
-                        if malicious_check == "detections":
-                            detections = tree[1]
-                            engines = detections[0]
-                            count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
-                            temp = []
-                            for engine in engines:
-                                temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
-                            engines = ", ".join(temp)
+                    try:
+                        for child in tree:
+                            malicious_check = child.tag
+                            if malicious_check == "detections":
+                                detections = tree[1]
+                                engines = detections[0]
+                                count = ET.tostring(detections[1], method='text').rstrip().decode('ascii')
+                                temp = []
+                                for engine in engines:
+                                    temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
+                                engines = ", ".join(temp)
 
-                    rep_data = tree[0]
-                    if len(rep_data) == 0:
-                        pass
-                    else:
-                        target = ET.tostring(rep_data[0], method='text').rstrip().decode('ascii')
-                        domain_age = ET.tostring(rep_data[3], method='text').rstrip().decode('ascii')
-                        google_rank = ET.tostring(rep_data[4], method='text').rstrip().decode('ascii')
-                        alexa_rank = ET.tostring(rep_data[5], method='text').rstrip().decode('ascii')
-
-                        if rep_data[11]:
-                            ip_data = rep_data[11]
-                            ip_add = ET.tostring(ip_data[0], method='text').rstrip().decode('ascii')
-                            hostnames = ET.tostring(ip_data[1], method='text').rstrip().decode('ascii')
-                            asn = ET.tostring(ip_data[2], method='text').rstrip().decode('ascii')
-                            asn_name = ET.tostring(ip_data[3], method='text').rstrip().decode('ascii')
+                        rep_data = tree[0]
+                        if len(rep_data) == 0:
+                            pass
                         else:
-                            ip_add = None
-                            hostnames = None
-                            asn = None
-                            asn_name = None
+                            target = ET.tostring(rep_data[0], method='text').rstrip().decode('ascii')
+                            domain_age = ET.tostring(rep_data[3], method='text').rstrip().decode('ascii')
+                            google_rank = ET.tostring(rep_data[4], method='text').rstrip().decode('ascii')
+                            alexa_rank = ET.tostring(rep_data[5], method='text').rstrip().decode('ascii')
 
-                        self.c.execute('''UPDATE UrlCrazyResults
-                                          SET 'URLVoidIP'=?,
-                                              'Hostname(s)'=?,
-                                              'DomainAge'=?,
-                                              'GoogleRank'=?,
-                                              'AlexaRank'=?,
-                                              'ASN'=?,
-                                              'AsnName'=?,
-                                              'MaliciousCount'=?,
-                                              'MaliciousEngines'=?
-                                          WHERE Domain = ?''',
-                                    (ip_add, hostnames, domain_age, google_rank, alexa_rank, asn,
-                                    asn_name, count, engines, target))
-                        self.conn.commit()
-                    # except:
-                    #     print(red("[!] There was an error getting the data for {}.".format(domain)))
+                            if rep_data[11]:
+                                ip_data = rep_data[11]
+                                ip_add = ET.tostring(ip_data[0], method='text').rstrip().decode('ascii')
+                                hostnames = ET.tostring(ip_data[1], method='text').rstrip().decode('ascii')
+                                asn = ET.tostring(ip_data[2], method='text').rstrip().decode('ascii')
+                                asn_name = ET.tostring(ip_data[3], method='text').rstrip().decode('ascii')
+                            else:
+                                ip_add = None
+                                hostnames = None
+                                asn = None
+                                asn_name = None
+
+                            self.c.execute('''UPDATE urlcrazy
+                                            SET 'urlvoid_ip'=?,
+                                                'hostname'=?,
+                                                'domain_age'=?,
+                                                'google_rank'=?,
+                                                'alexa_rank'=?,
+                                                'asn'=?,
+                                                'asn_name'=?,
+                                                'urlvoid_hit'=?,
+                                                'urlvoid_engines'=?
+                                            WHERE domain = ?''',
+                                        (ip_add, hostnames, domain_age, google_rank, alexa_rank, asn,
+                                            asn_name, count, engines, target))
+                            self.conn.commit()
+                    except:
+                        print(red("[!] There was an error getting the data for {}.".format(domain)))
 
     def create_cloud_table(self, client, domain, wordlist=None, fix_wordlist=None):
         """Function to add a cloud worksheet for findings related to AWS."""
@@ -794,14 +841,15 @@ Please try again."))
 
         if verified_buckets and verified_accounts:
             # Setup cloud table
-            self.c.execute('''CREATE TABLE 'CloudResults'
-                           ('Name' text, 'BucketURI' text, 'BucketARN' text, 'PublicAccess' text
+            self.c.execute('''CREATE TABLE 'cloud'
+                           ('name' text, 'bucket_uri' text, 'bucket_arn' text, 'publicly_accessible' text
                            )''')
             # Write S3 Bucket table contents
             for bucket in verified_buckets:
                 if bucket['exists']:
-                    self.c.execute("INSERT INTO 'CloudResults' VALUES (?,?,?,?)",
-                                   (bucket['bucketName'], bucket['bucketUri'], bucket['arn'], bucket['public']))
+                    self.c.execute("INSERT INTO 'cloud' VALUES (?,?,?,?)",
+                                   (bucket['bucketName'], bucket['bucketUri'],
+                                   bucket['arn'], bucket['public']))
                     self.conn.commit()
 
             # # Write headers for AWS Account table
@@ -852,4 +900,4 @@ Please try again."))
                 pass
 
             # Take a break for Censys's rate limits
-            time.sleep(self.sleep)
+            sleep(self.sleep)

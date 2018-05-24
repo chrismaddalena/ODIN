@@ -9,6 +9,11 @@ import requests
 import tweepy
 from colors import red, green, yellow
 from bs4 import BeautifulSoup as BS
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from http.cookiejar import CookieJar, Cookie
+from time import sleep
+import json
 from lib.theharvester import googlesearch, linkedinsearch, \
 twittersearch, yahoosearch, bingsearch, jigsaw
 from lib import helpers
@@ -48,45 +53,59 @@ class PeopleCheck(object):
             self.contact_api_key = ""
             print(yellow("[!] Could not fetch Full Contact API key."))
 
+        try:
+            self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+            self.browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+        except Exception:
+            self.chrome_driver_path = None
+
     def pwn_check(self, email):
         """Use HIBP's API to check for the target's email in public security breaches."""
-        pwned_api_endpoint = "https://haveibeenpwned.com/api/breachedaccount/{}".format(email)
         try:
-            request = requests.get(pwned_api_endpoint)
-            return request.json()
-        except requests.exceptions.RequestException as error:
-            print(red("[!] Error with HIBP request: {}".format(error)))
+            self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
+            sleep(10)
+            # cookies = self.browser.get_cookies()
+            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            pwned = json.loads(json_text)
+            # self.browser.close()
+
+            return pwned
+        except TimeoutException:
+            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
-        except ValueError:
+        except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
+            return []
+        except WebDriverException:
+            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
 
     def paste_check(self, email):
         """Use HIBP's API to check for the target's email in pastes across multiple paste websites.
         This includes sites like Slexy, Ghostbin, Pastebin.
         """
-        paste_api_endpoint = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
         try:
-            request = requests.get(paste_api_endpoint)
-            return request.text
-        except requests.exceptions.RequestException as error:
-            print(red("[!] Error with HaveIBeenPwned request: {}".format(error)))
+            self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
+            sleep(10)
+            # cookies = self.browser.get_cookies()
+            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            pastes = json.loads(json_text)
+            # self.browser.close()
+
+            return pastes
+        except TimeoutException:
+            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
-        except ValueError:
+        except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
             return []
+        except WebDriverException:
+            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+            return []
 
-    def password_check(self, keyword):
-        """Search a copy of the HaveIBeenPwned passwords list for passwords that include the
-        provided keyword. This can be something like the client's name, initials, etc.
-        """
-        # password_api_endpoint = "https://api.pwnedpasswords.com/pwnedpassword/"
-        if self.pwned_password_list:
-            # Do Something
-            print("Nothing to see here")
-        else:
-            return None
-
+    def webdriver_cleanup(self):
+        """Helper function to close out the web driver sessions."""
+        self.browser.close()
 
     def full_contact_email(self, email):
         """Use the Full Contact API to collect social information for the target email address."""
@@ -120,32 +139,32 @@ class PeopleCheck(object):
         print(green("[+] Beginning the harvesting of email addresses..."))
         # Search through most of Harvester's supported engines
         # No Baidu because it always seems to hang or take way too long
-        print(green("[-] Harvesting Google"))
+        print(green("[*] Harvesting Google"))
         search = googlesearch.search_google(domain, harvest_limit, harvest_start)
         search.process()
         google_harvest = search.get_emails()
 
-        print(green("[-] Harvesting LinkedIn"))
+        print(green("[*] Harvesting LinkedIn"))
         search = linkedinsearch.search_linkedin(domain, harvest_limit)
         search.process()
         link_harvest = search.get_people()
 
-        print(green("[-] Harvesting Twitter"))
+        print(green("[*] Harvesting Twitter"))
         search = twittersearch.search_twitter(domain, harvest_limit)
         search.process()
         twit_harvest = search.get_people()
 
-        print(green("[-] Harvesting Yahoo"))
+        print(green("[*] Harvesting Yahoo"))
         search = yahoosearch.search_yahoo(domain, harvest_limit)
         search.process()
         yahoo_harvest = search.get_emails()
 
-        print(green("[-] Harvesting Bing"))
+        print(green("[*] Harvesting Bing"))
         search = bingsearch.search_bing(domain, harvest_limit, harvest_start)
         search.process('no')
         bing_harvest = search.get_emails()
 
-        print(green("[-] Harvesting Jigsaw"))
+        print(green("[*] Harvesting Jigsaw"))
         search = jigsaw.search_jigsaw(domain, harvest_limit)
         search.process()
         jigsaw_harvest = search.get_people()

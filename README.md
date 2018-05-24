@@ -3,10 +3,10 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.6-brightgreen.svg)]() [![license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 
-![ODIN](https://github.com/chrismaddalena/viper/raw/origin/dev/ODIN.jpg)
+![ODIN](https://github.com/chrismaddalena/viper/raw/origin/dev/ODIN.png)
 
 ```
-Current version: v1.7 "Muninn"
+Current version: v1.8.5 "Muninn"
 
 A Python tool for automating intelligence gathering, testing and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
 
@@ -174,7 +174,7 @@ Currently only the Company API is used. There are plans to incorproate the Peopl
 
 **Does ODIN perform DNS brute forcing?**
 
-No, but it is being considered. However, brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into ODIN without just running the commands for those tools. For subdomain discovery via guessing, it's hard to beat Aquatone right now and there's alwas Fierce and DNSRecon.
+No. Brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into ODIN without just running the commands for those tools. For subdomain discovery via guessing, it's hard to beat Aquatone right now and there's alwas Fierce and DNSRecon.
 
 For now, ODIN leverages DNS Dumpster, Netcraft, and SSL/TLS certificate data to collect subdomains to get you started. That should get you a good number of subdomains to get started.
 
@@ -199,6 +199,26 @@ And to these folks who have created/maintained some of the tools integrated into
 * TrullJ - For making the slick [SSL Labs Scanner module](https://github.com/TrullJ/ssllabs).
 
 ### Change Log
+#### May 25, 2018, 1.8.5
+This is another large update with an all new arbitrary version number, v1.8.5! Many, many improvements and changes have been implemented to make ODIN better but also to pave the way for some plans coming for version 2.0 :D
+
+Here we go:
+
+* Fixed an issue with the Have I Been Pwned API failing to return results due to changes in API endpoints.
+* Redesinged SQLite3 database to be more in-line with design standards -- naming conventions, keys, and so forth.
+* Reworked multiprocess implementation to share variables between processes. This was to allow for the next several changes...
+* Reverse DNS is performed against all subdomains and IP addfesses are added to the new hosts tables (formerly report scope table).
+* IP addresses from DNS records and other sources are now added to the hosts table as well.
+* The hosts table now as a "source" column to note where the IP or domain was found if it wasn't in your scope file.
+    * There is also a column with True/False values that makes it easy to run a query and see the IPs and domains found that were not in the provided scope file.
+* Speaking of the scope file, it's no longer required. Feel free to not include it if you would rather just provide a name and a single domain name to get started.
+* Updated Full Contact API queries to v3, up from v2.
+* Shodan queries are now run against all IP addresses and domains discovered during the initial discovery phase instead of just those found in the provided scope file.
+* Tables have been cleaned up, made leaner, and can now be connected using keys. This will allow for link tables to create relationships between an IP address in the hosts table and DNS records or subdomains in other tables.
+* Link tables now exist to connect relationships between different information.
+* A new `--html` option now exists to generate an HTML report from the database upon completion.
+* Also fixed a dozen little things like typos, little periods hanging out at the ends of domain names, and other stuff!
+
 #### May 13, 2018
 * Full SSL/TLS certificates from Censys are now stored in their own table by default (not only verbose mode).
 * Subdomains pulled from Censys certificate data is now added to the Subdomains table.
