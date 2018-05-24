@@ -3,7 +3,7 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.6-brightgreen.svg)]() [![license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 
-![ODIN](https://github.com/chrismaddalena/viper/raw/origin/dev/ODIN.png)
+![ODIN](https://github.com/chrismaddalena/viper/raw/master/ODIN.png)
 
 ```
 Current version: v1.8.5 "Muninn"
