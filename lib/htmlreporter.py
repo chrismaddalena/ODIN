@@ -12,9 +12,21 @@ from colors import red, green, yellow
 class HTMLReporter(object):
     """A class that opens an ODIN database file and generates an HTML report."""
 
-    def __init__(self, report_path, database_path):
+    def __init__(self, organization, report_path, database_path):
         """Everything that should be initiated with a new object goes here."""
+        self.organization = organization
         self.report_path = report_path
+
+        self.table_header_style = """
+        <style>
+            th {
+            display: table-cell;
+            vertical-align: center;
+            font-weight: bold;
+            text-align: left;
+            }
+        </style>
+        """
 
         if not os.path.exists(report_path):
             try:
@@ -192,39 +204,69 @@ class HTMLReporter(object):
                         self.c.execute("INSERT INTO 'ip_hist_link' VALUES (NULL,?,?)", (host_info[0], row[0]))
                         self.conn.commit()
 
+    def create_css(self):
+        """Function to create the styles.css and define styling."""
+        with open(self.report_path + "styles.css", "w") as styles:
+            styling = """
+            table {
+                border-collapse: collapse;
+            }
+
+            table, th, td {
+                border: 1px solid black;
+            }
+
+            th {
+                text-align: center;
+            }
+
+            td {
+                text-align: left;
+            }
+            """
+            styles.write(styling)
+
     def create_report_page(self):
         """Function to create the main reports.html page in the report directory."""
         with open(self.report_path + "report.html", "w") as report:
             self.c.execute("SELECT * FROM company_info")
             company_info = self.c.fetchone()
-            name = company_info[0]
-            logo = company_info[1]
-            website = company_info[2]
-            employees = company_info[3]
-            founded = company_info[4]
+            if company_info:
+                name = company_info[0]
+                logo = company_info[1]
+                website = company_info[2]
+                employees = company_info[3]
+                founded = company_info[4]
+            else:
+                name = self.organization
+                logo = website = employees = founded = "Requires Full Contact API"
 
             content = """
-            <html>
-            <head></head>
-            <title>ODIN Report for {}</title>
-            <body>
+            <html><head><link rel="stylesheet" href="styles.css"></head>
+            <title>ODIN Report for {}</title><body>
             <h1>ODIN Report for {}</h1>
-            <img src='{}' alt='Company Logo' style="width:250px;" />
-            <p>Website: <a href='{}'>{}</a></p>
-            <p>Employees: {}</p>
-            <p>Founded: {}</p>
+            <p><img src='{}' alt='Company Logo' style="width:250px;" /></p>
+            <table><tr>
+            <th>Website</th><td>{}</td>
+            </tr><tr>
+            <th>Employees</th><td>{}</td>
+            </tr><tr>
+            <th>Founded</th><td>{}</td>
+            </tr></table>
             <h2>Table of Contents</h2>
             <li><a href='hosts.html'>Hosts Report</li>
+            <li><a href='screenshots.html'>Screenshots</li>
             <li><a href='people.html'>Social & Email</li>
             <li><a href='domains.html'>Domain Data</li>
             <li><a href='subdomains.html'>Subdomains</li>
             <li><a href='networks.html'>IP Address Data</li>
             <li><a href='shodan.html'>Shodan Data</a></li>
             <li><a href='certificates.html'>Certificates</li>
+            <li><a href='metadata.html'>File Metadata</li>
             <li><a href='cloud.html'>The Cloud</a></li>
-            </body>
-            </html>
-            """.format(name, name, logo, website, website, employees, founded)
+            <li><a href='typosquatting.html'>Domain Typosquatting</li>
+            </body></html>
+            """.format(name, name, logo, website, employees, founded)
 
             report.write(content)
 
@@ -238,13 +280,13 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>Hosts Report</title>
             <body>
             <h1>Hosts Report</h1>
             <h2>All Hosts</h2>
             <p>This table reflects the hosts/targets provided on the command line and the optional scope file:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Host</th>
             </tr>
@@ -252,13 +294,13 @@ class HTMLReporter(object):
 
             for row in in_scope:
                 for x in row[0].split(","):
-                    content += "<tr><th>{}</th></tr>".format(x)
-            content += "</table><p><br /><br /></p>"
+                    content += "<tr><td>{}</td></tr>".format(x)
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>Discovered Hosts</h2>
             <p>This table reflects the hosts/targets identified by ODIN:</p>
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Host</th>
             <th>Source</th>
@@ -266,8 +308,8 @@ class HTMLReporter(object):
             """
 
             for row in out_of_scope:
-                content += "<tr><th>{}</th><th>{}</th></tr>".format(row[0], row[1])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
+            content += "</table><p><br /></p>"
 
             content += """
             </body>
@@ -288,14 +330,14 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>Email & Social Report</title>
             <body>
             <h1>Email & Social Report</h1>
             <h2>Public Email Addresses & Related Breach Data</h2>
             <p>This table contains discovered email addresses and links to data breaches and posts from
             Have I Been Pwned's database:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Email Address</th>
             <th>Data Breach</th>
@@ -304,13 +346,13 @@ class HTMLReporter(object):
             """
 
             for row in emails:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>Employee Data</h2>
             <p>This table contains any data ODIN was able to collect about employees of the organization:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Employee Name</th>
             <th>Job Title</th>
@@ -319,14 +361,14 @@ class HTMLReporter(object):
             """
 
             for row in employees:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+            content += "</table><p><br /></p>"
 
 
             content += """
             <h2>Twitter Profiles</h2>
             <p>This table contains the data collected about Twitter accounts potentally linked to the organization:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Handle</th>
             <th>Real Name</th>
@@ -337,8 +379,8 @@ class HTMLReporter(object):
             """
 
             for row in twitter:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2], row[3], row[4])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4])
+            content += "</table><p><br /></p>"
 
             content += """
             </body>
@@ -355,13 +397,13 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>Certificates Report</title>
             <body>
             <h1>SSL/TLS Certificates</h1>
             <h2>Discovered Certificates</h2>
             <p>This table contains the SSL/TLS certificates ODIN was able to find:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
             <th>Subject</th>
@@ -370,8 +412,8 @@ class HTMLReporter(object):
             """
 
             for row in certificates:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+            content += "</table><p><br /></p>"
 
             content += """
             </body>
@@ -390,13 +432,13 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>Cloud Report</title>
             <body>
             <h1>Cloud Report</h1>
             <h2>Publicly Accessible Resources</h2>
             <p>This table contains the list of S3 buckets and Digital Ocean Spaces ODIN was able to find and access:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Name</th>
             <th>URI</th>
@@ -404,13 +446,13 @@ class HTMLReporter(object):
             """
 
             for row in public_cloud:
-                content += "<tr><th>{}</th><th>{}</th></tr>".format(row[0], row[1])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>All Discovered Resources</h2>
             <p>This table contains the list of all S3 buckets and Digital Ocean Spaces ODIN was able to identify:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Name</th>
             <th>URI</th>
@@ -418,8 +460,8 @@ class HTMLReporter(object):
             """
 
             for row in all_cloud:
-                content += "<tr><th>{}</th><th>{}</th></tr>".format(row[0], row[1])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
+            content += "</table><p><br /></p>"
 
             content += """
             </body>
@@ -444,13 +486,13 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>Domain Names Report</title>
             <body>
             <h1>Domain Names Report</h1>
             <h2>Domain Registration</h2>
             <p>This table contains the domain registration data for the reviewed domain names:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
             <th>Registrar</th>
@@ -459,13 +501,13 @@ class HTMLReporter(object):
             """
 
             for row in registration_data:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>Whois Contacts</h2>
             <p>This table contains the contact information tied to the domain names:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
             <th>Organization</th>
@@ -476,13 +518,13 @@ class HTMLReporter(object):
             """
 
             for row in whois_contacts:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2], row[3], row[4])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4])
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>DNS Records</h2>
             <p>This table contains the DNS records for the domain names:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
             <th>NS Record(s)</th>
@@ -495,13 +537,13 @@ class HTMLReporter(object):
             """
 
             for row in dns_records:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>Name Server Cache Snooping</h2>
             <p>This table contains name servers vulnerable to DNS cache snooping:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
             <th>NS Record(s)</th>
@@ -510,13 +552,13 @@ class HTMLReporter(object):
             """
 
             for row in cache_snoop:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>IP History</h2>
             <p>This table contains IP history for domain names collected from Netcraft:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
             <th>Netblock Owner</th>
@@ -525,8 +567,8 @@ class HTMLReporter(object):
             """
 
             for row in ip_history:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+            content += "</table><p><br /></p>"
 
             content += """
             </body>
@@ -545,7 +587,7 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>Subdomains</title>
             <body>
             <h1>Subdomains</h1>
@@ -556,7 +598,7 @@ class HTMLReporter(object):
                 content += """
                 <h2>Frontable Subdomains</h2>
                 <p>This table contains subdomains that may be used for domain fronting:
-                <table style="width:100%" align="left" border="1">
+                <table style="width:100%" border="1">
                 <tr>
                 <th>Base Domain</th>
                 <th>Subdomain</th>
@@ -565,13 +607,13 @@ class HTMLReporter(object):
                 """
                 
                 for row in frontable:
-                    content += "<tr><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2])
-                content += "</table><p><br /><br /></p>"    
+                    content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+                content += "</table><p><br /></p>"    
 
             content += """
             <h2>Discovered Subdomains</h2>
             <p>This table contains all of the subdomains ODIN identified, the IP address, and the source of the subdomain:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Base Domain</th>
             <th>Subdomain</th>
@@ -581,8 +623,8 @@ class HTMLReporter(object):
             """
 
             for row in subdomains:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2], row[3])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3])
+            content += "</table><p><br /></p>"
 
             content += """
             </body>
@@ -601,13 +643,13 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>IP Address Report</title>
             <body>
             <h1>IP Address Report</h1>
             <h2>RDAP Records</h2>
             <p>This table contains information pulled from RDAP for each analyzed IP address:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>IP Address</th>
             <th>RDAP Source</th>
@@ -619,13 +661,13 @@ class HTMLReporter(object):
             """
 
             for row in rdap_data:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2], row[3], row[4], row[5])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4], row[5])
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>Related Domains</h2>
             <p>This table contains domain names known to be tied to these IP addresses (via Robtex):
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>IP Address</th>
             <th>Related Domain</th>
@@ -633,8 +675,8 @@ class HTMLReporter(object):
             """
 
             for row in related_domains:
-                content += "<tr><th>{}</th><th>{}</th></tr>".format(row[0], row[1])
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
+            content += "</table><p><br /></p>"
 
             content += """
             </body>
@@ -653,13 +695,13 @@ class HTMLReporter(object):
 
             content = """
             <html>
-            <head></head>
+            <head><link rel="stylesheet" href="styles.css"></head>
             <title>Shodan Data</title>
             <body>
             <h1>Shodan Data</h1>
             <h2>Shodan Search Results</h2>
             <p>This table contains the results for Shodan searches on domain names:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>Search Term</th>
             <th>IP Address</th>
@@ -671,13 +713,13 @@ class HTMLReporter(object):
             """
 
             for row in shodan_search:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2], row[3], row[4], html.escape(row[5]))
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4], html.escape(row[5]))
+            content += "</table><p><br /></p>"
 
             content += """
             <h2>Shodan Host Lookups</h2>
             <p>This table contains the information Shodan has on the identified IP addresses:
-            <table style="width:100%" align="left" border="1">
+            <table style="width:100%" border="1">
             <tr>
             <th>IP Address</th>
             <th>OS</th>
@@ -688,8 +730,135 @@ class HTMLReporter(object):
             """
 
             for row in shodan_lookup:
-                content += "<tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>".format(row[0], row[1], row[2], row[3], html.escape(row[4]))
-            content += "</table><p><br /><br /></p>"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], html.escape(row[4]))
+            content += "</table><p><br /></p>"
+
+            content += """
+            </body>
+            </html>
+            """
+
+            report.write(content)
+
+    def create_typo_page(self):
+        """Function to create the typosquatting.html page in the report directory."""
+        with open(self.report_path + "typosquatting.html", "w") as report:
+            self.c.execute("SELECT domain,a_record,mx_record FROM urlcrazy")
+            typosquat = self.c.fetchall()
+            self.c.execute("SELECT domain,a_record,cymon_hit,urlvoid_ip,hostname,domain_age,google_rank,alexa_rank,asn,asn_name,urlvoid_hit,urlvoid_engines FROM urlcrazy")
+            mal_check = self.c.fetchall()
+
+            content = """
+            <html>
+            <head><link rel="stylesheet" href="styles.css"></head>
+            <title>Typosquatting Report</title>
+            <body>
+            <h1>Typosquatting Report</h1>
+            <h2>URLCrazy Results</h2>
+            <p>This table contains the registered lookalike domains for the provided domain name:
+            <table style="width:100%" border="1">
+            <tr>
+            <th>Domain</th>
+            <th>A Record</th>
+            <th>MX Record</th>
+            </tr>
+            """
+
+            for row in typosquat:
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+            content += "</table><p><br /></p>"
+
+            content += """
+            <h2>Malicious Content Review</h2>
+            <p>This table shows the results from Cymon.io and URLVoid for the registered lookalike domains:
+            <table style="width:100%" border="1">
+            <tr>
+            <th>Domain</th>
+            <th>A Record</th>
+            <th>Cymon Hits</th>
+            <th>URLVoid IP Address</th>
+            <th>URLVoid Hostname</th>
+            <th>Domain Age</th>
+            <th>Google Rank</th>
+            <th>Alexa Rank</th>
+            <th>ASN</th>
+            <th>ASN Name</th>
+            <th>URLVoid Hits</th>
+            <th>URLVoid Engines</th>
+            </tr>
+            """
+
+            for row in mal_check:
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11])
+            content += "</table><p><br /></p>"
+
+            content += """
+            <p>Note: A positive hit in the above table does not mean the domain/IP address is 
+            malicious. It might be a shared IP address, the malicious activity may be shutdown, 
+            or the domain may have already been seized and just happens to still be pointing 
+            at the bad IP address. Don't jump to any conclusions until you check the reports 
+            yourself!
+            </body>
+            </html>
+            """
+
+            report.write(content)
+
+    def create_metadata_page(self):
+        """Function to create the typosquatting.html page in the report directory."""
+        with open(self.report_path + "metadata.html", "w") as report:
+            self.c.execute("SELECT filename,creation_date,author,produced_by,modification_date FROM file_metadata")
+            metadata = self.c.fetchall()
+
+            content = """
+            <html>
+            <head><link rel="stylesheet" href="styles.css"></head>
+            <title>File Metadata Report</title>
+            <body>
+            <h1>File Metadata Report</h1>
+            <h2>Found Metadata</h2>
+            <p>This table contains the metadata extracted from files found via Google's search engine:
+            <table style="width:100%" border="1">
+            <tr>
+            <th>Filename</th>
+            <th>Creation Date</th>
+            <th>Author</th>
+            <th>Software</th>
+            <th>Modification Date</th>
+            </tr>
+            """
+
+            for row in metadata:
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4])
+            content += "</table><p><br /></p>"
+
+            content += """
+            </body>
+            </html>
+            """
+
+            report.write(content)
+
+    def create_screenshots_page(self):
+        """Function to create the screenshots.html page in the report directory."""
+        with open(self.report_path + "screenshots.html", "w") as report:
+
+            content = """
+            <html>
+            <head><link rel="stylesheet" href="styles.css"></head>
+            <title>Screenshots Report</title>
+            <body>
+            <h1>Screenshots Report</h1>
+            <p>This page contains the screenshots captured for web services:</p>
+            """
+
+            screenshot_images = os.listdir(self.report_path + "../screenshots")
+
+            for screenshot in screenshot_images:
+                content += """
+                <h2>{}</h2>
+                <img src='{}' />
+                """.format(screenshot, "../screenshots/" + screenshot)
 
             content += """
             </body>
@@ -701,6 +870,7 @@ class HTMLReporter(object):
     def generate_full_report(self):
         """Function to generate all report pages."""
         self.generate_link_tables()
+        self.create_css()
         self.create_report_page()
         self.create_hosts_page()
         self.create_domains_page()
@@ -710,4 +880,7 @@ class HTMLReporter(object):
         self.create_shodan_page()
         self.create_people_page()
         self.create_cloud_page()
+        self.create_typo_page()
+        self.create_metadata_page()
+        self.create_screenshots_page()
         self.close_out_reporting()

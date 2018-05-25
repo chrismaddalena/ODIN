@@ -26,6 +26,7 @@ from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 import validators
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from lib import helpers
 import click
 
@@ -83,8 +84,20 @@ class DomainCheck(object):
 
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+            # Try loading the driver as a test
+            browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            browser.close()
+            print(green("[*] Chrome web driver test was successful!"))
+        # Catch issues with the web driver or path
+        except WebDriverException:
+            self.chrome_driver_path = None
+            print(yellow("[!] There was a problem with the specified Chrome web driver in your \
+keys.config! Please check it. For now ODIN will try to use PhantomJS for Netcraft."))
+        # Catch issues loading the value from the config file
         except Exception:
             self.chrome_driver_path = None
+            print(yellow("[!] Could not load a Chrome webdriver for Selenium, so we will try \
+to use PantomJS for Netcraft."))
 
         try:
             self.boto3_client = boto3.client('s3')
@@ -292,22 +305,21 @@ class DomainCheck(object):
         """
         # Check to see if urlcrazy is available
         try:
-            subprocess.call("urlcrazy")
-            urlcrazy_present = True
+            urlcrazy_present = subprocess.getstatusoutput("urlcrazy")
         except OSError as error:
             if error.errno == os.errno.ENOENT:
                 # The urlcrazy command was not found
                 print(yellow("[!] A test call to urlcrazy failed, so skipping urlcrazy run."))
                 print(yellow("L.. Details: {}".format(error)))
-                urlcrazy_present = False
+                urlcrazy_present = "1"
             else:
                 # Something else went wrong while trying to run urlcrazy
                 print(yellow("[!] A test call to urlcrazy failed, so skipping urlcrazy run."))
                 print(yellow("L.. Details: {}".format(error)))
-                urlcrazy_present = False
+                urlcrazy_present = "1"
             return urlcrazy_present
 
-        if urlcrazy_present:
+        if urlcrazy_present[0] == 0:
             outfile = "reports/{}/crazy_temp.csv".format(client)
             final_csv = "reports/{}/{}_urlcrazy.csv".format(client, target)
             domains = []
@@ -394,7 +406,8 @@ class DomainCheck(object):
                 print(red("[!] Execution of urlcrazy failed!"))
                 print(red("L.. Details: {}".format(error)))
         else:
-            print(yellow("[*] Skipped urlcrazy check."))
+            print(yellow("[*] Skipping typosquatting checks because the urlcrazy command failed \
+to be found."))
 
     def run_shodan_search(self, target):
         """Collect information Shodan has for target domain name. This uses the Shodan search
@@ -557,8 +570,8 @@ class DomainCheck(object):
         request = session.post(dnsdumpster_url, cookies=cookies, data=data, headers=headers)
 
         if request.status_code != 200:
-            print("[+] There appears to have been an error communicating with DNS Dumpster -- {} \
-                  received!".format(request.status_code))
+            print(red("[+] There appears to have been an error communicating with DNS Dumpster -- {} \
+received!".format(request.status_code)))
 
         soup = BeautifulSoup(request.content, 'lxml')
         tables = soup.findAll('table')
@@ -628,49 +641,50 @@ class DomainCheck(object):
         NetCraft.
         """
         results = []
-        # If the WebDriver path is empty, we cannot continue with NetCraft
+        netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
+        target_dom_name = domain.split(".")
+
+        # We must use Selenium, so we either need PhantomJS or a driver
         if self.chrome_driver_path:
             driver = webdriver.Chrome(self.chrome_driver_path)
-            netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
-            target_dom_name = domain.split(".")
-            driver.get(netcraft_url)
+        else:
+            driver = webdriver.PhantomJS()
 
-            link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-            links_list = link_regx.findall(driver.page_source)
-            for x in links_list:
-                dom_name = x.split("/")[2].split(".")
-                if (dom_name[len(dom_name) - 1] == target_dom_name[1]) and \
-                (dom_name[len(dom_name) - 2] == target_dom_name[0]):
-                    results.append(x.split("/")[2])
-            num_regex = re.compile('Found (.*) site')
+        driver.get(netcraft_url)
+        link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
+        links_list = link_regx.findall(driver.page_source)
+        for x in links_list:
+            dom_name = x.split("/")[2].split(".")
+            if (dom_name[len(dom_name) - 1] == target_dom_name[1]) and \
+            (dom_name[len(dom_name) - 2] == target_dom_name[0]):
+                results.append(x.split("/")[2])
+        num_regex = re.compile('Found (.*) site')
+        num_subdomains = num_regex.findall(driver.page_source)
+        if not num_subdomains:
+            num_regex = re.compile('First (.*) sites returned')
             num_subdomains = num_regex.findall(driver.page_source)
-            if not num_subdomains:
-                num_regex = re.compile('First (.*) sites returned')
-                num_subdomains = num_regex.findall(driver.page_source)
-            if num_subdomains:
-                if num_subdomains[0] != str(0):
-                    num_pages = int(num_subdomains[0]) // 20 + 1
-                    if num_pages > 1:
-                        last_regex = re.compile(
-                            '<td align="left">%s.</td><td align="left">\n<a href="(.*)" rel="nofollow">' % (20))
-                        last_item = last_regex.findall(driver.page_source)[0].split("/")[2]
-                        next_page = 21
+        if num_subdomains:
+            if num_subdomains[0] != str(0):
+                num_pages = int(num_subdomains[0]) // 20 + 1
+                if num_pages > 1:
+                    last_regex = re.compile(
+                        '<td align="left">%s.</td><td align="left">\n<a href="(.*)" rel="nofollow">' % (20))
+                    last_item = last_regex.findall(driver.page_source)[0].split("/")[2]
+                    next_page = 21
 
-                        for x in range(2, num_pages):
-                            url = "http://searchdns.netcraft.com/?host=%s&last=%s&from=%s&restriction=/site%%20contains" % (domain, last_item, next_page)
-                            driver.get(url)
-                            link_regx = re.compile(
-                                '<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-                            links_list = link_regx.findall(driver.page_source)
-                            for y in links_list:
-                                dom_name1 = y.split("/")[2].split(".")
-                                if (dom_name1[len(dom_name1) - 1] == target_dom_name[1]) and \
-                                (dom_name1[len(dom_name1) - 2] == target_dom_name[0]):
-                                    results.append(y.split("/")[2])
-                            last_item = links_list[len(links_list) - 1].split("/")[2]
-                            next_page = 20 * x + 1
-                else:
-                    pass
+                    for x in range(2, num_pages):
+                        url = "http://searchdns.netcraft.com/?host=%s&last=%s&from=%s&restriction=/site%%20contains" % (domain, last_item, next_page)
+                        driver.get(url)
+                        link_regx = re.compile(
+                            '<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
+                        links_list = link_regx.findall(driver.page_source)
+                        for y in links_list:
+                            dom_name1 = y.split("/")[2].split(".")
+                            if (dom_name1[len(dom_name1) - 1] == target_dom_name[1]) and \
+                            (dom_name1[len(dom_name1) - 2] == target_dom_name[0]):
+                                results.append(y.split("/")[2])
+                        last_item = links_list[len(links_list) - 1].split("/")[2]
+                        next_page = 20 * x + 1
             else:
                 pass
 
@@ -681,20 +695,24 @@ class DomainCheck(object):
         """Function to fetch a domain's IP address history from NetCraft."""
         # TODO: See if the "Last Seen" and other data can be easily collected for here
         ip_history = []
+        endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % domain
         time.sleep(1)
+
+        # We must use Selenium, so we either need PhantomJS or a driver
         if self.chrome_driver_path:
             driver = webdriver.Chrome(self.chrome_driver_path)
-            endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % (domain)
-            driver.get(endpoint)
+        else:
+            driver = webdriver.PhantomJS()
 
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
-            urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
+        driver.get(endpoint)
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
 
-            for url in urls_parsed:
-                if urls_parsed.index(url) != 0:
-                    result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
-                    str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
-                    ip_history.append(result)
+        for url in urls_parsed:
+            if urls_parsed.index(url) != 0:
+                result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
+                str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
+                ip_history.append(result)
 
         driver.close()
         return ip_history
@@ -956,24 +974,3 @@ class DomainCheck(object):
             return ip_json
         else:
             print(red("[!] The provided IP for Robtex address is invalid!"))
-
-    def run_censys_search_address(self, target):
-        """Collect open port/protocol information from Censys for the target IP address. This
-        returns a dictionary of protocol information.
-
-        A free API key is required.
-
-        POSSIBLY UNNECESSARY: Censys is primarily useful for certificate data. Shodan has open
-        ports covered. This seems like an unnecessary use of Censys API calls now that Censys
-        limits users to 250/month.
-        """
-        if self.cenAddAPI is None:
-            pass
-        else:
-            print(green("[+] Performing Censys open port search for {}".format(target)))
-            try:
-                data = self.cenAddAPI.search(target)
-                return data
-            except Exception as error:
-                print(red("[!] Error collecting Censys data for {}.".format(target)))
-                print(red("L.. Details: {}".format(error)))

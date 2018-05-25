@@ -14,10 +14,11 @@ Note: ODIN is designed to be run on Linux. About 90% of it will absolutely work 
 ```
 
 ## First Things First
-ODIN is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify. All this developer did was assemble the tools, convert some of them to Python 3, and stitch them together into an all-in-one toolkit.
+ODIN is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify. Have fun :D
 
 ## What Can ODIN Do?
 ODIN is still very much in development, but it aims to automate many of the common recon tasks carried out by penetration testers. Such as:
+
 * Harvesting email addresses and employee names for a company.
 * Linking employees and companies to social media profiles.
 * Checking to see if discovered accounts have been a part of any public security breaches or appeared in any pastes.
@@ -25,7 +26,10 @@ ODIN is still very much in development, but it aims to automate many of the comm
 * Discovering subdomains, their related IP addresses, and looking for CDNs that might allow for domain fronting.
 * Hunting Office files and PDFs under a domain, downloading them, and extracting metadata.
 * Linking key words, like a company name or domain, to AWS via S3 buckets and account aliases.
+* Take screenshtos of web services.
 * More to come in the future...
+
+At the end of all of this ODIN will output a SQL database with all of the colelcted data. Optionally, an HTML report will be created with some default queries displaying all of the collected information.
 
 ## Getting Started
 ### Installing ODIN
@@ -35,6 +39,8 @@ ODIN requires **Python 3**. Using `pipenv` for managing the required libraries i
 2. Run `git clone https://github.com/chrismaddalena/ODIN.git`.
 3. Run `cd ODIN && pipenv install`.
 4. Run `pipenv shell` to get started using ODIN.
+
+[Optional] Install PhantomJS -- `brew install phantomjs` or `apt install phtanomjs`
 
 **Note:** On MacOS you may get an error about `pew` not being in your PATH after installing `pipenv` and attempting to install ODIN. To fix it, follow these steps in order:
 * Uninstall virtualenv, pipenv, and pew.
@@ -200,14 +206,21 @@ And to these folks who have created/maintained some of the tools integrated into
 
 ### Change Log
 #### May 25, 2018, 1.8.5
+* Fixed a few bugs in the HTML report and made it much, much prettier.
+* The reports directory has been organized! Now a reports/<organization_name>/ directory will be made. Under that, separate file_downloads, screenshots, and html_report directories are created for these items.
+* Fixed a few misc bugs reported by users.
+* [BETA] A new `--screenshots` flag has been added. If used, ODIN will take screenshots of the web services on hosts. For now this is limited to adding "http://" to the front of the IP address, domain, or subdomain and giving it a shot.
+* [BETA] Added a screenshots.html report page to the HTML report. This page serves as a gallery for web screenshots.
+
+#### May 24, 2018, 1.8.5
 This is another large update with an all new arbitrary version number, v1.8.5! Many, many improvements and changes have been implemented to make ODIN better but also to pave the way for some plans coming for version 2.0 :D
 
 Here we go:
 
 * Fixed an issue with the Have I Been Pwned API failing to return results due to changes in API endpoints.
-* Redesinged SQLite3 database to be more in-line with design standards -- naming conventions, keys, and so forth.
+* Redesigned SQLite3 database to be more in-line with design standards -- naming conventions, keys, and so forth.
 * Reworked multiprocess implementation to share variables between processes. This was to allow for the next several changes...
-* Reverse DNS is performed against all subdomains and IP addfesses are added to the new hosts tables (formerly report scope table).
+* Reverse DNS is performed against all subdomains and IP addresses are added to the new hosts tables (formerly the report scope table).
 * IP addresses from DNS records and other sources are now added to the hosts table as well.
 * The hosts table now as a "source" column to note where the IP or domain was found if it wasn't in your scope file.
     * There is also a column with True/False values that makes it easy to run a query and see the IPs and domains found that were not in the provided scope file.
@@ -237,7 +250,7 @@ Here we go:
 * Added Pipfile to replace requirements.txt and avoid conflicts with Python 2.x installs.
 * Finally updated the URLCrazy module for the SQLite3 database change.
 
-#### January 3, 2018
+#### January 3, 2018 v1.7.0
 * Converted the old XLSX reports to a SQLite3 database solution!
 * Implemented multiprocessing (!) to greatly improve efficiency and shorten runtime!
 * Various other little bug fixes and tweaks.

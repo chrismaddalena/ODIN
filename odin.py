@@ -28,10 +28,13 @@ from lib import reporter, asciis, verification, htmlreporter
 
 
 def setup_reports(client):
-    """Function to create a reports directory for the target organization."""
+    """Function to create a reports directory structure for the target organization."""
     if not os.path.exists("reports/{}".format(client)):
         try:
             os.makedirs("reports/{}".format(client))
+            os.makedirs("reports/{}/screenshots".format(client))
+            os.makedirs("reports/{}/file_downloads".format(client))
+            os.makedirs("reports/{}/html_report".format(client))
         except OSError as error:
             print(red("[!] Could not create the reports directory!"))
             print(red("L.. Details: {}".format(error)))
@@ -105,10 +108,12 @@ files with --file to be deleted after analysis.")
 @click.option('-wf', '--aws-fixes', help="A list of strings to be added to the start and end of \
 AWS S3 bucket names.", type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.option('--html', is_flag=True, help="Create an HTML report at the end for easy browsing.")
+@click.option('--screenshots', is_flag=True, help="Attempt to take screenshots of discovered \
+web services.")
 # Pass the above arguments on to your osint function
 @click.pass_context
 
-def osint(self, organization, domain, files, ext, delete, scope_file, aws, aws_fixes, verbose, html):
+def osint(self, organization, domain, files, ext, delete, scope_file, aws, aws_fixes, verbose, html, screenshots):
     """
 The OSINT toolkit:\n
 This is ODIN's primary module. ODIN will take the tagret organization, domain, and other data
@@ -138,12 +143,15 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         domain_list = manager.list()
         # Create reporter object and generate final list, the scope from scope file
         report = reporter.Reporter(output_report)
+        report.create_tables()
         scope, ip_list, domain_list = report.prepare_scope(ip_list, domain_list, scope_file, domain)
 
         # Create some jobs and put Python to work!
-        # Two job queues are used so some jobs can run with discovered domains and IPs
+        # Job queue 1 is for the initial phase
         jobs = []
+        # Job queue 2 is used for jobs using data from job queue 1
         more_jobs = []
+        # Job queue 3 is used for jobs that take a while and use the progress bar, i.e. AWS enum
         even_more_jobs = []
         company_info = Process(name="Company Info Collector",
                                target=report.create_company_info_table,
@@ -172,10 +180,16 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
                                args=(organization, domain, aws, aws_fixes))
         even_more_jobs.append(cloud_report)
 
+        if screenshots:
+            take_screenshots = Process(name="Screenshot Snapper",
+                                       target=report.capture_web_snapshots,
+                                       args=(report_path,))
+            more_jobs.append(take_screenshots)
+
         if files:
             files_report = Process(name="File Hunter",
                                    target=report.create_foca_table,
-                                   args=(domain, ext, delete, verbose))
+                                   args=(domain, ext, delete, report_path, verbose))
             jobs.append(files_report)
 
         print(green("[+] Beginning initial discovery phase! This could take some time..."))
@@ -192,7 +206,7 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         for job in more_jobs:
             job.join()
 
-        print(green("[+] Final phase: checking the cloud for interesting bits..."))
+        print(green("[+] Final phase: checking the cloud and web services..."))
         for job in even_more_jobs:
             print(green("[+] Starting new process: {}".format(job.name)))
             job.start()
@@ -203,7 +217,7 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         print(green("[+] Job's done! Your results are in {}.".format(output_report)))
 
         if html:
-            html_reporter = htmlreporter.HTMLReporter(report_path, output_report)
+            html_reporter = htmlreporter.HTMLReporter(organization, report_path + "/html_report/", output_report)
             html_reporter.generate_full_report()
 
 

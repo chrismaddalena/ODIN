@@ -55,64 +55,70 @@ class PeopleCheck(object):
 
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
-            self.browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-        except Exception:
-            self.browser = None
+            # Try loading the driver as a test
+            browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            browser.close()
+            print(green("[*] Chrome web driver test was successful!"))
+        # Catch issues with the web driver or path
+        except WebDriverException:
             self.chrome_driver_path = None
+            print(yellow("[!] There was a problem with the specified Chrome web driver in your \
+keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned."))
+        # Catch issues loading the value from the config file
+        except Exception:
+            self.chrome_driver_path = None
+            print(yellow("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
+to use PantomJS for haveIBeenPwned."))
 
     def pwn_check(self, email):
         """Use HIBP's API to check for the target's email in public security breaches."""
-        if self.browser:
-            try:
-                self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
-                sleep(10)
-                # cookies = self.browser.get_cookies()
-                json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
-                pwned = json.loads(json_text)
-                # self.browser.close()
+        try:
+            if self.chrome_driver_path:
+                browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            else:
+                browser = webdriver.PhantomJS()
+            browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
+            # cookies = browser.get_cookies()
+            json_text = browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            pwned = json.loads(json_text)
+            browser.close()
 
-                return pwned
-            except TimeoutException:
-                print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-                return []
-            except NoSuchElementException:
-                # This is likely an "all clear" -- no hits in HIBP
-                return []
-            except WebDriverException:
-                # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-                return []
-        else:
-            return ["Missing Chrome webdriver"]
+            return pwned
+        except TimeoutException:
+            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+            return []
+        except NoSuchElementException:
+            # This is likely an "all clear" -- no hits in HIBP
+            return []
+        except WebDriverException:
+            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+            return []
 
     def paste_check(self, email):
         """Use HIBP's API to check for the target's email in pastes across multiple paste websites.
         This includes sites like Slexy, Ghostbin, Pastebin.
         """
-        if self.browser:
-            try:
-                self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
-                sleep(10)
-                # cookies = self.browser.get_cookies()
-                json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
-                pastes = json.loads(json_text)
-                # self.browser.close()
+        try:
+            if self.chrome_driver_path:
+                browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            else:
+                browser = webdriver.PhantomJS()
+            browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
+            # cookies = browser.get_cookies()
+            json_text = browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            pastes = json.loads(json_text)
+            browser.close()
 
-                return pastes
-            except TimeoutException:
-                print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-                return []
-            except NoSuchElementException:
-                # This is likely an "all clear" -- no hits in HIBP
-                return []
-            except WebDriverException:
-                # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-                return []
-        else:
-            return ["Missing Chrome webdriver"]
-
-    def webdriver_cleanup(self):
-        """Helper function to close out the web driver sessions."""
-        self.browser.close()
+            return pastes
+        except TimeoutException:
+            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+            return []
+        except NoSuchElementException:
+            # This is likely an "all clear" -- no hits in HIBP
+            return []
+        except WebDriverException:
+            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+            return []
 
     def full_contact_email(self, email):
         """Use the Full Contact API to collect social information for the target email address."""

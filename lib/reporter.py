@@ -10,7 +10,7 @@ import datetime
 import sqlite3
 from xml.etree import ElementTree  as ET
 from colors import red, green, yellow
-from lib import domain_tools, email_tools, pyfoca, helpers
+from lib import domain_tools, email_tools, pyfoca, helpers, screenshots
 import sys
 import os
 
@@ -24,9 +24,6 @@ class Reporter(object):
 
     def __init__(self, report_name):
         """Everything that should be initiated with a new object goes here."""
-        # Initiate the new class objects
-        self.DC = domain_tools.DomainCheck()
-        self.PC = email_tools.PeopleCheck()
         # Create the report database -- NOT in memory to allow for multiprocessing and archiving
         if os.path.isfile(report_name):
             confirm = input(red("[!] A report for this client already exists. Are you sure you \
@@ -36,8 +33,84 @@ want to overwrite it? (Y\\N) "))
             else:
                 print(red("[!] Exiting..."))
                 exit()
+
+        # Initiate the new class objects
+        self.DC = domain_tools.DomainCheck()
+        self.PC = email_tools.PeopleCheck()
+        # Connect to our database
         self.conn = sqlite3.connect(report_name)
         self.c = self.conn.cursor()
+
+    def create_tables(self):
+        """Function to create the database tables."""
+       # Create the 'hosts' table
+        self.c.execute('''CREATE TABLE 'hosts' ('id' INTEGER PRIMARY KEY, 'host_address' text,
+                       'in_scope_file' text, 'source' text)''')
+        # Create the 'company_info' table
+        self.c.execute('''CREATE TABLE 'company_info'
+                    ('company_name' text, 'logo' text, 'website' text, 'employees' text,
+                    'year_founded' text, 'website_overview' text, 'corporate_keyword' text,
+                    'email_address' text, 'phone_number' text, 'physical_address' text
+                    )''')
+        # Create the 'dns' table
+        self.c.execute('''CREATE TABLE 'dns'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'ns_record' text, 'a_record' text,
+                    'mx_record' text, 'txt_record' text, 'soa_record' text, 'dmarc' text,
+                    'vulnerable_cache_snooping' text)''')
+        # Create the 'subdomains' table
+        self.c.execute('''CREATE TABLE 'subdomains'
+            ('id' INTEGER PRIMARY KEY,'domain' text, 'subdomain' text, 'ip_address' text,
+            'domain_frontable' text, 'source' text)''')
+        # Create the 'certificate' table
+        self.c.execute('''CREATE TABLE 'certificates'
+                    ('id' INTEGER PRIMARY KEY, 'host' text, 'subject' text, 'issuer' text)''')
+        # Create the 'ip_history' table
+        self.c.execute('''CREATE TABLE 'ip_history'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'netblock_owner' text,
+                    'ip_address' text)''')
+        # Create the 'whois_data' table
+        self.c.execute('''CREATE TABLE 'whois_data'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'registrar' text, 'expiration' text,
+                    'organization' text, 'registrant' text, 'admin_contact' text,
+                    'tech_contact' text, 'address' text, 'dns_sec' text)''')
+        # Create the 'rdap_data' table
+        self.c.execute('''CREATE TABLE 'rdap_data'
+                    ('id' INTEGER PRIMARY KEY, 'ip_address' text, 'rdap_source' text,
+                    'organization' text, 'network_cidr' text, 'asn' text, 'country_code' text,
+                    'robtex_related_domains' text)''')
+        # Create the 'shodan_search' table
+        self.c.execute('''CREATE TABLE 'shodan_search'
+                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'ip_address' text, 'hostname' text,
+                    'os' text, 'port' text, 'banner_data' text)''')
+        # Create the 'shodan_host_lookup' table
+        self.c.execute('''CREATE TABLE 'shodan_host_lookup'
+                    ('id' INTEGER PRIMARY KEY, 'ip_address' text, 'os' text, 'organization' text,
+                    'port' text, 'banner_data' text)''')
+        # Create the 'email_address' table
+        self.c.execute('''CREATE TABLE 'email_addresses'
+                        ('email_address' text, 'breaches' text, 'pastes' text)''')
+        # Create the 'twitter' table
+        self.c.execute('''CREATE TABLE 'twitter' 
+                        ('handle' text, 'real_name' text, 'follower_count' text, 'location' text,
+                        'description' text)''')
+        # Create the 'employee_data' table
+        self.c.execute('''CREATE TABLE 'employee_data' 
+                        ('name' text, 'job_title' text, 'phone_number' text,
+                        'linkedin_url' text)''')
+        # Create the 'file_metadata' table
+        self.c.execute('''CREATE TABLE 'file_metadata'
+                        ('filename' text, 'creation_date' text, 'author' text, 'produced_by' text,
+                        'modification_date' text)''')
+        # Create the 'urlcrazy' table
+        self.c.execute('''CREATE TABLE 'urlcrazy'
+                    ('domain' text, 'a_record' text, 'mx_record' text, 'cymon_hit' text,
+                    'urlvoid_ip' text, 'hostname' text, 'domain_age' text, 'google_rank' text,
+                    'alexa_rank' text, 'asn' text, 'asn_name' text, 'urlvoid_hit' text,
+                    'urlvoid_engines' text)''')
+        # Create the 'cloud' table
+        self.c.execute('''CREATE TABLE 'cloud'
+                        ('name' text, 'bucket_uri' text, 'bucket_arn' text, 'publicly_accessible' text
+                        )''')
 
     def close_out_reporting(self):
         """Function to check the new database and tables and close the connections."""
@@ -72,9 +145,6 @@ it has been added to the scope for OSINT.".format(domain)))
             else:
                 domain_list.append(item)
 
-        # Record the scope being used in the database
-        self.c.execute('''CREATE TABLE 'hosts' ('id' INTEGER PRIMARY KEY, 'host_address' text,
-                       'in_scope_file' text, 'source' text)''')
         for target in scope:
             self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)", (target, True, "Scope File"))
             self.conn.commit()
@@ -85,13 +155,6 @@ it has been added to the scope for OSINT.".format(domain)))
         """Function to generate a table of company information provided via Full Contact."""
         # Try to collect the info from Full Contact
         info_json = self.PC.full_contact_company(domain)
-
-        # Create the company_info table
-        self.c.execute('''CREATE TABLE 'company_info'
-                    ('company_name' text, 'logo' text, 'website' text, 'employees' text,
-                    'year_founded' text, 'website_overview' text, 'corporate_keyword' text,
-                    'email_address' text, 'phone_number' text, 'physical_address' text
-                    )''')
 
         if info_json is not None:
             try:
@@ -164,12 +227,6 @@ the company's primary domain used for their website.".format(domain)))
         """Function to generate a domain report consisting of information like DNS records and
         subdomains.
         """
-        # Create the DNS table for holding the domains' DNS records
-        self.c.execute('''CREATE TABLE 'dns'
-                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'ns_record' text, 'a_record' text,
-                    'mx_record' text, 'txt_record' text, 'soa_record' text, 'dmarc' text,
-                    'vulnerable_cache_snooping' text)''')
-
         # Get the DNS records for each domain
         for domain in domain_list:
             vulnerable_dns_servers = []
@@ -253,15 +310,6 @@ the company's primary domain used for their website.".format(domain)))
                            (domain, ns_records, a_records, mx_records, txt_records, soa_records,
                             dmarc_record, ", ".join(vulnerable_dns_servers)))
             self.conn.commit()
-
-        # Create the Subdomains table for recording subdomain info for each domain
-        self.c.execute('''CREATE TABLE 'subdomains'
-            ('id' INTEGER PRIMARY KEY,'domain' text, 'subdomain' text, 'ip_address' text,
-            'domain_frontable' text, 'source' text)''')
-
-        # Create Certificate table for recording full certificates collected for subdomains
-        self.c.execute('''CREATE TABLE 'certificates'
-                    ('id' INTEGER PRIMARY KEY, 'host' text, 'subject' text, 'issuer' text)''')
 
         # Collect the subdomain information from DNS Dumpster and NetCraft
         for domain in domain_list:
@@ -372,11 +420,6 @@ the company's primary domain used for their website.".format(domain)))
             # Take a break for Censys's rate limits
             sleep(self.sleep)
 
-        # Create IP History table for historical data collected from NetCraft
-        self.c.execute('''CREATE TABLE 'ip_history'
-                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'netblock_owner' text,
-                    'ip_address' text)''')
-
         for domain in domain_list:
             ip_history = []
             try:
@@ -400,12 +443,6 @@ the company's primary domain used for their website.".format(domain)))
                         self.conn.commit()
                         # Also add it to our list of IP addresses
                         ip_list.append(ip_address)
-
-        # Create the WhoisData table
-        self.c.execute('''CREATE TABLE 'whois_data'
-                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'registrar' text, 'expiration' text,
-                    'organization' text, 'registrant' text, 'admin_contact' text,
-                    'tech_contact' text, 'address' text, 'dns_sec' text)''')
 
         # The whois lookups are only for domain names
         for domain in domain_list:
@@ -441,12 +478,6 @@ the company's primary domain used for their website.".format(domain)))
             except Exception as error:
                 print(red("[!] There was an error running whois for {}!".format(domain)))
                 print(red("L.. Details: {}".format(error)))
-
-        # Create RDAP table
-        self.c.execute('''CREATE TABLE 'rdap_data'
-                    ('id' INTEGER PRIMARY KEY, 'ip_address' text, 'rdap_source' text,
-                    'organization' text, 'network_cidr' text, 'asn' text, 'country_code' text,
-                    'robtex_related_domains' text)''')
 
         # The RDAP lookups are only for IPs, but we get the IPs for each domain name, too
         self.c.execute("SELECT host_address FROM hosts")
@@ -537,11 +568,6 @@ the company's primary domain used for their website.".format(domain)))
 
     def create_shodan_table(self, ip_list, domain_list):
         """Function to create a Shodan table with Shodan search results."""
-        # Prepare for Shodan searches
-        self.c.execute('''CREATE TABLE 'shodan_search'
-                    ('id' INTEGER PRIMARY KEY, 'domain' text, 'ip_address' text, 'hostname' text,
-                    'os' text, 'port' text, 'banner_data' text)''')
-
         for domain in domain_list:
             try:
                 results = self.DC.run_shodan_search(domain)
@@ -563,11 +589,6 @@ the company's primary domain used for their website.".format(domain)))
 
             # Take a break for Shodan's rate limits
             sleep(self.sleep)
-
-        # Now perform Shodan host lookups
-        self.c.execute('''CREATE TABLE 'shodan_host_lookup'
-                    ('id' INTEGER PRIMARY KEY, 'ip_address' text, 'os' text, 'organization' text,
-                    'port' text, 'banner_data' text)''')
 
         for ip in ip_list:
             try:
@@ -606,51 +627,42 @@ the company's primary domain used for their website.".format(domain)))
         self.PC.process_harvested_lists(harvester_emails, harvester_people, \
         harvester_twitter, hunter_json)
 
-        self.c.execute('''CREATE TABLE 'email_addresses'
-                        ('email_address' text, 'breaches' text, 'pastes' text)''')
-
         # If we have emails, record them and check HaveIBeenPwned
         if unique_emails:
             print(green("[+] Checking emails with HaveIBeenPwned."))
 
-            # try:
-            for email in unique_emails:
-                # Make sure we drop that @domain.com result Harvester often includes
-                if email == '@' + domain or email == " ":
-                    pass
-                else:
-                    pwned = self.PC.pwn_check(email)
-                    pastes = self.PC.paste_check(email)
-                    if pwned:
-                        hits = []
-                        for pwn in pwned:
-                            hits.append(pwn['Name'])
-                        pwned_results = ", ".join(hits)
+            try:
+                for email in unique_emails:
+                    # Make sure we drop that @domain.com result Harvester often includes
+                    if email == '@' + domain or email == " ":
+                        pass
                     else:
-                        pwned_results = "None Found"
+                        pwned = self.PC.pwn_check(email)
+                        pastes = self.PC.paste_check(email)
+                        if pwned:
+                            hits = []
+                            for pwn in pwned:
+                                hits.append(pwn['Name'])
+                            pwned_results = ", ".join(hits)
+                        else:
+                            pwned_results = "None Found"
 
-                    if pastes:
-                        pastes_results = pastes
-                    else:
-                        pastes_results = "None Found"
+                        if pastes:
+                            pastes_results = pastes
+                        else:
+                            pastes_results = "None Found"
 
-                    self.c.execute("INSERT INTO email_addresses VALUES (?,?,?)",
-                                    (email, pwned_results, pastes_results))
-                    self.conn.commit()
+                        self.c.execute("INSERT INTO email_addresses VALUES (?,?,?)",
+                                        (email, pwned_results, pastes_results))
+                        self.conn.commit()
 
-                # Give HIBP a rest for a few seconds
-                sleep(self.hibp_sleep)
-            # except Exception as error:
-            #     print(red("[!] Error checking emails with HaveIBeenPwned's database!"))
-            #     print(red("L.. Detail: {}".format(error)))
-            self.PC.webdriver_cleanup
+                    # Give HIBP a rest for a few seconds
+                    sleep(self.hibp_sleep)
+            except Exception as error:
+                print(red("[!] Error checking emails with HaveIBeenPwned's database!"))
+                print(red("L.. Detail: {}".format(error)))
 
         print(green("[+] Gathering Twitter account data for identified profiles."))
-
-        # Setup Twitter Profiles table
-        self.c.execute('''CREATE TABLE 'twitter' 
-                        ('handle' text, 'real_name' text, 'follower_count' text, 'location' text,
-                        'description' text)''')
 
         # If we have Twitter handles, check Twitter for user data
         if unique_twitter:
@@ -665,11 +677,6 @@ the company's primary domain used for their website.".format(domain)))
                         self.conn.commit()
             except:
                 pass
-
-        # Create the EmployeeData table
-        self.c.execute('''CREATE TABLE 'employee_data' 
-                        ('name' text, 'job_title' text, 'phone_number' text,
-                        'linkedin_url' text)''')
 
         # If we have names, try to find LinkedIn profiles for them
         if unique_people:
@@ -715,7 +722,7 @@ the company's primary domain used for their website.".format(domain)))
             except:
                 pass
 
-    def create_foca_table(self, domain, extensions, del_files, verbose):
+    def create_foca_table(self, domain, extensions, del_files, download_dir, verbose):
         """Function to add a FOCA worksheet containing pyFOCA results."""
         # Set domain to look at and choose if files should be deleted
         domain_name = domain
@@ -737,14 +744,9 @@ Please try again."))
         socket.setdefaulttimeout(5)
 
         print(green("[+] Performing file discovery under {}.".format(domain_name)))
-        parser = pyfoca.Metaparser(domain_name, page_results, exts, del_files, verbose)
+        parser = pyfoca.Metaparser(domain_name, page_results, exts, del_files, download_dir, verbose)
         metadata = parser.grab_meta()
         parser.clean_up()
-
-        # Setup the file metadata table
-        self.c.execute('''CREATE TABLE 'file_metadata'
-                        ('filename' text, 'creation_date' text, 'author' text, 'produced_by' text,
-                        'modification_date' text)''')
 
         if metadata:
             # Write out the metadata for each found file
@@ -757,14 +759,6 @@ Please try again."))
         """Function to add a worksheet for URLCrazy results."""
         # Check if urlcrazy is available and proceed with recording results
         urlcrazy_results = self.DC.run_urlcrazy(client, domain)
-
-        # Prepare for URLCrazy searches
-        self.c.execute('''CREATE TABLE 'urlcrazy'
-                    ('domain' text, 'a_record' text, 'mx_record' text, 'cymon_hit' text,
-                    'urlvoid_ip' text, 'hostname' text, 'domain_age' text, 'google_rank' text,
-                    'alexa_rank' text, 'asn' text, 'asn_name' text, 'urlvoid_hits' text,
-                    'urlvoid_engines' text)''')
-
         if not urlcrazy_results:
             pass
         else:
@@ -839,11 +833,6 @@ Please try again."))
         """Function to add a cloud worksheet for findings related to AWS."""
         verified_buckets, verified_accounts = self.DC.enumerate_buckets(client, domain, wordlist, fix_wordlist)
 
-        # Setup cloud table
-        self.c.execute('''CREATE TABLE 'cloud'
-                        ('name' text, 'bucket_uri' text, 'bucket_arn' text, 'publicly_accessible' text
-                        )''')
-
         if verified_buckets and verified_accounts:
             # Write S3 Bucket table contents
             for bucket in verified_buckets:
@@ -875,30 +864,13 @@ Please try again."))
         else:
             print(yellow("[*] Could not access the AWS API to enumerate S3 buckets and accounts."))
 
-    def create_censys_table(self, scope):
-        """Function to add a Censys.io table to the DB with Censys host information and certificate
-        details.
+    def capture_web_snapshots(self, output_dir):
+        """Function to take a screenshot of discovered web services."""
+        camera = screenshots.Screenshotter()
+        output_dir += "screenshots/"
 
-        POSSIBLY UNNECESSARY: Censys is primarily useful for certificate data. Shodan has open
-        ports covered. This seems like an unnecessary use of Censys API calls now that Censys
-        limits users to 250/month.
-        """
-        # Create the Censys table
-        self.c.execute('''CREATE TABLE CensysResults
-                    ('Host' text, 'IP' text, 'Country' text, 'Ports' text)''')
+        self.c.execute("SELECT host_address FROM hosts")
+        target_list = self.c.fetchall()
 
-        for target in scope:
-            try:
-                results = self.DC.run_censys_search_address(target)
-                for result in results:
-                    ports = []
-                    for port in result["protocols"]:
-                        ports.append(port)
-                    self.c.execute("INSERT INTO CensysResults VALUES (?,?,?,?)",
-                                   (target, result['ip'], result['location.country'], ', '.join(ports)))
-                    self.conn.commit()
-            except:
-                pass
-
-            # Take a break for Censys's rate limits
-            sleep(self.sleep)
+        for target in target_list:
+            camera.take_screenshot(target[0], output_dir)
