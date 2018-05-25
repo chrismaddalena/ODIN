@@ -86,14 +86,15 @@ it has been added to the scope for OSINT.".format(domain)))
         # Try to collect the info from Full Contact
         info_json = self.PC.full_contact_company(domain)
 
+        # Create the company_info table
+        self.c.execute('''CREATE TABLE 'company_info'
+                    ('company_name' text, 'logo' text, 'website' text, 'employees' text,
+                    'year_founded' text, 'website_overview' text, 'corporate_keyword' text,
+                    'email_address' text, 'phone_number' text, 'physical_address' text
+                    )''')
+
         if info_json is not None:
             try:
-                # Create the company_info table
-                self.c.execute('''CREATE TABLE 'company_info'
-                            ('company_name' text, 'logo' text, 'website' text, 'employees' text,
-                            'year_founded' text, 'website_overview' text, 'corporate_keyword' text,
-                            'email_address' text, 'phone_number' text, 'physical_address' text
-                            )''')
                 # INSERT the data from Full Contact
                 name = info_json['organization']['name']
                 logo = info_json['logo']
@@ -254,9 +255,6 @@ the company's primary domain used for their website.".format(domain)))
             self.conn.commit()
 
         # Create the Subdomains table for recording subdomain info for each domain
-        # self.c.execute('''CREATE TABLE 'subdomains'
-        #     ('id' INTEGER PRIMARY KEY,'domain' text, 'subdomain' text, 'ip_address' text, 'asn' text,
-        #     'provider' text, 'domain_frontable' text, 'source' text)''')
         self.c.execute('''CREATE TABLE 'subdomains'
             ('id' INTEGER PRIMARY KEY,'domain' text, 'subdomain' text, 'ip_address' text,
             'domain_frontable' text, 'source' text)''')
@@ -374,7 +372,7 @@ the company's primary domain used for their website.".format(domain)))
             # Take a break for Censys's rate limits
             sleep(self.sleep)
 
-        # Create IPHistory table for historical data collected from NetCraft
+        # Create IP History table for historical data collected from NetCraft
         self.c.execute('''CREATE TABLE 'ip_history'
                     ('id' INTEGER PRIMARY KEY, 'domain' text, 'netblock_owner' text,
                     'ip_address' text)''')
@@ -608,11 +606,11 @@ the company's primary domain used for their website.".format(domain)))
         self.PC.process_harvested_lists(harvester_emails, harvester_people, \
         harvester_twitter, hunter_json)
 
+        self.c.execute('''CREATE TABLE 'email_addresses'
+                        ('email_address' text, 'breaches' text, 'pastes' text)''')
+
         # If we have emails, record them and check HaveIBeenPwned
         if unique_emails:
-            self.c.execute('''CREATE TABLE 'email_addresses'
-                           ('email_address' text, 'breaches' text, 'pastes' text)''')
-
             print(green("[+] Checking emails with HaveIBeenPwned."))
 
             # try:
@@ -649,13 +647,13 @@ the company's primary domain used for their website.".format(domain)))
 
         print(green("[+] Gathering Twitter account data for identified profiles."))
 
+        # Setup Twitter Profiles table
+        self.c.execute('''CREATE TABLE 'twitter' 
+                        ('handle' text, 'real_name' text, 'follower_count' text, 'location' text,
+                        'description' text)''')
+
         # If we have Twitter handles, check Twitter for user data
         if unique_twitter:
-            # Setup Twitter Profiles table
-            self.c.execute('''CREATE TABLE 'twitter' 
-                           ('handle' text, 'real_name' text, 'follower_count' text, 'location' text,
-                           'description' text)''')
-
             try:
                 # Collect any available Twitter info for discovered handles
                 for handle in unique_twitter:
@@ -668,13 +666,13 @@ the company's primary domain used for their website.".format(domain)))
             except:
                 pass
 
+        # Create the EmployeeData table
+        self.c.execute('''CREATE TABLE 'employee_data' 
+                        ('name' text, 'job_title' text, 'phone_number' text,
+                        'linkedin_url' text)''')
+
         # If we have names, try to find LinkedIn profiles for them
         if unique_people:
-            # Create the EmployeeData table
-            self.c.execute('''CREATE TABLE 'employee_data' 
-                           ('name' text, 'job_title' text, 'phone_number' text,
-                           'linkedin_url' text)''')
-
             try:
                 # Try to find possible LinkedIn profiles for people
                 for person in unique_people:
@@ -743,11 +741,12 @@ Please try again."))
         metadata = parser.grab_meta()
         parser.clean_up()
 
+        # Setup the file metadata table
+        self.c.execute('''CREATE TABLE 'file_metadata'
+                        ('filename' text, 'creation_date' text, 'author' text, 'produced_by' text,
+                        'modification_date' text)''')
+
         if metadata:
-            # Setup the file metadata table
-            self.c.execute('''CREATE TABLE 'file_metadata'
-                           ('filename' text, 'creation_date' text, 'author' text, 'produced_by' text,
-                           'modification_date' text)''')
             # Write out the metadata for each found file
             for result in metadata:
                 self.c.execute("INSERT INTO file_metadata VALUES (?,?,?,?,?)",
@@ -758,16 +757,17 @@ Please try again."))
         """Function to add a worksheet for URLCrazy results."""
         # Check if urlcrazy is available and proceed with recording results
         urlcrazy_results = self.DC.run_urlcrazy(client, domain)
+
+        # Prepare for URLCrazy searches
+        self.c.execute('''CREATE TABLE 'urlcrazy'
+                    ('domain' text, 'a_record' text, 'mx_record' text, 'cymon_hit' text,
+                    'urlvoid_ip' text, 'hostname' text, 'domain_age' text, 'google_rank' text,
+                    'alexa_rank' text, 'asn' text, 'asn_name' text, 'urlvoid_hits' text,
+                    'urlvoid_engines' text)''')
+
         if not urlcrazy_results:
             pass
         else:
-            # Prepare for URLCrazy searches
-            self.c.execute('''CREATE TABLE 'urlcrazy'
-                        ('domain' text, 'a_record' text, 'mx_record' text, 'cymon_hit' text,
-                        'urlvoid_ip' text, 'hostname' text, 'domain_age' text, 'google_rank' text,
-                        'alexa_rank' text, 'asn' text, 'asn_name' text, 'urlvoid_hits' text,
-                        'urlvoid_engines' text)''')
-
             # Record each typosquatted domain
             for result in urlcrazy_results:
                 domain = result['domain']
@@ -839,11 +839,12 @@ Please try again."))
         """Function to add a cloud worksheet for findings related to AWS."""
         verified_buckets, verified_accounts = self.DC.enumerate_buckets(client, domain, wordlist, fix_wordlist)
 
+        # Setup cloud table
+        self.c.execute('''CREATE TABLE 'cloud'
+                        ('name' text, 'bucket_uri' text, 'bucket_arn' text, 'publicly_accessible' text
+                        )''')
+
         if verified_buckets and verified_accounts:
-            # Setup cloud table
-            self.c.execute('''CREATE TABLE 'cloud'
-                           ('name' text, 'bucket_uri' text, 'bucket_arn' text, 'publicly_accessible' text
-                           )''')
             # Write S3 Bucket table contents
             for bucket in verified_buckets:
                 if bucket['exists']:

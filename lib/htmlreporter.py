@@ -45,45 +45,70 @@ class HTMLReporter(object):
         """Function to create link tables between the hosts table and tables with IP address and
         domain info. Each table is named <something>_link and uses a link_id as its primary key.
         """
-        self.c.execute('''CREATE TABLE 'dns_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'dns_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(dns_id) REFERENCES dns(id))
-                ''')
+        try:
+            self.c.execute('''CREATE TABLE 'dns_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'dns_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(dns_id) REFERENCES dns(id))
+                    ''')
+        except:
+            print("[!] Could not create DNS link table! ")
+            
+        try:
+            self.c.execute('''CREATE TABLE 'whois_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'whois_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(whois_id) REFERENCES whois_data(id))
+                    ''')
+        except:
+            print("[!] Could not create Whois link table! ")
 
-        self.c.execute('''CREATE TABLE 'whois_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'whois_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(whois_id) REFERENCES whois_data(id))
-                ''')
+        try:
+            self.c.execute('''CREATE TABLE 'rdap_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'rdap_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(rdap_id) REFERENCES rdap_data(id))
+                    ''')
+        except:
+            print("[!] Could not create RDAP link table! ")
 
-        self.c.execute('''CREATE TABLE 'rdap_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'rdap_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(rdap_id) REFERENCES rdap_data(id))
-                ''')
+        try:
+            self.c.execute('''CREATE TABLE 'subdomain_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'subdomain_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(subdomain_id) REFERENCES subdomains(id))
+                    ''')
+        except:
+            print("[!] Could not create Subdomain link table! ")
 
-        self.c.execute('''CREATE TABLE 'subdomain_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'subdomain_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(subdomain_id) REFERENCES subdomains(id))
-                ''')
+        try:
+            self.c.execute('''CREATE TABLE 'shodan_search_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_host_lookup(id))
+                    ''')
+        except:
+            print("[!] Could not create Shodan Search link table! ")
 
-        self.c.execute('''CREATE TABLE 'shodan_search_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_host_lookup(id))
-                ''')
+        try:
+            self.c.execute('''CREATE TABLE 'shodan_host_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_search(id))
+                    ''')
+        except:
+            print("[!] Could not create Shodan Host link table! ")
 
-        self.c.execute('''CREATE TABLE 'shodan_host_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_search(id))
-                ''')
+        try:
+            self.c.execute('''CREATE TABLE 'ip_hist_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'hist_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(hist_id) REFERENCES ip_history(id))
+                    ''')
+        except:
+            print("[!] Could not create IP History link table! ")
 
-        self.c.execute('''CREATE TABLE 'ip_hist_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'hist_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(hist_id) REFERENCES ip_history(id))
-                ''')
 
-        self.c.execute('''CREATE TABLE 'certificate_link'
-                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'cert_id' text, 
-                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(cert_id) REFERENCES certificates(id))
-                ''')
+        try:
+            self.c.execute('''CREATE TABLE 'certificate_link'
+                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'cert_id' text, 
+                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(cert_id) REFERENCES certificates(id))
+                    ''')
+        except:
+            print("[!] Could not create Certificate link table! ")
 
     def link_the_tables(self):
         """Function to populate the link tables."""

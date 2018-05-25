@@ -57,51 +57,58 @@ class PeopleCheck(object):
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
             self.browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
         except Exception:
+            self.browser = None
             self.chrome_driver_path = None
 
     def pwn_check(self, email):
         """Use HIBP's API to check for the target's email in public security breaches."""
-        try:
-            self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
-            sleep(10)
-            # cookies = self.browser.get_cookies()
-            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
-            pwned = json.loads(json_text)
-            # self.browser.close()
+        if self.browser:
+            try:
+                self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
+                sleep(10)
+                # cookies = self.browser.get_cookies()
+                json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
+                pwned = json.loads(json_text)
+                # self.browser.close()
 
-            return pwned
-        except TimeoutException:
-            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-            return []
-        except NoSuchElementException:
-            # This is likely an "all clear" -- no hits in HIBP
-            return []
-        except WebDriverException:
-            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-            return []
+                return pwned
+            except TimeoutException:
+                print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+                return []
+            except NoSuchElementException:
+                # This is likely an "all clear" -- no hits in HIBP
+                return []
+            except WebDriverException:
+                # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+                return []
+        else:
+            return ["Missing Chrome webdriver"]
 
     def paste_check(self, email):
         """Use HIBP's API to check for the target's email in pastes across multiple paste websites.
         This includes sites like Slexy, Ghostbin, Pastebin.
         """
-        try:
-            self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
-            sleep(10)
-            # cookies = self.browser.get_cookies()
-            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
-            pastes = json.loads(json_text)
-            # self.browser.close()
+        if self.browser:
+            try:
+                self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
+                sleep(10)
+                # cookies = self.browser.get_cookies()
+                json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
+                pastes = json.loads(json_text)
+                # self.browser.close()
 
-            return pastes
-        except TimeoutException:
-            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-            return []
-        except NoSuchElementException:
-            # This is likely an "all clear" -- no hits in HIBP
-            return []
-        except WebDriverException:
-            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
-            return []
+                return pastes
+            except TimeoutException:
+                print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+                return []
+            except NoSuchElementException:
+                # This is likely an "all clear" -- no hits in HIBP
+                return []
+            except WebDriverException:
+                # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+                return []
+        else:
+            return ["Missing Chrome webdriver"]
 
     def webdriver_cleanup(self):
         """Helper function to close out the web driver sessions."""
