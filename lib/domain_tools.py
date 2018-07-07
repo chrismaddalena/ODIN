@@ -113,49 +113,50 @@ to use PantomJS for Netcraft."))
         """
         scope = []
         try:
-            with open(scope_file, "r") as preparse:
-                for i in preparse:
-                    # Check if there is a hyphen
-                    # Ex: 192.168.1.1-50 will become 192.168.1.1,192.168.1.50
-                    i = i.rstrip()
-                    if "-" in i:
-                        print(green("[+] {} is a range - expanding...".format(i.rstrip())))
-                        i = i.rstrip()
-                        a = i.split("-")
-                        startrange = a[0]
-                        b = a[0]
-                        dot_split = b.split(".")
-                        j = "."
-                        # Join the values using a "." so it makes a valid IP
-                        combine = dot_split[0], dot_split[1], dot_split[2], a[1]
-                        endrange = j.join(combine)
-                        # Calculate the IP range
-                        ip_list = list(iter_iprange(startrange, endrange))
-                        # Iterate through the range and remove ip_list
-                        for x in ip_list:
-                            a = str(x)
-                            scope.append(a)
-                    # Check if range has an underscore
-                    # Ex: 192.168.1.2_192.168.1.155
-                    elif "_" in i:
-                        print(green("[+] {} is a range - expanding...".format(i.rstrip())))
-                        i = i.rstrip()
-                        a = i.split("_")
-                        startrange = a[0]
-                        endrange = a[1]
-                        ip_list = list(iter_iprange(startrange, endrange))
-                        for address in ip_list:
+            with open(scope_file, "r") as scope_file:
+                for target in scope_file:
+                    target = target.rstrip()
+                    # Record individual IPs and expand CIDRs
+                    if helpers.is_ip(target):
+                        ip_list = list(IPNetwork(target))
+                        for address in sorted(ip_list):
                             str_address = str(address)
                             scope.append(str_address)
-                    elif "/" in i:
-                        print(green("[+] {} is a CIDR - converting...".format(i.rstrip())))
-                        i = i.rstrip()
-                        ip_list = list(IPNetwork(i))
-                        for address in sorted(ip_list):
-                            st = str(address)
-                            scope.append(st)
+                    # Sort IP ranges from domain names and expand the ranges
+                    if not helpers.is_domain(target):
+                        # Check for hyphenated ranges like those accepted by Nmap
+                        # Ex: 192.168.1.1-50 will become 192.168.1.1 ... 192.168.1.50
+                        if "-" in target:
+                            print(green("[+] {} is a range - expanding...".format(target.rstrip())))
+                            target = target.rstrip()
+                            parts = target.split("-")
+                            startrange = parts[0]
+                            b = parts[0]
+                            dot_split = b.split(".")
+                            temp = "."
+                            # Join the values using a "." so it makes a valid IP
+                            combine = dot_split[0], dot_split[1], dot_split[2], parts[1]
+                            endrange = temp.join(combine)
+                            # Calculate the IP range
+                            ip_list = list(iter_iprange(startrange, endrange))
+                            # Iterate through the range and remove ip_list
+                            for x in ip_list:
+                                temp = str(x)
+                                scope.append(temp)
+                        # Check if range has an underscore because underscores are fine, I guess?
+                        # Ex: 192.168.1.2_192.168.1.155
+                        elif "_" in target:
+                            print(green("[+] {} is a range - expanding...".format(target.rstrip())))
+                            target = target.rstrip()
+                            parts = target.split("_")
+                            startrange = parts[0]
+                            endrange = parts[1]
+                            ip_list = list(iter_iprange(startrange, endrange))
+                            for address in ip_list:
+                                str_address = str(address)
+                                scope.append(str_address)
                     else:
-                        scope.append(i.rstrip())
+                        scope.append(target.rstrip())
         except Exception as error:
             print(red("[!] Parsing of scope file failed!"))
             print(red("L.. Details: {}".format(error)))

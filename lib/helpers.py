@@ -51,3 +51,15 @@ def is_ip(value):
     except ValueError:
         return False
     return True
+
+def is_domain(value):
+    """A very basic check to see if the provided string contians any letters. This is useful for
+    determining if a string should be treated as an IP address range or a domain.
+
+    For example, is_ip() will recognize an idnvidual IP address or a CIDR, but will not validate a
+    range like 192.168.1.0-50. Ranges will never contain letters, so this serves to separate domain
+    names with hyphens from IP address ranges.
+    """
+    result = any(check.isalpha() for check in value)
+
+    return result
