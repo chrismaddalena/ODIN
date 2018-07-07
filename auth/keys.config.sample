@@ -24,4 +24,4 @@ token_secret:
 api_key: 
 
 [WebDriver]
-driver_path = /Users/Odin/Downloads/chromedriver
+driver_path: /Users/Odin/Downloads/chromedriver
