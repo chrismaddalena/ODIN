@@ -359,7 +359,7 @@ to use PantomJS for Netcraft."))
                 urlcrazy_results = []
                 for domain in squatted:
                     try:
-                        request = session.get(cymon_api + "/ioc/search/domain/" + domain[0])
+                        request = session.get(cymon_api + "/ioc/search/domain/" + domain[0], verify=False)
                         # results = json.loads(r.text)
 
                         if request.status_code == 200:
@@ -376,7 +376,7 @@ to use PantomJS for Netcraft."))
 
                     # Search for domains and IP addresses tied to the A-record IP
                     try:
-                        r = session.get(cymon_api + "/ioc/search/ip/" + domain[1])
+                        r = session.get(cymon_api + "/ioc/search/ip/" + domain[1], verify=False)
                         # results = json.loads(r.text)
 
                         if r.status_code == 200:
