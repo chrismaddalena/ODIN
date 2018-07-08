@@ -10,6 +10,7 @@ import tweepy
 from colors import red, green, yellow
 from bs4 import BeautifulSoup as BS
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from http.cookiejar import CookieJar, Cookie
 from time import sleep
@@ -56,32 +57,35 @@ class PeopleCheck(object):
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
             # Try loading the driver as a test
-            browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            browser.close()
-            print(green("[*] Chrome web driver test was successful!"))
+            self.chrome_options = Options()
+            self.chrome_options.add_argument("--headless")
+            self.chrome_options.add_argument("--window-size=1920x1080")
+            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
         # Catch issues with the web driver or path
         except WebDriverException:
             self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
             print(yellow("[!] There was a problem with the specified Chrome web driver in your \
 keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned."))
         # Catch issues loading the value from the config file
         except Exception:
             self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
             print(yellow("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
 to use PantomJS for haveIBeenPwned."))
 
     def pwn_check(self, email):
         """Use HIBP's API to check for the target's email in public security breaches."""
         try:
-            if self.chrome_driver_path:
-                browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            else:
-                browser = webdriver.PhantomJS()
-            browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
+            # if self.chrome_driver_path:
+            #     browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            # else:
+            #     browser = webdriver.PhantomJS()
+            self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
             # cookies = browser.get_cookies()
-            json_text = browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pwned = json.loads(json_text)
-            browser.close()
+            # browser.close()
 
             return pwned
         except TimeoutException:
@@ -99,15 +103,15 @@ to use PantomJS for haveIBeenPwned."))
         This includes sites like Slexy, Ghostbin, Pastebin.
         """
         try:
-            if self.chrome_driver_path:
-                browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            else:
-                browser = webdriver.PhantomJS()
-            browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
+            # if self.chrome_driver_path:
+            #     browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            # else:
+            #     browser = webdriver.PhantomJS()
+            self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
             # cookies = browser.get_cookies()
-            json_text = browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pastes = json.loads(json_text)
-            browser.close()
+            # browser.close()
 
             return pastes
         except TimeoutException:

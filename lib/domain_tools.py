@@ -26,6 +26,7 @@ from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 import validators
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from lib import helpers
 import click
@@ -85,17 +86,21 @@ class DomainCheck(object):
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
             # Try loading the driver as a test
-            browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            browser.close()
-            print(green("[*] Chrome web driver test was successful!"))
+            self.chrome_options = Options()
+            self.chrome_options.add_argument("--headless")
+            self.chrome_options.add_argument("--window-size=1920x1080")
+            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
+            print(green("[*] Headless Chrome browser test was successful!"))
         # Catch issues with the web driver or path
         except WebDriverException:
             self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
             print(yellow("[!] There was a problem with the specified Chrome web driver in your \
 keys.config! Please check it. For now ODIN will try to use PhantomJS for Netcraft."))
         # Catch issues loading the value from the config file
         except Exception:
             self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
             print(yellow("[!] Could not load a Chrome webdriver for Selenium, so we will try \
 to use PantomJS for Netcraft."))
 
@@ -424,7 +429,7 @@ to be found."))
                 target_results = self.shodan_api.search(target)
                 return target_results
             except shodan.APIError as error:
-                print(red("[!] Error fetching Shodan info for {}!".format(target)))
+                print(red("[!] No Shodan data for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
     def run_shodan_lookup(self, target):
@@ -446,7 +451,7 @@ to be found."))
                 target_results = self.shodan_api.host(target)
                 return target_results
             except shodan.APIError as error:
-                print(red("[!] Error fetching Shodan info for {}!".format(target)))
+                print(red("[!]  No Shodan data for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
     def run_shodan_exploit_search(self, CVE):
@@ -645,40 +650,40 @@ received!".format(request.status_code)))
         netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
         target_dom_name = domain.split(".")
 
-        # We must use Selenium, so we either need PhantomJS or a driver
-        if self.chrome_driver_path:
-            driver = webdriver.Chrome(self.chrome_driver_path)
-        else:
-            driver = webdriver.PhantomJS()
+        # We must use a browser, so we either need PhantomJS or a Selenium web driver object
+        # if self.chrome_driver_path:
+        #     driver = webdriver.Chrome(self.chrome_driver_path)
+        # else:
+        #     driver = webdriver.PhantomJS()
 
-        driver.get(netcraft_url)
+        self.browser.get(netcraft_url)
         link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-        links_list = link_regx.findall(driver.page_source)
+        links_list = link_regx.findall(self.browser.page_source)
         for x in links_list:
             dom_name = x.split("/")[2].split(".")
             if (dom_name[len(dom_name) - 1] == target_dom_name[1]) and \
             (dom_name[len(dom_name) - 2] == target_dom_name[0]):
                 results.append(x.split("/")[2])
         num_regex = re.compile('Found (.*) site')
-        num_subdomains = num_regex.findall(driver.page_source)
+        num_subdomains = num_regex.findall(self.browser.page_source)
         if not num_subdomains:
             num_regex = re.compile('First (.*) sites returned')
-            num_subdomains = num_regex.findall(driver.page_source)
+            num_subdomains = num_regex.findall(self.browser.page_source)
         if num_subdomains:
             if num_subdomains[0] != str(0):
                 num_pages = int(num_subdomains[0]) // 20 + 1
                 if num_pages > 1:
                     last_regex = re.compile(
                         '<td align="left">%s.</td><td align="left">\n<a href="(.*)" rel="nofollow">' % (20))
-                    last_item = last_regex.findall(driver.page_source)[0].split("/")[2]
+                    last_item = last_regex.findall(self.browser.page_source)[0].split("/")[2]
                     next_page = 21
 
                     for x in range(2, num_pages):
                         url = "http://searchdns.netcraft.com/?host=%s&last=%s&from=%s&restriction=/site%%20contains" % (domain, last_item, next_page)
-                        driver.get(url)
+                        self.browser.get(url)
                         link_regx = re.compile(
                             '<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-                        links_list = link_regx.findall(driver.page_source)
+                        links_list = link_regx.findall(self.browser.page_source)
                         for y in links_list:
                             dom_name1 = y.split("/")[2].split(".")
                             if (dom_name1[len(dom_name1) - 1] == target_dom_name[1]) and \
@@ -689,7 +694,7 @@ received!".format(request.status_code)))
             else:
                 pass
 
-        driver.close()
+        # driver.close()
         return results
 
     def fetch_netcraft_domain_history(self, domain):
@@ -700,13 +705,13 @@ received!".format(request.status_code)))
         time.sleep(1)
 
         # We must use Selenium, so we either need PhantomJS or a driver
-        if self.chrome_driver_path:
-            driver = webdriver.Chrome(self.chrome_driver_path)
-        else:
-            driver = webdriver.PhantomJS()
+        # if self.chrome_driver_path:
+        #     driver = webdriver.Chrome(self.chrome_driver_path)
+        # else:
+        #     driver = webdriver.PhantomJS()
 
-        driver.get(endpoint)
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        self.browser.get(endpoint)
+        soup = BeautifulSoup(self.browser.page_source, 'html.parser')
         urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
 
         for url in urls_parsed:
@@ -715,7 +720,7 @@ received!".format(request.status_code)))
                 str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
                 ip_history.append(result)
 
-        driver.close()
+        # driver.close()
         return ip_history
 
     def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
@@ -730,7 +735,8 @@ received!".format(request.status_code)))
         # Potentially valid and interesting keywords that might be used a prefix or suffix
         fixes = ["apps", "downloads", "software", "deployment", "qa", "dev", "test", "vpn",
                  "secret", "user", "confidential", "invoice", "config", "backup", "bak",
-                 "xls", "csv", "ssn", "resources", "web", "testing"]
+                 "xls", "csv", "ssn", "resources", "web", "testing", "uac", "legacy", "adhoc",
+                 "docs"]
         bucket_results = []
         account_results = []
 
