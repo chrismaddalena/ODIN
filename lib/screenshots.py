@@ -4,6 +4,7 @@
 """This module contains all of tools and functions used for takin screenshots of webpages."""
 
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from colors import red, green, yellow
 from lib import helpers
@@ -17,9 +18,11 @@ class Screenshotter(object):
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
             # Try loading the driver as a test
-            browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            browser.close()
-            print(green("[*] Chrome web driver test was successful!"))
+            self.chrome_options = Options()
+            self.chrome_options.add_argument("--headless")
+            self.chrome_options.add_argument("--window-size=1920x1080")
+            self.chrome_options.add_argument('--ignore-certificate-errors')
+            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
             self.browser_capable = True
         # Catch issues with the web driver or path
         except WebDriverException:
@@ -31,12 +34,10 @@ class Screenshotter(object):
             self.browser_capable = False
 
         if self.browser_capable is False:
-            print(yellow("[*] Chrome web driver test failed with the provided web driver \
-executable. We will try PhantomJS."))
             try:
-                webdriver.PhantomJS()
+                self.browser = webdriver.PhantomJS()
                 self.browser_capable = True
-                print(green("[*] PhantomJS test was successful!"))
+                print(green("[*] PhantomJS for web screenshots test was successful!"))
             except WebDriverException:
                 self.chrome_driver_path = None
                 self.browser_capable = False
@@ -49,18 +50,22 @@ executable. We will try PhantomJS."))
     def take_screenshot(self, target, directory):
         """Function to take a screenshot of a target webpage."""
         if self.browser_capable:
-            if self.chrome_driver_path:
-                browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            else:
-                browser = webdriver.PhantomJS()
-
             try:
                 out_name = target.split("//")[1]
             except:
                 out_name = target
                 target = "http://" + target
+                target_ssl = "https://" + target
 
-            browser.set_window_size(1120, 550)
-            browser.get(target)
-            browser.save_screenshot(directory + out_name + ".png")
-            browser.close()
+            # Attempt to take a screenshot of the target
+            try: 
+                self.browser.get(target)
+                self.browser.save_screenshot(directory + out_name + ".png")
+                self.browser.get(target_ssl)
+                self.browser.save_screenshot(directory + out_name + "_ssl.png")
+            except TimeoutException:
+                pass
+            except WebDriverException:
+                pass
+            except Exception:
+                pass
