@@ -542,7 +542,7 @@ class HTMLReporter(object):
 
             content += """
             <h2>Name Server Cache Snooping</h2>
-            <p>This table contains name servers vulnerable to DNS cache snooping:
+            <p>This table contains the domain's name servers and flags those vulnerable to DNS cache snooping:
             <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
