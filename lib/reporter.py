@@ -185,12 +185,19 @@ it has been added to the scope for OSINT.".format(domain)))
                 self.conn.commit()
 
                 # If Full Contact returned any social media info, add columns for the service
+                temp = []
                 for profile in info_json['socialProfiles']:
                     service = profile['typeName']
                     profile_url = profile['url']
-                    self.c.execute("ALTER TABLE company_info ADD COLUMN " + service + " text")
-                    self.c.execute("UPDATE company_info SET '%s' = '%s'" % (service, profile_url))
-                    self.conn.commit()
+                    # Check if we already have a column for this social media service and append if so
+                    if service in temp:
+                        self.c.execute("UPDATE company_info SET %s = %s || ', ' || '%s'"  % (service, service, profile_url))
+                        self.conn.commit()
+                    else:
+                        self.c.execute("ALTER TABLE company_info ADD COLUMN " + service + " text")
+                        self.c.execute("UPDATE company_info SET '%s' = '%s'" % (service, profile_url))
+                        self.conn.commit()
+                        temp.append(service)
 
                 # Update the table with information that is not always available
                 if "emailAddresses" in info_json['organization']['contactInfo']:
