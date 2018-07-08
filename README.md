@@ -205,6 +205,13 @@ And to these folks who have created/maintained some of the tools integrated into
 * TrullJ - For making the slick [SSL Labs Scanner module](https://github.com/TrullJ/ssllabs).
 
 ### Change Log
+#### July 7, 2018, 1.8.6
+* Company Info table now supports a target organization having multiple profiles on one social media platform.
+* Chromium now operates in headless mode, so no more Chrome windows covering your screen.
+* Scope generation and parsing is no longer tripped up by domain names with hyphens in them.
+* Some minor text chanes for typos and small clarifications.
+* [BETA] Improved the screenshots functionality to add both HTTP and HTTPS to hostnames for screenshots.
+
 #### May 25, 2018, 1.8.5
 * Fixed a few bugs in the HTML report and made it much, much prettier.
 * The reports directory has been organized! Now a reports/<organization_name>/ directory will be made. Under that, separate file_downloads, screenshots, and html_report directories are created for these items.

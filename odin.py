@@ -9,7 +9,7 @@
   ======   =======   ===  ===  ===
 
 Developer:   Chris "cmaddy" Maddalena
-Version:     1.8.5 "Muninn"
+Version:     1.8.6 "Muninn"
 Description: Observation, Detection, and Investigation of Networks
              ODIN was designed to assist with OSINT automation for penetration testing clients and
              their networks, both the types with IP address and social. Provide a client's name,
