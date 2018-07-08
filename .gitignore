@@ -9,6 +9,7 @@
 *.png
 *.xlsx
 *.log
+*.lock
 
 /auth/keys.config
 /reports/*
