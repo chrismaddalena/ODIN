@@ -9,9 +9,12 @@
 *.png
 *.xlsx
 *.log
+*.lock
 
 /auth/keys.config
 /reports/*
 /pyfoca-downloads/*
+
+.vscode
 
 chromedriver

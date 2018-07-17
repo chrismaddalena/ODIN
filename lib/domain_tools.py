@@ -5,17 +5,19 @@
 domain names.
 """
 
+import warnings
 import os
 import subprocess
 from xml.etree import ElementTree as ET
 import csv
 import base64
 import re
+import time
 import shodan
 from cymon import Cymon
-import censys.certificates
-import censys.ipv4
 import whois
+import boto3
+from botocore.exceptions import ClientError
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
 import requests
@@ -23,9 +25,11 @@ from colors import red, green, yellow
 from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 import validators
-import time
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from lib import helpers
+import click
 
 
 class DomainCheck(object):
@@ -36,7 +40,7 @@ class DomainCheck(object):
     # Sleep time for Google and Shodan
     sleep = 10
     # Cymon.io API endpoint
-    cymon_api = "https://cymon.io/api/nexus/v1"
+    cymon_api = "https://api.cymon.io/v2"
     # Robtex's free API endpoint
     robtex_api = "https://freeapi.robtex.com/ipquery/"
 
@@ -45,51 +49,68 @@ class DomainCheck(object):
         # Collect the API keys from the config file
         try:
             shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
-            self.shoAPI = shodan.Shodan(shodan_api_key)
-        except:
-            self.shoAPI = None
+            self.shodan_api = shodan.Shodan(shodan_api_key)
+        except Exception:
+            self.shodan_api = None
             print(yellow("[!] Did not find a Shodan API key."))
 
         try:
             self.cymon_api_key = helpers.config_section_map("Cymon")["api_key"]
-            self.cyAPI = Cymon(self.cymon_api_key)
+            self.cymon_api = Cymon(self.cymon_api_key)
         except Exception:
-            self.cyAPI = Cymon()
+            self.cymon_api = Cymon()
             print(yellow("[!] Did not find a Cymon API key, so proceeding without API auth."))
 
         try:
             self.urlvoid_api_key = helpers.config_section_map("URLVoid")["api_key"]
-        except:
+        except Exception:
             self.urlvoid_api_key = ""
             print(yellow("[!] Did not find a URLVoid API key."))
 
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
-        except:
+        except Exception:
             self.contact_api_key = None
             print(yellow("[!] Did not find a Full Contact API key."))
 
         try:
-            censys_api_id = helpers.config_section_map("Censys")["api_id"]
-            censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
-            self.cenCertAPI = censys.certificates.CensysCertificates(
-                api_id=censys_api_id, api_secret=censys_api_secret)
-            self.cenAddAPI = censys.ipv4.CensysIPv4(
-                api_id=censys_api_id, api_secret=censys_api_secret)
-        except:
-            self.cenCertAPI = None
-            self.cenAddAPI = None
+            self.censys_api_id = helpers.config_section_map("Censys")["api_id"]
+            self.censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
+            self.censys_api_endpoint = "https://censys.io/api/v1"
+        except Exception:
+            self.censys_api_id = None
+            self.censys_api_secret = None
+            self.censys_api_endpoint = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
 
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
-            # if chrome_driver_path:
-            #     self.webdriver = webdriver.Chrome(chrome_driver_path)
-            # else:
-            #     self.webdriver = None    
-        except:
-            # self.webdriver = None
+            # Try loading the driver as a test
+            self.chrome_options = Options()
+            self.chrome_options.add_argument("--headless")
+            self.chrome_options.add_argument("--window-size=1920x1080")
+            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
+            print(green("[*] Headless Chrome browser test was successful!"))
+        # Catch issues with the web driver or path
+        except WebDriverException:
             self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
+            print(yellow("[!] There was a problem with the specified Chrome web driver in your \
+keys.config! Please check it. For now ODIN will try to use PhantomJS for Netcraft."))
+        # Catch issues loading the value from the config file
+        except Exception:
+            self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
+            print(yellow("[!] Could not load a Chrome webdriver for Selenium, so we will try \
+to use PantomJS for Netcraft."))
+
+        try:
+            self.boto3_client = boto3.client('s3')
+            # Test connecting to S3 with the creds supplied to `aws configure`
+            self.boto3_client.head_bucket(Bucket="hostmenow")
+        except Exception:
+            self.boto3_client = None
+            print(yellow("[!] Could not create an AWS client with the supplied secrets."))
 
     def generate_scope(self, scope_file):
         """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
@@ -97,49 +118,50 @@ class DomainCheck(object):
         """
         scope = []
         try:
-            with open(scope_file, "r") as preparse:
-                for i in preparse:
-                    # Check if there is a hyphen
-                    # Ex: 192.168.1.1-50 will become 192.168.1.1,192.168.1.50
-                    i = i.rstrip()
-                    if "-" in i:
-                        print(green("[+] {} is a range - expanding...".format(i.rstrip())))
-                        i = i.rstrip()
-                        a = i.split("-")
-                        startrange = a[0]
-                        b = a[0]
-                        dot_split = b.split(".")
-                        j = "."
-                        # Join the values using a "." so it makes a valid IP
-                        combine = dot_split[0], dot_split[1], dot_split[2], a[1]
-                        endrange = j.join(combine)
-                        # Calculate the IP range
-                        ip_list = list(iter_iprange(startrange, endrange))
-                        # Iterate through the range and remove ip_list
-                        for x in ip_list:
-                            a = str(x)
-                            scope.append(a)
-                    # Check if range has an underscore
-                    # Ex: 192.168.1.2_192.168.1.155
-                    elif "_" in i:
-                        print(green("[+] {} is a range - expanding...".format(i.rstrip())))
-                        i = i.rstrip()
-                        a = i.split("_")
-                        startrange = a[0]
-                        endrange = a[1]
-                        ip_list = list(iter_iprange(startrange, endrange))
-                        for i in ip_list:
-                            a = str(i)
-                            scope.append(a)
-                    elif "/" in i:
-                        print(green("[+] {} is a CIDR - converting...".format(i.rstrip())))
-                        i = i.rstrip()
-                        ip_list = list(IPNetwork(i))
-                        for e in sorted(ip_list):
-                            st = str(e)
-                            scope.append(st)
+            with open(scope_file, "r") as scope_file:
+                for target in scope_file:
+                    target = target.rstrip()
+                    # Record individual IPs and expand CIDRs
+                    if helpers.is_ip(target):
+                        ip_list = list(IPNetwork(target))
+                        for address in sorted(ip_list):
+                            str_address = str(address)
+                            scope.append(str_address)
+                    # Sort IP ranges from domain names and expand the ranges
+                    if not helpers.is_domain(target):
+                        # Check for hyphenated ranges like those accepted by Nmap
+                        # Ex: 192.168.1.1-50 will become 192.168.1.1 ... 192.168.1.50
+                        if "-" in target:
+                            print(green("[+] {} is a range - expanding...".format(target.rstrip())))
+                            target = target.rstrip()
+                            parts = target.split("-")
+                            startrange = parts[0]
+                            b = parts[0]
+                            dot_split = b.split(".")
+                            temp = "."
+                            # Join the values using a "." so it makes a valid IP
+                            combine = dot_split[0], dot_split[1], dot_split[2], parts[1]
+                            endrange = temp.join(combine)
+                            # Calculate the IP range
+                            ip_list = list(iter_iprange(startrange, endrange))
+                            # Iterate through the range and remove ip_list
+                            for x in ip_list:
+                                temp = str(x)
+                                scope.append(temp)
+                        # Check if range has an underscore because underscores are fine, I guess?
+                        # Ex: 192.168.1.2_192.168.1.155
+                        elif "_" in target:
+                            print(green("[+] {} is a range - expanding...".format(target.rstrip())))
+                            target = target.rstrip()
+                            parts = target.split("_")
+                            startrange = parts[0]
+                            endrange = parts[1]
+                            ip_list = list(iter_iprange(startrange, endrange))
+                            for address in ip_list:
+                                str_address = str(address)
+                                scope.append(str_address)
                     else:
-                        scope.append(i.rstrip())
+                        scope.append(target.rstrip())
         except Exception as error:
             print(red("[!] Parsing of scope file failed!"))
             print(red("L.. Details: {}".format(error)))
@@ -155,19 +177,80 @@ class DomainCheck(object):
         if self.contact_api_key == "":
             print(red("[!] No Full Contact API key, so skipping these searches."))
         else:
-            base_url = "https://api.fullcontact.com/v2/company/lookup.json"
-            payload = {'domain':domain, 'apiKey':self.contact_api_key}
+            base_url = "https://api.fullcontact.com/v3/company.enrich"
+            payload = {'domain':domain, 'Authorization':'Bearer ' + self.contact_api_key}
             resp = requests.get(base_url, params=payload)
 
             if resp.status_code == 200:
                 return resp.text.encode('ascii', 'ignore')
 
     def get_dns_record(self, domain, record_type):
-        """Simple function to get the specified DNS record for the
-        target domain.
-        """
+        """Simple function to get the specified DNS record for the target domain."""
         answer = dns.resolver.query(domain, record_type)
         return answer
+
+    def check_dns_cache(self, name_server):
+        """Function to check if the given name server is vulnerable to DNS cache snooping.
+
+        Code adapted for ODIN from work done by z0mbiehunt3r with DNS Snoopy.
+        https://github.com/z0mbiehunt3r/dns-snoopy
+        """
+        vulnerable_dns_servers = ""
+        # Domains that are commonly resolved and can be used for testing DNS servers
+        common_domains = ["google.es", "google.com", "facebook.com", "youtube.com", "yahoo.com",
+                          "live.com", "baidu.com", "wikipedia.org", "blogger.com", "msn.com",
+                          "twitter.com", "wordpress.com", "amazon.com", "adobe.com",
+                          "microsoft.com", "amazon.co.uk", "facebook.com"]
+
+        answers = self.get_dns_record(name_server, "A")
+        nameserver_ip = str(answers.rrset[0])
+        for domain in common_domains:
+            if self.dns_cache_request(domain, nameserver_ip):
+                print(green("[+] {} resolved a cached query for {}.".format(name_server, domain)))
+                vulnerable_dns_servers = name_server
+                break
+
+        return vulnerable_dns_servers
+
+    def dns_cache_request(self, domain, nameserver_ip, checkttl=False, dns_snooped=False):
+        """Function to perform cache requests against the name server for the provided domain."""
+        query = dns.message.make_query(domain, dns.rdatatype.A, dns.rdataclass.IN)
+        # Negate recursion desired bit
+        query.flags ^= dns.flags.RD
+        dns_response = dns.query.udp(q=query, where=nameserver_ip)
+        """
+        Check length major of 0 to avoid those answers with root servers in authority section
+        ;; QUESTION SECTION:
+        ;www.facebook.com.        IN    A
+
+        ;; AUTHORITY SECTION:
+        com.            123348    IN    NS    d.gtld-servers.net.
+        com.            123348    IN    NS    m.gtld-servers.net.
+        [...]
+        com.            123348    IN    NS    a.gtld-servers.net.
+        com.            123348    IN    NS    g.gtld-servers.net.    `
+        """
+        if len(dns_response.answer) > 0 and checkttl:
+            # Get cached TTL
+            ttl_cached = dns_response.answer[0].ttl
+            # First, get NS for the first cached domain
+            cached_domain_dns = self.get_dns_record(domain, "NS")[0]
+            # After, resolve its IP address
+            cached_domain_dns_IP = self.get_dns_record(cached_domain_dns, "A")
+            # Now, obtain original TTL
+            query = dns.message.make_query(domain, dns.rdatatype.A, dns.rdataclass.IN)
+            query.flags ^= dns.flags.RD
+
+            dns_response = dns.query.udp(q=query, where=cached_domain_dns_IP)
+            ttl_original = dns_response.answer[0].ttl
+            cached_ago = ttl_original-ttl_cached
+            print("[+] %s was cached about %s ago aprox. [%s]" %
+                  (domain, time.strftime('%H:%M:%S', time.gmtime(cached_ago)), dns_snooped), "plus")
+
+        elif len(dns_response.answer) > 0:
+            return 1
+
+        return 0
 
     def run_whois(self, domain):
         """Perform a whois lookup for the provided target domain. The whois results are returned
@@ -204,8 +287,11 @@ class DomainCheck(object):
         and groups. RDAP also provides more detailed network information.
         """
         try:
-            rdapwho = IPWhois(ip_address)
-            results = rdapwho.lookup_rdap(depth=1)
+            with warnings.catch_warnings():
+                # Hide the 'allow_permutations has been deprecated' warning until ipwhois removes it
+                warnings.filterwarnings("ignore", category=UserWarning)
+                rdapwho = IPWhois(ip_address)
+                results = rdapwho.lookup_rdap(depth=1)
 
             return results
         except Exception as error:
@@ -225,22 +311,21 @@ class DomainCheck(object):
         """
         # Check to see if urlcrazy is available
         try:
-            subprocess.call("urlcrazy")
-            urlcrazy_present = True
+            urlcrazy_present = subprocess.getstatusoutput("urlcrazy")
         except OSError as error:
             if error.errno == os.errno.ENOENT:
                 # The urlcrazy command was not found
                 print(yellow("[!] A test call to urlcrazy failed, so skipping urlcrazy run."))
                 print(yellow("L.. Details: {}".format(error)))
-                urlcrazy_present = False
+                urlcrazy_present = "1"
             else:
                 # Something else went wrong while trying to run urlcrazy
                 print(yellow("[!] A test call to urlcrazy failed, so skipping urlcrazy run."))
                 print(yellow("L.. Details: {}".format(error)))
-                urlcrazy_present = False
+                urlcrazy_present = "1"
             return urlcrazy_present
 
-        if urlcrazy_present:
+        if urlcrazy_present[0] == 0:
             outfile = "reports/{}/crazy_temp.csv".format(client)
             final_csv = "reports/{}/{}_urlcrazy.csv".format(client, target)
             domains = []
@@ -252,7 +337,7 @@ class DomainCheck(object):
                 cmd = "urlcrazy -f csv -o '{}' {}".format(outfile, target)
                 with open(os.devnull, "w") as devnull:
                     subprocess.check_call(cmd, stdout=devnull, shell=True)
-                with open(outfile, "r") as results:
+                with open(outfile, "r", encoding = "ISO-8859-1") as results:
                     reader = csv.DictReader(row.replace("\0", "") for row in results)
                     for row in reader:
                         if len(row) != 0:
@@ -274,40 +359,42 @@ class DomainCheck(object):
                 urlcrazy_results = []
                 for domain in squatted:
                     try:
-                        request = session.get(cymon_api + "/domain/" + domain[0])
+                        request = session.get(cymon_api + "/ioc/search/domain/" + domain[0], verify=False)
                         # results = json.loads(r.text)
 
                         if request.status_code == 200:
-                            malicious_domain = 1
+                            if request.json()['total'] > 0:
+                                malicious_domain = 1
+                            else:
+                                malicious_domain = 0
                         else:
                             malicious_domain = 0
                     except Exception as error:
                         malicious_domain = 0
                         print(red("[!] There was an error checking {} with Cymon.io!"
-                            .format(domain[0])))
+                                   .format(domain[0])))
 
                     # Search for domains and IP addresses tied to the A-record IP
                     try:
-                        r = session.get(cymon_api + "/ip/" + domain[1])
+                        r = session.get(cymon_api + "/ioc/search/ip/" + domain[1], verify=False)
                         # results = json.loads(r.text)
 
                         if r.status_code == 200:
-                            malicious_ip = 1
+                            if request.json()['total'] > 0:
+                                malicious_ip = 1
+                            else:
+                                malicious_ip = 0
                         else:
                             malicious_ip = 0
                     except Exception as error:
                         malicious_ip = 0
                         print(red("[!] There was an error checking {} with Cymon.io!"
-                              .format(domain[1])))
+                                   .format(domain[1])))
 
                     if malicious_domain == 1:
                         cymon_result = "Yes"
-                        print(yellow("[*] {} was flagged as malicious, so consider looking into \
-this.".format(domain[0])))
                     elif malicious_ip == 1:
                         cymon_result = "Yes"
-                        print(yellow("[*] {} was flagged as malicious, so consider looking into \
-this.".format(domain[1])))
                     else:
                         cymon_result = "No"
 
@@ -319,14 +406,14 @@ this.".format(domain[1])))
                     urlcrazy_results.append(temp)
 
                 os.rename(outfile, final_csv)
-                print(green("[+] The full urlcrazy results are in {}.".format(final_csv)))
                 return urlcrazy_results
 
             except Exception as error:
                 print(red("[!] Execution of urlcrazy failed!"))
                 print(red("L.. Details: {}".format(error)))
         else:
-            print(yellow("[*] Skipped urlcrazy check."))
+            print(yellow("[*] Skipping typosquatting checks because the urlcrazy command failed \
+to be found."))
 
     def run_shodan_search(self, target):
         """Collect information Shodan has for target domain name. This uses the Shodan search
@@ -334,15 +421,15 @@ this.".format(domain[1])))
 
         A Shodan API key is required.
         """
-        if self.shoAPI is None:
+        if self.shodan_api is None:
             pass
         else:
             print(green("[+] Performing Shodan domain search for {}.".format(target)))
             try:
-                target_results = self.shoAPI.search(target)
+                target_results = self.shodan_api.search(target)
                 return target_results
             except shodan.APIError as error:
-                print(red("[!] Error fetching Shodan info for {}!".format(target)))
+                print(red("[!] No Shodan data for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
     def run_shodan_lookup(self, target):
@@ -356,20 +443,20 @@ this.".format(domain[1])))
         # resolved = requests.get(dnsResolve)
         # target_ip = resolved.json()[target]
 
-        if self.shoAPI is None:
+        if self.shodan_api is None:
             pass
         else:
             print(green("[+] Performing Shodan IP lookup for {}.".format(target)))
             try:
-                target_results = self.shoAPI.host(target)
+                target_results = self.shodan_api.host(target)
                 return target_results
             except shodan.APIError as error:
-                print(red("[!] Error fetching Shodan info for {}!".format(target)))
+                print(red("[!]  No Shodan data for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
     def run_shodan_exploit_search(self, CVE):
         """Function to lookup CVEs through Shodan and return the results."""
-        exploits = self.shoAPI.exploits.search(CVE)
+        exploits = self.shodan_api.exploits.search(CVE)
         return exploits
 
     def search_cymon_ip(self, target):
@@ -378,17 +465,16 @@ this.".format(domain[1])))
 
         An API key is not required, but is recommended.
         """
-        print(green("[+] Checking Cymon for domains associated with the provided IP address."))
         try:
             # Search for IP and domains tied to the IP
-            data = self.cyAPI.ip_domains(target)
+            data = self.cymon_api.ip_domains(target)
             domains_results = data['results']
             # Search for security events for the IP
-            data = self.cyAPI.ip_events(target)
+            data = self.cymon_api.ip_events(target)
             ip_results = data['results']
             print(green("[+] Cymon search completed!"))
             return domains_results, ip_results
-        except:
+        except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
     def search_cymon_domain(self, target):
@@ -397,13 +483,12 @@ this.".format(domain[1])))
 
         An API key is not required, but is recommended.
         """
-        print(green("[+] Checking Cymon for domains associated with the provided IP address."))
         try:
             # Search for domains and IP addresses tied to the domain
-            results = self.cyAPI.domain_lookup(target)
+            results = self.cymon_api.domain_lookup(target)
             print(green("[+] Cymon search completed!"))
             return results
-        except:
+        except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
     def run_censys_search_cert(self, target):
@@ -415,34 +500,37 @@ this.".format(domain[1])))
 
         A free API key is required.
         """
-        if self.cenCertAPI is None:
+        if self.censys_api_endpoint is None:
             pass
         else:
             print(green("[+] Performing Censys certificate search for {}".format(target)))
+            params = {"query" : target}
             try:
-                fields = ["parsed.subject_dn", "parsed.issuer_dn"]
-                certs = self.cenCertAPI.search(target, fields=fields)
+                results = requests.post(self.censys_api_endpoint + "/search/certificates", json = params, auth=(self.censys_api_id, self.censys_api_secret))
+                certs = results.json()
                 return certs
             except Exception as error:
                 print(red("[!] Error collecting Censys certificate data for {}.".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
-    def run_censys_search_address(self, target):
-        """Collect open port/protocol information from Censys for the target IP address. This 
-        returns a dictionary of protocol information.
+    def parse_cert_subdomains(self, certdata):
+        """Accepts Censys certificate data and parses out subdomain information."""
+        subdomains = []
+        for cert in certdata['results']:
+            if "," in cert["parsed.subject_dn"]:
+                pos = cert["parsed.subject_dn"].find('CN=')+3
+            else:
+                pos = 3
+            tmp = cert["parsed.subject_dn"][pos:]
+            if "," in tmp:
+                pos = tmp.find(",")
+                tmp = tmp[:pos]
+            if "." not in tmp:
+                continue
+            subdomains.append(tmp)
 
-        A free API key is required.
-        """
-        if self.cenAddAPI is None:
-            pass
-        else:
-            print(green("[+] Performing Censys open port search for {}".format(target)))
-            try:
-                data = self.cenAddAPI.search(target)
-                return data
-            except Exception as error:
-                print(red("[!] Error collecting Censys data for {}.".format(target)))
-                print(red("L.. Details: {}".format(error)))
+        subdomains = set(subdomains)
+        return subdomains
 
     def run_urlvoid_lookup(self, domain):
         """Collect reputation data from URLVoid for the target domain. This returns an ElementTree
@@ -453,7 +541,6 @@ this.".format(domain[1])))
         if not helpers.is_ip(domain):
             try:
                 if self.urlvoid_api_key != "":
-                    print(green("[+] Checking reputation for {} with URLVoid".format(domain)))
                     url = "http://api.urlvoid.com/api1000/{}/host/{}"\
                         .format(self.urlvoid_api_key, domain)
                     response = requests.get(url)
@@ -489,8 +576,8 @@ this.".format(domain[1])))
         request = session.post(dnsdumpster_url, cookies=cookies, data=data, headers=headers)
 
         if request.status_code != 200:
-            print("[+] There appears to have been an error communicating with DNS Dumpster -- {} \
-                  received!".format(request.status_code))
+            print(red("[+] There appears to have been an error communicating with DNS Dumpster -- {} \
+received!".format(request.status_code)))
 
         soup = BeautifulSoup(request.content, 'lxml')
         tables = soup.findAll('table')
@@ -508,7 +595,7 @@ this.".format(domain[1])))
             val = soup.find('img', attrs={'class': 'img-responsive'})['src']
             tmp_url = "{}{}".format(dnsdumpster_url, val)
             image_data = base64.b64encode(requests.get(tmp_url).content)
-        except:
+        except Exception:
             image_data = None
         finally:
             results['image_data'] = image_data
@@ -560,76 +647,83 @@ this.".format(domain[1])))
         NetCraft.
         """
         results = []
-        # If the WebDriver path is empty, we cannot continue with NetCraft
-        if self.chrome_driver_path:
-            driver = webdriver.Chrome(self.chrome_driver_path)
-            netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
-            target_dom_name = domain.split(".")
-            driver.get(netcraft_url)
+        netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
+        target_dom_name = domain.split(".")
 
-            link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-            links_list = link_regx.findall(driver.page_source)
-            for x in links_list:
-                dom_name = x.split("/")[2].split(".")
-                if (dom_name[len(dom_name) - 1] == target_dom_name[1]) and \
-                (dom_name[len(dom_name) - 2] == target_dom_name[0]):
-                    results.append(x.split("/")[2])
-            num_regex = re.compile('Found (.*) site')
-            num_subdomains = num_regex.findall(driver.page_source)
-            if not num_subdomains:
-                num_regex = re.compile('First (.*) sites returned')
-                num_subdomains = num_regex.findall(driver.page_source)
-            if num_subdomains:
-                if num_subdomains[0] != str(0):
-                    num_pages = int(num_subdomains[0]) // 20 + 1
-                    if num_pages > 1:
-                        last_regex = re.compile(
-                            '<td align="left">%s.</td><td align="left">\n<a href="(.*)" rel="nofollow">' % (20))
-                        last_item = last_regex.findall(driver.page_source)[0].split("/")[2]
-                        next_page = 21
+        # We must use a browser, so we either need PhantomJS or a Selenium web driver object
+        # if self.chrome_driver_path:
+        #     driver = webdriver.Chrome(self.chrome_driver_path)
+        # else:
+        #     driver = webdriver.PhantomJS()
 
-                        for x in range(2, num_pages):
-                            url = "http://searchdns.netcraft.com/?host=%s&last=%s&from=%s&restriction=/site%%20contains" % (domain, last_item, next_page)
-                            driver.get(url)
-                            link_regx = re.compile(
-                                '<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
-                            links_list = link_regx.findall(driver.page_source)
-                            for y in links_list:
-                                dom_name1 = y.split("/")[2].split(".")
-                                if (dom_name1[len(dom_name1) - 1] == target_dom_name[1]) and \
-                                (dom_name1[len(dom_name1) - 2] == target_dom_name[0]):
-                                    results.append(y.split("/")[2])
-                            last_item = links_list[len(links_list) - 1].split("/")[2]
-                            next_page = 20 * x + 1
-                else:
-                    pass
+        self.browser.get(netcraft_url)
+        link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
+        links_list = link_regx.findall(self.browser.page_source)
+        for x in links_list:
+            dom_name = x.split("/")[2].split(".")
+            if (dom_name[len(dom_name) - 1] == target_dom_name[1]) and \
+            (dom_name[len(dom_name) - 2] == target_dom_name[0]):
+                results.append(x.split("/")[2])
+        num_regex = re.compile('Found (.*) site')
+        num_subdomains = num_regex.findall(self.browser.page_source)
+        if not num_subdomains:
+            num_regex = re.compile('First (.*) sites returned')
+            num_subdomains = num_regex.findall(self.browser.page_source)
+        if num_subdomains:
+            if num_subdomains[0] != str(0):
+                num_pages = int(num_subdomains[0]) // 20 + 1
+                if num_pages > 1:
+                    last_regex = re.compile(
+                        '<td align="left">%s.</td><td align="left">\n<a href="(.*)" rel="nofollow">' % (20))
+                    last_item = last_regex.findall(self.browser.page_source)[0].split("/")[2]
+                    next_page = 21
+
+                    for x in range(2, num_pages):
+                        url = "http://searchdns.netcraft.com/?host=%s&last=%s&from=%s&restriction=/site%%20contains" % (domain, last_item, next_page)
+                        self.browser.get(url)
+                        link_regx = re.compile(
+                            '<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
+                        links_list = link_regx.findall(self.browser.page_source)
+                        for y in links_list:
+                            dom_name1 = y.split("/")[2].split(".")
+                            if (dom_name1[len(dom_name1) - 1] == target_dom_name[1]) and \
+                            (dom_name1[len(dom_name1) - 2] == target_dom_name[0]):
+                                results.append(y.split("/")[2])
+                        last_item = links_list[len(links_list) - 1].split("/")[2]
+                        next_page = 20 * x + 1
             else:
                 pass
 
+        # driver.close()
         return results
 
     def fetch_netcraft_domain_history(self, domain):
         """Function to fetch a domain's IP address history from NetCraft."""
         # TODO: See if the "Last Seen" and other data can be easily collected for here
         ip_history = []
+        endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % domain
         time.sleep(1)
-        if self.chrome_driver_path:
-            driver = webdriver.Chrome(self.chrome_driver_path)
-            endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % (domain)
-            driver.get(endpoint)
 
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
-            urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
+        # We must use Selenium, so we either need PhantomJS or a driver
+        # if self.chrome_driver_path:
+        #     driver = webdriver.Chrome(self.chrome_driver_path)
+        # else:
+        #     driver = webdriver.PhantomJS()
 
-            for url in urls_parsed:
-                if urls_parsed.index(url) != 0:
-                    result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
-                    str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
-                    ip_history.append(result)
+        self.browser.get(endpoint)
+        soup = BeautifulSoup(self.browser.page_source, 'html.parser')
+        urls_parsed = soup.findAll('a', href=re.compile(r".*netblock\?q.*"))
 
+        for url in urls_parsed:
+            if urls_parsed.index(url) != 0:
+                result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
+                str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
+                ip_history.append(result)
+
+        # driver.close()
         return ip_history
 
-    def enumerate_aws(self, client, domain, wordlist=None):
+    def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
         """Function to search for AWS S3 buckets and accounts. Default search terms are the
         client, domain, and domain without its TLD. A wordlist is optional.
 
@@ -638,12 +732,15 @@ this.".format(domain[1])))
         # Take the user input as the initial list of keywords here
         # Both example.com and example are valid bucket names, so domain+tld and domain are tried
         search_terms = [domain, domain.split(".")[0], client.replace(" ", "").lower()]
+        # Potentially valid and interesting keywords that might be used a prefix or suffix
+        fixes = ["apps", "downloads", "software", "deployment", "qa", "dev", "test", "vpn",
+                 "secret", "user", "confidential", "invoice", "config", "backup", "bak",
+                 "xls", "csv", "ssn", "resources", "web", "testing", "uac", "legacy", "adhoc",
+                 "docs"]
         bucket_results = []
         account_results = []
-        prefixes = ["apps-", "downloads-"]
-        suffixes = ["-apps", "-downloads"]
 
-        # Add wordlist terms to our list of search terms
+        # Add user-provided wordlist terms to our list of search terms
         if wordlist is not None:
             with open(wordlist, "r") as bucket_list:
                 for name in bucket_list:
@@ -651,29 +748,108 @@ this.".format(domain[1])))
                     if name and not name.startswith('#'):
                         search_terms.append(name)
 
-        # Modify search terms with some common prefixes and suffixes
-        for fix in prefixes:
-            for term in search_terms:
-                search_terms.append(fix + term)
+        # Add user-provided list of pre/suffixes to our list of fixes
+        if fix_wordlist is not None:
+            with open(fix_wordlist, "r") as new_fixes:
+                for fix in new_fixes:
+                    fix = fix.strip()
+                    if fix and not fix.startswith('#'):
+                        fixes.append(fix)
 
-        for fix in suffixes:
+        # Modify search terms with some common prefixes and suffixes
+        # We use this new list to avoid endlessly looping
+        final_search_terms = []
+        for fix in fixes:
             for term in search_terms:
-                search_terms.append(term + fix)
+                final_search_terms.append(fix + "-" + term)
+                final_search_terms.append(term + "-" + fix)
+                final_search_terms.append(fix + term)
+                final_search_terms.append(term + fix)
+        # Now include our original list of base terms
+        for term in search_terms:
+            final_search_terms.append(term)
 
         # Ensure we have only unique search terms in our list and start hunting
-        search_terms = list(set(search_terms))
-        for term in search_terms:
-            # Check for buckets
-            result = self.validate_bucket(term)
-            bucket_results.append(result)
-            # Check for accounts
-            result = self.validate_account(term)
-            account_results.append(result)
+        final_search_terms = list(set(final_search_terms))
+
+        with click.progressbar(final_search_terms,
+                               label="Enumerating AWS Keywords",
+                               length=len(final_search_terms)) as bar:
+            for term in bar:
+                # Check for buckets and spaces
+                if self.boto3_client is not None:
+                    result = self.validate_bucket('head', term)
+                    bucket_results.append(result)
+                result = self.validate_do_space("ams3", term)
+                bucket_results.append(result)
+                result = self.validate_do_space("nyc3", term)
+                bucket_results.append(result)
+                result = self.validate_do_space("sgp1", term)
+                bucket_results.append(result)
+                # Check for accounts
+                result = self.validate_account(term)
+                account_results.append(result)
 
         return bucket_results, account_results
 
-    def validate_bucket(self, bucket_name):
-        """Function to check a string to see if it exists as the name of an Amazon S3 bucket."""
+    def validate_bucket(self, validation_type, bucket_name):
+        """Helper function used by validate_bucket_head()."""
+        validation_functions = {
+            'head': self.validate_bucket_head
+        }
+        if validation_functions[validation_type]:
+            return validation_functions[validation_type](bucket_name)
+
+
+    def validate_bucket_head(self, bucket_name):
+        """Function to check a string to see if it exists as the name of an Amazon S3 bucket. This
+        version uses awscli to identify a bucket and then uses Requests to check public access. The
+        benefit of this is awscli will gather information from buckets that are otherwise
+        inaccessible via web requests.
+        """
+        # This test requires authentication
+        # Warning: Check credentials before use
+        error_values = {
+            '400': True,
+            '403': True,
+            '404': False
+        }
+        result = {
+            'bucketName': bucket_name,
+            'bucketUri': 'http://' + bucket_name + '.s3.amazonaws.com',
+            'arn': 'arn:aws:s3:::' + bucket_name,
+            'exists': False,
+            'public': False
+        }
+
+        try:
+            self.boto3_client.head_bucket(Bucket=bucket_name)
+            result['exists'] = True
+            try:
+                # Request the bucket to check the response
+                request = requests.get(result['bucketUri'])
+                # All bucket names will get something, so look for the NoSuchBucket status
+                if "NoSuchBucket" in request.text:
+                    result['exists'] = False
+                else:
+                    result['exists'] = True
+                # Check for a 200 OK to indicate a publicly listable bucket
+                if request.status_code == 200:
+                    result['public'] = True
+                    print(yellow("[*] Found a public bucket -- {}".format(result['bucketName'])))
+            except requests.exceptions.RequestException:
+                result['exists'] = False
+        except ClientError as e:
+            result['exists'] = error_values[e.response['Error']['Code']]
+
+        return result
+
+    def validate_bucket_noncli(self, bucket_name):
+        """Function to check a string to see if it exists as the name of an Amazon S3 bucket. This
+        version uses only Requests and the bucket's URL.
+
+        This is deprecated, but here just in case.
+        """
         bucket_uri = "http://" + bucket_name + ".s3.amazonaws.com"
         result = {
             'bucketName': bucket_name,
@@ -694,7 +870,34 @@ this.".format(domain[1])))
             # Check for a 200 OK to indicate a publicly listable bucket
             if request.status_code == 200:
                 result['public'] = True
-        except requests.exceptions.RequestException as error:
+        except requests.exceptions.RequestException:
+            result['exists'] = False
+
+        return result
+
+    def validate_do_space(self, region, space_name):
+        """Function to check a string to see if it exists as the name of a Digital Ocean Space."""
+        space_uri = "http://" + space_name + region + ".digitaloceanspaces.com"
+        result = {
+            'bucketName': space_name,
+            'bucketUri': space_uri,
+            'arn': 'arn:do:space:::' + space_name,
+            'exists': False,
+            'public': False
+        }
+
+        try:
+            # Request the Space to check the response
+            request = requests.get(space_uri)
+            # All Space names will get something, so look for the NoSuchBucket status
+            if "NoSuchBucket" in request.text:
+                result['exists'] = False
+            else:
+                result['exists'] = True
+            # Check for a 200 OK to indicate a publicly listable Space
+            if request.status_code == 200:
+                result['public'] = True
+        except requests.exceptions.RequestException:
             result['exists'] = False
 
         return result
@@ -761,17 +964,20 @@ this.".format(domain[1])))
                         return "Level 3: {}".format(target)
                     elif "cloudflare" in target:
                         return "Cloudflare: {}".format(target)
-        except:
-            pass
+                    elif 'unbouncepages.com' in target:
+                        return "Unbounce: {}".format(target)
+                    elif 'secure.footprint.net' in target:
+                        return "Level 3: {}".format(target)
+                    else:
+                        return False
+        except Exception:
+            return False
 
     def lookup_robtex_ipinfo(self, ip_address):
         """Function to lookup information about a target IP address with Robtex."""
         if helpers.is_ip(ip_address):
             request = requests.get(self.robtex_api + ip_address)
             ip_json = request.json()
-            
             return ip_json
         else:
             print(red("[!] The provided IP for Robtex address is invalid!"))
-
-    

@@ -4,6 +4,7 @@
 """This module prints ASCII art banners and version information."""
 
 import random
+from colors import red, green, yellow
 
 def print_art():
 	r1 = """
@@ -12,7 +13,7 @@ def print_art():
  ===  ===    ===  ===    ===    ========
  ===  ===    ===  ===    ===    === ====
   ======  :: =======  :: === :: ===  === ::
- Release v1.1, MUNIN"""
+ 		"""
 
 
 	r2 = """
@@ -22,7 +23,7 @@ def print_art():
 ██║   ██║   ██║  ██║   ██║   ██║╚██╗██║
 ╚██████╔╝██╗██████╔╝██╗██║██╗██║ ╚████║██╗
  ╚═════╝ ╚═╝╚═════╝ ╚═╝╚═╝╚═╝╚═╝  ╚═══╝╚═╝
- Release v1.1, MUNINN"""
+ 		"""
 
 	r3 = """
  ▒█████       ▓█████▄       ██▓      ███▄    █
@@ -35,7 +36,7 @@ def print_art():
 ░ ░ ░ ▒   ░    ░ ░  ░  ░    ▒ ░ ░      ░   ░ ░  ░
     ░ ░    ░     ░      ░   ░    ░           ░   ░
            ░   ░        ░        ░               ░
- Release v1.1, MUNINN"""
+ 		"""
 
 	r4 = """
  ▄██████▄  ████████▄   ▄█  ███▄▄▄▄
@@ -46,7 +47,7 @@ def print_art():
 ███    ███ ███    ███ ███  ███   ███
 ███    ███ ███   ▄███ ███  ███   ███
  ▀██████▀  ████████▀  █▀    ▀█   █▀
- Release v1.1, MUNINN"""
+ 		"""
 
 	r5 = """
          ·▄▄▄▄     ▪      ▐ ▄
@@ -54,7 +55,8 @@ def print_art():
  ▄█▀▄    ▐█· ▐█▌   ▐█·   ▐█▐▐▌
 ▐█▌.▐▌   ██. ██    ▐█▌   ██▐█▌
  ▀█▄▀▪ ▀ ▀▀▀▀▀•  ▀ ▀▀▀ ▀ ▀▀ █▪ ▀
- Release v1.1, MUNINN"""
+ 		"""
 
 	art = [r1,r2,r3,r4,r5]
-	print (random.choice(art))
+	print(red(random.choice(art)))
+	print(yellow("Release v1.8.6, MUNINN"))

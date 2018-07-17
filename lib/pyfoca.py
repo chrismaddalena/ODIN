@@ -10,7 +10,7 @@ import re
 import time
 import subprocess
 import requests
-from colors import red, green
+from colors import red, green, yellow
 from PyPDF2 import PdfFileReader
 
 
@@ -22,7 +22,7 @@ class Metaparser:
     """This class will search a domain for files and then attempt to extract metadata from any
     discovered files.
     """
-    def __init__(self, domain_name, page_results, exts, del_files, verbose):
+    def __init__(self, domain_name, page_results, exts, del_files, download_dir, verbose):
         self.container = list()
         self.offset = [0]
         self.data_exists = [0]
@@ -35,6 +35,7 @@ class Metaparser:
         self.total_success = 0
         self.exts = exts
         self.del_files = del_files
+        self.download_dir = download_dir + "file_downloads/"
         self.verbose = verbose
 
         while len(self.offset) < len(self.top_row):
@@ -102,9 +103,6 @@ class Metaparser:
                 if "\\" in curr_file:
                     curr_file = curr_file.replace("\\", "")
 
-                # Trim information if it's too long
-                if len(curr_file) > 15:
-                    curr_file = curr_file[:15] + "..." + curr_file[-13:]
                 if len(producer) > 30:
                     producer = producer[:20] + " [snipped] "
                 if len(author) > 20:
@@ -113,79 +111,82 @@ class Metaparser:
                 # Appends each piece of information
                 # Output will show ONLY if at least ONE file has data in a column
                 self.container.append([curr_file, created, author, producer, modded, last_saved])
-            except:
+            except Exception:
                 return
         else:
             try:
                 curr_file = curr_file.replace(" ", "\ ").replace("(", "\(")\
                     .replace(")", "\)")
-                output = subprocess.check_output('extract -V ' + curr_file, shell=True)\
-                    .decode('utf-8').split('\n')
-                if "extract: not found" in output[0]:
-                    print(red("[!] PyFOCA requires the 'extract' command."))
-                    print(red("L.. Please install extract by typing 'apt-get \
-install extract' in terminal."))
-                    exit()
 
-                for i in output:
-                    if "creator" in i:
-                        author = i[i.find("-")+2:]
-                        rem_alphanumeric = re.compile(r'\W')
-                        author = re.sub(rem_alphanumeric, ' ', author)
-                        while True:
-                            if "  " in author:
-                                author = author.replace("  ", " ")
-                            elif author[0] == " ":
-                                author = author[1:]
-                            else:
-                                break
-                    elif "date" in i and "creation" not in i:
-                        year = i[i.find('-')+2:(i.find('-')+2)+4]
-                        date = i[i.find(year)+5:(i.find(year)+5)+5].replace("-", "/")
-                        modded_time = i[i.find(":")-2:i.rfind(":")-1]
-                        modded_time = time.strftime("%I:%M %p", time.strptime(modded_time, "%H:%M"))
-                        modded = date + "/" + year + " " + modded_time
-                    elif "generator" in i:
-                        producer = i[i.find('-')+2:]
-                    elif "creation" in i:
-                        year = i[i.find('-')+2:(i.find('-')+2)+4]
-                        date = i[i.find(year)+5:(i.find(year)+5)+5].replace("-", "/")
-                        created_time = i[i.find(":")-2:i.rfind(":")-1]
-                        created_time = time.strftime("%I:%M %p",
-                                                     time.strptime(created_time, "%H:%M"))
-                        created = date + "/" + year + " " + created_time
-                    elif "last saved" in i:
-                        last_saved = i[i.find('-')+2:]
+                try:
+                    extract_status = subprocess.getstatusoutput("extract")
+                except:
+                    print(yellow("[*] We found an Office document, but 'extract' is not installed \
+on this system to get the metadata. It is downloaded for later analysis."))
 
-                if "/" in curr_file:
-                    curr_file = curr_file[curr_file.rfind("/")+1:]
+                if extract_status[0] == 0:
+                    output = subprocess.check_output("extract -V " + curr_file, shell=True)\
+                        .decode('utf-8').split('\n')
+                    if "extract: not found" in output[0]:
+                        print(red("[!] PyFOCA requires the 'extract' command."))
+                        print(red("L.. Please install extract by typing 'apt-get install extract' \
+    in terminal."))
 
-                if "\\" in curr_file:
-                    curr_file = curr_file.replace("\\", "")
+                    for i in output:
+                        if "creator" in i:
+                            author = i[i.find("-")+2:]
+                            rem_alphanumeric = re.compile(r'\W')
+                            author = re.sub(rem_alphanumeric, ' ', author)
+                            while True:
+                                if "  " in author:
+                                    author = author.replace("  ", " ")
+                                elif author[0] == " ":
+                                    author = author[1:]
+                                else:
+                                    break
+                        elif "date" in i and "creation" not in i:
+                            year = i[i.find('-')+2:(i.find('-')+2)+4]
+                            date = i[i.find(year)+5:(i.find(year)+5)+5].replace("-", "/")
+                            modded_time = i[i.find(":")-2:i.rfind(":")-1]
+                            modded_time = time.strftime("%I:%M %p", time.strptime(modded_time, "%H:%M"))
+                            modded = date + "/" + year + " " + modded_time
+                        elif "generator" in i:
+                            producer = i[i.find('-')+2:]
+                        elif "creation" in i:
+                            year = i[i.find('-')+2:(i.find('-')+2)+4]
+                            date = i[i.find(year)+5:(i.find(year)+5)+5].replace("-", "/")
+                            created_time = i[i.find(":")-2:i.rfind(":")-1]
+                            created_time = time.strftime("%I:%M %p",
+                                                        time.strptime(created_time, "%H:%M"))
+                            created = date + "/" + year + " " + created_time
+                        elif "last saved" in i:
+                            last_saved = i[i.find('-')+2:]
 
-                # Trim the file name if it's longer than 15 characters
-                if len(curr_file) > 15:
-                    curr_file = curr_file[:9] + "..." + curr_file[-13:]
+                    if "/" in curr_file:
+                        curr_file = curr_file[curr_file.rfind("/")+1:]
 
-                if author != "-" or date != "-" or generator != "-" or created != "-" or \
-                    producer != "-" or modded != "-" or last_saved != "-":
-                    self.container.append([" | " + curr_file, created, author,
-                                           producer, modded, last_saved])
+                    if "\\" in curr_file:
+                        curr_file = curr_file.replace("\\", "")
+
+                    if author != "-" or date != "-" or generator != "-" or created != "-" or \
+                        producer != "-" or modded != "-" or last_saved != "-":
+                        self.container.append([" | " + curr_file, created, author,
+                                            producer, modded, last_saved])
+                else:
+                    print(yellow("[*] We found an Office document, but 'extract' is not installed \
+on this system to get the metadata. It is downloaded for later analysis."))
             except Exception as error:
                 if "command not found" in str(error):
                     print(red("[!] PyFOCA requires the 'extract' command."))
-                    print(red("L.. Please install extract by typing 'apt-get install extract' \
+                    print(red("L.. Please install on Linux extract by typing 'apt-get install extract' \
 in terminal."))
-                    exit()
+                    # exit()
                 return
 
     def grab_meta(self):
         """This function collects the metadata from files."""
         global TOTAL_FILES
         files = []
-
-        print(green("[+] Domain: {}".format(self.domain_name)))
-        print(green("[+] Attempting to gather links from Google searches..."))
 
         total_count = 0
 
@@ -213,27 +214,21 @@ domain you provided."))
 searches...").format(len(files), total_count))
 
         # Create pyfoca-downloads directory if it doesn't exist
-        if not os.path.exists('reports/pyfoca-downloads'):
-            print(green("[+] Creating reports/pyfoca-downloads folder..."))
-            os.makedirs('reports/pyfoca-downloads')
+        # if not os.path.exists('reports/pyfoca-downloads'):
+        if not os.path.exists(self.download_dir):
+            os.makedirs(self.download_dir)
 
         # Set maximum number of spaces for pdf file names
         spaces = 0
         for item in files:
             item = item[item.rfind("/")+1:]
-            if len(item) > 10:
-                short_file = item[:10] + "..." + item[-10:]
-            else:
-                short_file = item
+            short_file = item
             if len(short_file) > spaces:
                 spaces = len(short_file) + 3
 
         print(green("[+] Attempting to download files..."))
-        if self.verbose == False:
-            print(green("[+] Please wait..."))
 
         # Download each file that has been added to the 'files' variable
-        print(green("-------------------------------"))
         for item in files:
             if "..." in item:
                 del files[files.index(item)]
@@ -242,13 +237,10 @@ searches...").format(len(files), total_count))
             try:
                 response = requests.get(item)
                 source = response.content
-                with open('reports/pyfoca-downloads/%s' % pdf_name, 'wb') as file_descriptor:
+                with open(self.download_dir + pdf_name, "wb") as file_descriptor:
                     file_descriptor.write(source)
                 pdf_name = pdf_name.replace("(", "\(").replace(")", "\)")
-                if len(pdf_name) > 10:
-                    short_file = pdf_name[:10] + "..." + pdf_name[-10:]
-                else:
-                    short_file = pdf_name
+                short_file = pdf_name
             except Exception as error:
                 print(red("[!] There was an error downloading a file from this URL:\n{}"
                       .format(item)))
@@ -257,18 +249,18 @@ searches...").format(len(files), total_count))
 
         for item in files:
             pdf_name = item[item.rfind("/")+1:]
-            self.process_file('reports/pyfoca-downloads/%s' % pdf_name)
+            self.process_file(self.download_dir + pdf_name)
 
         return self.container
 
     def clean_up(self):
         """Small function to clean-up downloaded files."""
         if self.del_files is True:
-            print(green("[+] Done and deleting reports/pyfoca-downloads folder for clean-up."))
+            print(green("[+] Done and deleting file_downloads directory for clean-up."))
             try:
-                subprocess.Popen('rm -rf reports/pyfoca-downloads/', shell=True)
+                subprocess.Popen("rm -rf {}".format(self.download_dir, shell=True))
             except Exception as error:
-                print(red("[!] Failed to delete reports/pyfoca-downloads folder!"))
+                print(red("[!] Failed to delete file_downloads directory!"))
                 print(red("L.. Details: {}".format(error)))
         else:
-            print(green("[+] Done! Downloaded files can be found in reports/pyfoca-downloads."))
+            print(green("[+] Job's done! Downloaded files can be found in {}.".format(self.download_dir)))

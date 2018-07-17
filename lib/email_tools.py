@@ -9,6 +9,12 @@ import requests
 import tweepy
 from colors import red, green, yellow
 from bs4 import BeautifulSoup as BS
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from http.cookiejar import CookieJar, Cookie
+from time import sleep
+import json
 from lib.theharvester import googlesearch, linkedinsearch, \
 twittersearch, yahoosearch, bingsearch, jigsaw
 from lib import helpers
@@ -32,54 +38,94 @@ class PeopleCheck(object):
             twit_auth = tweepy.OAuthHandler(consumer_key, consumer_key_secret)
             twit_auth.set_access_token(access_token, access_token_secret)
             self.twit_api = tweepy.API(twit_auth)
-        except:
+        except Exception:
             self.twit_api = None
             print(yellow("[!] Could not setup OAuth for Twitter API."))
 
         try:
             self.emailhunter_api_key = helpers.config_section_map("EmailHunter")["api_key"]
-        except:
+        except Exception:
             self.emailhunter_api_key = ""
             print(yellow("[!] Could not fetch EmailHunter API key."))
 
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
-        except:
+        except Exception:
             self.contact_api_key = ""
             print(yellow("[!] Could not fetch Full Contact API key."))
 
+        try:
+            self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+            # Try loading the driver as a test
+            self.chrome_options = Options()
+            self.chrome_options.add_argument("--headless")
+            self.chrome_options.add_argument("--window-size=1920x1080")
+            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
+        # Catch issues with the web driver or path
+        except WebDriverException:
+            self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
+            print(yellow("[!] There was a problem with the specified Chrome web driver in your \
+keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned."))
+        # Catch issues loading the value from the config file
+        except Exception:
+            self.chrome_driver_path = None
+            self.browser = webdriver.PhantomJS()
+            print(yellow("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
+to use PantomJS for haveIBeenPwned."))
+
     def pwn_check(self, email):
         """Use HIBP's API to check for the target's email in public security breaches."""
-        pwned_api_endpoint = "https://haveibeenpwned.com/api/breachedaccount/{}".format(email)
         try:
-            request = requests.get(pwned_api_endpoint)
-            return request.json()
-        except requests.exceptions.RequestException as error:
-            print(red("[!] Error with HIBP request: {}".format(error)))
+            # if self.chrome_driver_path:
+            #     browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            # else:
+            #     browser = webdriver.PhantomJS()
+            self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
+            # cookies = browser.get_cookies()
+            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            pwned = json.loads(json_text)
+            # browser.close()
+
+            return pwned
+        except TimeoutException:
+            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
-        except ValueError:
+        except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
+            return []
+        except WebDriverException:
+            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
 
     def paste_check(self, email):
-        """Use HIBP's API to check for the target's email in pastes across multiple
-        paste websites, e.g. slexy, ghostbin, pastebin.
+        """Use HIBP's API to check for the target's email in pastes across multiple paste websites.
+        This includes sites like Slexy, Ghostbin, Pastebin.
         """
-        paste_api_endpoint = "https://haveibeenpwned.com/api/v2/pasteaccount/{}".format(email)
         try:
-            request = requests.get(paste_api_endpoint)
-            return request.text
-        except requests.exceptions.RequestException as error:
-            print(red("[!] Error with HIBP request: {}".format(error)))
+            # if self.chrome_driver_path:
+            #     browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
+            # else:
+            #     browser = webdriver.PhantomJS()
+            self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
+            # cookies = browser.get_cookies()
+            json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
+            pastes = json.loads(json_text)
+            # browser.close()
+
+            return pastes
+        except TimeoutException:
+            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
-        except ValueError:
+        except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
+            return []
+        except WebDriverException:
+            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
 
     def full_contact_email(self, email):
-        """Use the Full Contact API to collect social information
-        for the target email address.
-        """
+        """Use the Full Contact API to collect social information for the target email address."""
         if self.contact_api_key is None:
             print(red("[!] No Full Contact API key, so skipping these searches."))
         else:
@@ -107,35 +153,35 @@ class PeopleCheck(object):
         harvest_limit = 100
         harvest_start = 0
 
-        print(green("[+] Running The Harvester"))
+        print(green("[+] Beginning the harvesting of email addresses..."))
         # Search through most of Harvester's supported engines
         # No Baidu because it always seems to hang or take way too long
-        print(green("[-] Harvesting Google"))
+        print(green("[*] Harvesting Google"))
         search = googlesearch.search_google(domain, harvest_limit, harvest_start)
         search.process()
         google_harvest = search.get_emails()
 
-        print(green("[-] Harvesting LinkedIn"))
+        print(green("[*] Harvesting LinkedIn"))
         search = linkedinsearch.search_linkedin(domain, harvest_limit)
         search.process()
         link_harvest = search.get_people()
 
-        print(green("[-] Harvesting Twitter"))
+        print(green("[*] Harvesting Twitter"))
         search = twittersearch.search_twitter(domain, harvest_limit)
         search.process()
         twit_harvest = search.get_people()
 
-        print(green("[-] Harvesting Yahoo"))
+        print(green("[*] Harvesting Yahoo"))
         search = yahoosearch.search_yahoo(domain, harvest_limit)
         search.process()
         yahoo_harvest = search.get_emails()
 
-        print(green("[-] Harvesting Bing"))
+        print(green("[*] Harvesting Bing"))
         search = bingsearch.search_bing(domain, harvest_limit, harvest_start)
         search.process('no')
         bing_harvest = search.get_emails()
 
-        print(green("[-] Harvesting Jigsaw"))
+        print(green("[*] Harvesting Jigsaw"))
         search = jigsaw.search_jigsaw(domain, harvest_limit)
         search.process()
         jigsaw_harvest = search.get_people()
@@ -144,8 +190,8 @@ class PeopleCheck(object):
         all_emails = google_harvest + bing_harvest + yahoo_harvest
         all_people = link_harvest + jigsaw_harvest
 
-        print(green("[+] TheHarvester has found {} emails, {} names, and \
-{} Twitter handles.".format(len(all_emails), len(all_people), len(twit_harvest))))
+        print(green("[+] The search engines returned {} emails, {} names, and {} Twitter \
+handles.".format(len(all_emails), len(all_people), len(twit_harvest))))
 
         # Return the results for emails, people, and Twitter accounts
         return all_emails, all_people, twit_harvest
@@ -153,8 +199,8 @@ class PeopleCheck(object):
     def harvest_twitter(self, handle):
         """Function to lookup the provided handle on Twitter using Tweepy."""
         if self.twit_api is None:
-            print(yellow("[*] Twitter API access is not setup, \
-so skipping Twitter handle lookups."))
+            print(yellow("[*] Twitter API access is not setup, so skipping Twitter handle \
+lookups."))
         else:
             # Drop the lonely @ Harvester often includes and common false positives
             if handle == '@' or handle == '@-moz-keyframes' or \
