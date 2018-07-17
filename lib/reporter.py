@@ -876,6 +876,7 @@ Please try again."))
         camera = screenshots.Screenshotter()
         output_dir += "screenshots/"
 
+        # TODO: Take Shodan results and look for common web ports for screenshots
         self.c.execute("SELECT host_address FROM hosts")
         target_list = self.c.fetchall()
 

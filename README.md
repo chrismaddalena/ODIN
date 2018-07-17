@@ -5,13 +5,11 @@
 
 ![ODIN](https://github.com/chrismaddalena/viper/raw/master/ODIN.png)
 
-```
-Current version: v1.8.5 "Muninn"
+`Current version: v1.8.6 "Muninn"`
 
 A Python tool for automating intelligence gathering, testing and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
 
 Note: ODIN is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files, is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information.
-```
 
 ## First Things First
 ODIN is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify. Have fun :D
@@ -35,12 +33,12 @@ At the end of all of this ODIN will output a SQL database with all of the colelc
 ### Installing ODIN
 ODIN requires **Python 3**. Using `pipenv` for managing the required libraries is the best option to avoid Python installations getting mixed-up.
 
-1. Run `pip3 install --user pipenv` or `python3 -m pip install --user pipenv`. 
-2. Run `git clone https://github.com/chrismaddalena/ODIN.git`.
-3. Run `cd ODIN && pipenv install`.
-4. Run `pipenv shell` to get started using ODIN.
+1. Run: `pip3 install --user pipenv` or `python3 -m pip install --user pipenv`
+2. Ru: `git clone https://github.com/chrismaddalena/ODIN.git`
+3. Run: `cd ODIN && pipenv install`
+4. Start using ODIN by running: `pipenv shell`
 
-[Optional] Install PhantomJS -- `brew install phantomjs` or `apt install phtanomjs`
+[Optional] Install PhantomJS -- `brew install phantomjs` or `apt install phtanomjs` (This may go away soon due to PhantomJS no longer being actively supported and developed with Selenium.)
 
 **Note:** On MacOS you may get an error about `pew` not being in your PATH after installing `pipenv` and attempting to install ODIN. To fix it, follow these steps in order:
 * Uninstall virtualenv, pipenv, and pew.
@@ -48,12 +46,12 @@ ODIN requires **Python 3**. Using `pipenv` for managing the required libraries i
 * Install pew
 * Install pipenv
 
-**Note 2:** If you're running as root on something like Kali Linux, you'll want to drop the `--user` portion of the `pip` commands above. That seems to call issues for actually using `pipenv` commands, at least on Kali.
+**Note 2:** If you're running as root on something like Kali Linux, you'll want to drop the `--user` portion of the `pip` commands above. That seems to create issues for actually using `pipenv` commands later, at least on Kali.
 
 ### Setup API Keys
 1. Review the keys.config.sample file to fill-in your API keys and create a keys.config file.
 2. `cd` into the /setup directory and run `setup_check.py` to make sure your keys.config file is in order.
-3. Install awscli and run `aws configure`.
+3. Install awscli, run `aws configure`, and follow the prompts to enter your credentials.
 
 ## The APIs and Services
 ODIN uses several APIs to gather information. Some of these require an API key, but most of the APIs are free. That is to say, you can get a free key and then pay for more requests/day. Shodan is a good example of this. You may prefer to not use APIs at all for one reason or another. You can still use ODIN, but a few of the APIs are just really fantastic and you should consider using them, specifically Censys and Shodan.
