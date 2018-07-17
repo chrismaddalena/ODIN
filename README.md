@@ -7,31 +7,31 @@
 
 `Current version: v1.8.6 "Muninn"`
 
-A Python tool for automating intelligence gathering, testing and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
+A Python tool for automating intelligence gathering, asset discovery, and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
 
-Note: ODIN is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files, is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information.
+Note: ODIN is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files (mostly Office documents), is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information. YOu can always extract the metadata yourself later from the donwloaded files!
 
 ## First Things First
 ODIN is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify. Have fun :D
 
 ## What Can ODIN Do?
-ODIN is still very much in development, but it aims to automate many of the common recon tasks carried out by penetration testers. Such as:
+ODIN is still very much in development, but it aims to automate many of the common recon tasks carried out by penetration testers and red teamers. This includes:
 
-* Harvesting email addresses and employee names for a company.
-* Linking employees and companies to social media profiles.
-* Checking to see if discovered accounts have been a part of any public security breaches or appeared in any pastes.
+* Harvesting email addresses and employee names for a target organization.
+* Linking employees to social media profiles.
+* Checking to see if discovered email addresses have been a part of any public security breaches or appeared in any pastes.
 * Collecting data on domains and IP addresses from Shodan, Censys, DNS records, and whois/RDAP.
-* Discovering subdomains, their related IP addresses, and looking for CDNs that might allow for domain fronting.
-* Hunting Office files and PDFs under a domain, downloading them, and extracting metadata.
-* Linking key words, like a company name or domain, to AWS via S3 buckets and account aliases.
-* Take screenshtos of web services.
+* Discovering subdomains via online resources and TLS certificates, their related IP addresses, and looking for any pointing to a CDN that might allow for domain fronting.
+* Hunting for Office files and PDFs under a target domain, downloading them, and extracting metadata.
+* Searching for AWS S3 buckets and Digital Ocean spaces using key words, like an organization's name and domain name.
+* Take screenshots of web services.
 * More to come in the future...
 
-At the end of all of this ODIN will output a SQL database with all of the colelcted data. Optionally, an HTML report will be created with some default queries displaying all of the collected information.
+At the end of all of this ODIN will output a SQL database with all of the collected data. Optionally, an HTML report will be created with some default queries displaying all of the collected information in neat tables you can peruse using your preferred web browser.
 
 ## Getting Started
 ### Installing ODIN
-ODIN requires **Python 3**. Using `pipenv` for managing the required libraries is the best option to avoid Python installations getting mixed-up.
+ODIN requires **Python 3**. Using `pipenv` for managing the required libraries is the best option to avoid Python installations getting mixed-up. Do this:
 
 1. Run: `pip3 install --user pipenv` or `python3 -m pip install --user pipenv`
 2. Ru: `git clone https://github.com/chrismaddalena/ODIN.git`
