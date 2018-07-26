@@ -203,6 +203,12 @@ And to these folks who have created/maintained some of the tools integrated into
 * TrullJ - For making the slick [SSL Labs Scanner module](https://github.com/TrullJ/ssllabs).
 
 ### Change Log
+#### July 26, 2018, 1.9.0
+This brings ODIN closer to its v2.0 release:
+* ODIN now has a helper script, grapher.py, that will take your complete ODIN SQLite3 database and convert it to a Neo4j graph database with relationships!
+* Certificates are better than ever! ODIN will now use the returned ID from Censys to look-up all of the additional details about the certificate, like alternative names. Even more subdomains and fun to be had with certificates! Additionally, certificates ar enow paired properly with the subdomains to which they are attached, not the root *.whatever.tld domain.
+* The DNSDumpster output has been cleaned-up to remove some weird artifacts (e.g. HTTP: added to the end of some subdomains during scraping).
+
 #### July 7, 2018, 1.8.6
 * Company Info table now supports a target organization having multiple profiles on one social media platform.
 * Chromium now operates in headless mode, so no more Chrome windows covering your screen.

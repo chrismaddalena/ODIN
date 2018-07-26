@@ -8,6 +8,7 @@ from time import sleep
 import base64
 import datetime
 import sqlite3
+import re
 from xml.etree import ElementTree  as ET
 from colors import red, green, yellow
 from lib import domain_tools, email_tools, pyfoca, helpers, screenshots
@@ -60,10 +61,12 @@ want to overwrite it? (Y\\N) "))
         # Create the 'subdomains' table
         self.c.execute('''CREATE TABLE 'subdomains'
             ('id' INTEGER PRIMARY KEY,'domain' text, 'subdomain' text, 'ip_address' text,
-            'domain_frontable' text, 'source' text)''')
+            'domain_frontable' text)''')
         # Create the 'certificate' table
         self.c.execute('''CREATE TABLE 'certificates'
-                    ('id' INTEGER PRIMARY KEY, 'host' text, 'subject' text, 'issuer' text)''')
+                    ('id' INTEGER PRIMARY KEY, 'host' text, 'subject' text, 'issuer' text,
+                    'censys_fingerprint' text, 'signature_algo' text, 'self_signed' text,
+                    'start_date' text, 'expiration_date' text, 'alternate_names' text)''')
         # Create the 'ip_history' table
         self.c.execute('''CREATE TABLE 'ip_history'
                     ('id' INTEGER PRIMARY KEY, 'domain' text, 'netblock_owner' text,
@@ -320,6 +323,7 @@ the company's primary domain used for their website.".format(domain)))
 
         # Collect the subdomain information from DNS Dumpster and NetCraft
         for domain in domain_list:
+            collected_subdomains = []
             dumpster_results = []
             netcraft_results = []
             try:
@@ -349,78 +353,74 @@ the company's primary domain used for their website.".format(domain)))
                         # asn = result['as']
                         # provider = result['provider']
 
-                    # Check if this a known IP and add it to hosts if not
-                    self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (result['ip'],))
-                    res = self.c.fetchone()
-                    if res[0] == 0:
-                        self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
-                                       (result['ip'], False, "DNS Dumpster"))
-                        self.conn.commit()
-                        # Also add it to our list of IP addresses
-                        ip_list.append(result['ip'])
+                    # Avoid adding the base domain to our subdomains list
+                    if not bool(re.search("^" + re.escape(domain), subdomain.rstrip("HTTP:"), re.IGNORECASE)):
+                        collected_subdomains.append(subdomain.rstrip("HTTP:"))
 
-                    # Check the subdomain for domain fronting possibilties
-                    frontable = self.DC.check_domain_fronting(result['domain'])
-
-                    # INSERT the subdomain info into the table
-                    # self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?,?,?)",
-                    #             (domain, subdomain, ip, asn, provider, frontable, "DNS Dumpster"))
-                    self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?)",
-                                    (domain, subdomain, ip, frontable, "DNS Dumpster"))
-                    self.conn.commit()
-
-            # INSERT the subdomain info collected from NetCraft
             if netcraft_results:
                 for result in netcraft_results:
-                    if not result in dumpster_results['dns_records']['host']:
+                    # Avoid adding the base domain to our subdomains list
+                    if not bool(re.search("^" + re.escape(domain), result, re.IGNORECASE)):
+                        collected_subdomains.append(result)
+
+            # Try to collect certificate data for the domain
+            try:
+                cert_data = self.DC.run_censys_search_cert(domain)
+                # Go through each certificate returned by Censys
+                for cert in cert_data['results']:
+                    # Get the domain for which the cert is issued
+                    cert_domain = self.DC.parse_cert_subdomain(cert)
+
+                    # Limit API calls and records by weeding out unrelated domains
+                    # Example: A search for blizzard.com also returns dairyqueenblizzard.com
+                    # which is not a subdomain of blizzard.com and unwanted
+                    if ".{}".format(domain) in cert_domain or bool(re.search("^" + re.escape(domain), cert_domain, re.IGNORECASE)):    
+                        # Fetch the extended data from Censys
+                        extended_data = self.DC.view_censys_cert(cert["parsed.fingerprint_sha256"])
+                        alt_names = extended_data["parsed"]["names"]
+                        signature_algo = extended_data["parsed"]["signature_algorithm"]["name"]
+                        self_signed = extended_data["parsed"]["signature"]["self_signed"]
+                        start_date = extended_data["parsed"]["validity"]["start"]
+                        exp_date = extended_data["parsed"]["validity"]["end"]
+
+                        # Insert the certiticate info into the certificates table
+                        self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,?,?,?,?,?,?,?,?)",
+                                    (cert_domain, cert["parsed.subject_dn"],
+                                        cert["parsed.issuer_dn"], cert["parsed.fingerprint_sha256"],
+                                        signature_algo, self_signed, start_date, exp_date, ", ".join(alt_names)))
+                        self.conn.commit()
+
+                        # Only record certificate's domain as a subdomain if it is actually a subdomain
+                        if not bool(re.search("^" + re.escape(domain), cert_domain, re.IGNORECASE)):
+                            collected_subdomains.append(cert_domain)
+
+                        # Add the certificate's alternate DNS names to the list of subdomains
+                        for name in alt_names:
+                            if not bool(re.search("^" + re.escape(domain), name, re.IGNORECASE)):
+                                collected_subdomains.append(name)
+
+                # Add new subdomains to the hosts table and resolve the subdomains
+                unique_collected_subdomains = set(collected_subdomains)
+                for unique_sub in unique_collected_subdomains:
+                    # Check for wildcard subdomains from certificates and ignore them for this
+                    if not "*" in unique_sub:
                         try:
-                            ip_address = socket.gethostbyname(result)
+                            ip_address = socket.gethostbyname(unique_sub)
                             # Check if this a known IP and add it to hosts if not
                             self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
                             res = self.c.fetchone()
                             if res[0] == 0:
                                 self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
-                                                (ip_address, False, "Netcraft DNS"))
+                                                (ip_address, False, "Subdomain Enumeration"))
                                 self.conn.commit()
                                 # Also add it to our list of IP addresses
                                 ip_list.append(ip_address)
                         except:
                             ip_address = "Lookup Failed"
-                        frontable = self.DC.check_domain_fronting(result)
-                        self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?)",
-                                       (domain, result, ip_address, frontable, "Netcraft"))
+                        frontable = self.DC.check_domain_fronting(unique_sub)
+                        self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?)",
+                                    (domain, unique_sub, ip_address, frontable))
                         self.conn.commit()
-
-            # Try to collect certificate data for the domain
-            try:
-                cert_data = self.DC.run_censys_search_cert(domain)
-                for cert in cert_data['results']:
-                    self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,?,?)",
-                                   (domain, cert["parsed.subject_dn"], cert["parsed.issuer_dn"]))
-                    self.conn.commit()
-
-                cert_subdomains = self.DC.parse_cert_subdomains(cert_data)
-                for sub in cert_subdomains:
-                    if not sub in dumpster_results['dns_records']['host'] or sub in netcraft_results:
-                        # Check for wildcard subdomains from certificates and ignore them for this
-                        if not "*" in sub:
-                            try:
-                                ip_address = socket.gethostbyname(sub)
-                                # Check if this a known IP and add it to hosts if not
-                                self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
-                                res = self.c.fetchone()
-                                if res[0] == 0:
-                                    self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
-                                                    (ip_address, False, "Certificate Lookup"))
-                                    self.conn.commit()
-                                    # Also add it to our list of IP addresses
-                                    ip_list.append(ip_address)
-                            except:
-                                ip_address = "Lookup Failed"
-                            frontable = self.DC.check_domain_fronting(sub)
-                            self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?,?)",
-                                           (domain, sub, ip_address, frontable, "Certificate"))
-                            self.conn.commit()
             except:
                 pass
 
@@ -511,49 +511,6 @@ the company's primary domain used for their website.".format(domain)))
                     net_cidr = results['network']['cidr']
                     asn = results['asn']
                     country_code = results['asn_country_code']
-
-                # TODO: Convert Verbose mode output into something easily recorded in the DB
-#                 # Verbose mode is optional to allow users to NOT be overwhelmed by contact data
-#                 if verbose:
-#                     row += 1
-#                     for object_key, object_dict in results['objects'].items():
-#                         if results['objects'] is not None:
-#                             for item in results['objects']:
-#                                 name = results['objects'][item]['contact']['name']
-#                                 if name is not None:
-#                                     dom_worksheet.write(row, 1, "Contact Name:")
-#                                     dom_worksheet.write(row, 2, name)
-#                                     row += 1
-
-#                                 title = results['objects'][item]['contact']['title']
-#                                 if title is not None:
-#                                     dom_worksheet.write(row, 1, "Contact's Title:")
-#                                     dom_worksheet.write(row, 2, title)
-#                                     row += 1
-
-#                                 role = results['objects'][item]['contact']['role']
-#                                 if role is not None:
-#                                     dom_worksheet.write(row, 1, "Contact's Role:")
-#                                     dom_worksheet.write(row, 2, role)
-#                                     row += 1
-
-#                                 email = results['objects'][item]['contact']['email']
-#                                 if email is not None:
-#                                     dom_worksheet.write(row, 1, "Contact's Email:")
-#                                     dom_worksheet.write(row, 2, email[0]['value'])
-#                                     row += 1
-
-#                                 phone = results['objects'][item]['contact']['phone']
-#                                 if phone is not None:
-#                                     dom_worksheet.write(row, 1, "Contact's Phone:")
-#                                     dom_worksheet.write(row, 2, phone[0]['value'])
-#                                     row += 1
-
-#                                 address = results['objects'][item]['contact']['address']
-#                                 if address is not None:
-#                                     dom_worksheet.write(row, 1, "Contact's Address:")
-#                                     dom_worksheet.write(row, 2, address[0]['value'])
-#                                     row += 1
 
                     # Check Robtex for results for the current target
                     robtex = self.DC.lookup_robtex_ipinfo(target_ip)
@@ -848,24 +805,6 @@ Please try again."))
                                    (bucket['bucketName'], bucket['bucketUri'],
                                    bucket['arn'], bucket['public']))
                     self.conn.commit()
-
-            # # Write headers for AWS Account table
-            # cloud_worksheet.write(row, 0, "AWS Accounts", bold)
-            # row += 1
-            # cloud_worksheet.write(row, 0, "Account Alias", bold)
-            # cloud_worksheet.write(row, 1, "Account ID", bold)
-            # cloud_worksheet.write(row, 2, "Account Signin URI", bold)
-            # row += 1
-            # # Write AWS Account table contents
-            # for account in verified_accounts:
-            #     if account['exists']:
-            #         cloud_worksheet.write(row, 0, account['accountAlias'])
-            #         if account['accountId'] is None:
-            #             cloud_worksheet.write(row, 1, "Unknown")
-            #         else:
-            #             cloud_worksheet.write(row, 1, account['accountId'])
-            #         cloud_worksheet.write(row, 2, account['signinUri'])
-            #         row += 1
 
             print(green("[+] AWS searches are complete and results are in the Cloud worksheet."))
         else:

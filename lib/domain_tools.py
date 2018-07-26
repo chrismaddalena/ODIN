@@ -262,16 +262,21 @@ to use PantomJS for Netcraft."))
         try:
             who = whois.whois(domain)
             results = {}
-            results['domain_name'] = who.domain_name
-            results['registrar'] = who.registrar
-            results['expiration_date'] = who.expiration_date
-            results['registrant'] = who.name
-            results['org'] = who.org
-            results['admin_email'] = who.emails[0]
-            results['tech_email'] = who.emails[1]
-            results['address'] = "{}, {}{}, {}, {}\n".format(who.address, \
-                who.city, who.zipcode, who.state, who.country)
-            results['dnssec'] = who.dnssec
+            # Check if info was returned before proceeding because sometimes records are protected
+            if who.registrar:
+                results['domain_name'] = who.domain_name
+                results['registrar'] = who.registrar
+                results['expiration_date'] = who.expiration_date
+                results['registrant'] = who.name
+                results['org'] = who.org
+                results['admin_email'] = who.emails[0]
+                results['tech_email'] = who.emails[1]
+                results['address'] = "{}, {}{}, {}, {}".format(who.address, \
+                    who.city, who.zipcode, who.state, who.country)
+                results['dnssec'] = who.dnssec
+            else:
+                print(yellow("[*] Whois record for {} came back empty. Could be privacy protection, \
+GDPR, or the registrar. You might try looking at dnsstuff.com.").format(domain))
 
             return results
         except Exception as error:
@@ -493,10 +498,8 @@ to be found."))
 
     def run_censys_search_cert(self, target):
         """Collect certificate information from Censys for the target domain name. This returns
-        a dictionary of certificate information. Censys can return a LOT of certificate chain
-        info, so be warned.
-
-        This function uses these fields: parsed.subject_dn and parsed.issuer_dn
+        a dictionary of certificate information that includes the issuer, subject, and a hash
+        Censys uses for the /view/ API calls to fetch additional information.
 
         A free API key is required.
         """
@@ -506,15 +509,52 @@ to be found."))
             print(green("[+] Performing Censys certificate search for {}".format(target)))
             params = {"query" : target}
             try:
-                results = requests.post(self.censys_api_endpoint + "/search/certificates", json = params, auth=(self.censys_api_id, self.censys_api_secret))
+                results = requests.post(self.censys_api_endpoint + "/search/certificates", json=params, auth=(self.censys_api_id, self.censys_api_secret))
                 certs = results.json()
                 return certs
             except Exception as error:
                 print(red("[!] Error collecting Censys certificate data for {}.".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
+    def view_censys_cert(self, fingerprint):
+        """Collects more certificate data from Censys by look-up the fingerprint_sha256 returned
+        by a Censys API /search/ call. This includes alternative names, expiration date, trust
+        status and a lot more. The full JSON results are returned.
+
+        This requires the SHA256 fingerprint included in a successful run_censys_search_cert() result.
+
+        A free API key is required.
+        """
+        if self.censys_api_endpoint is None:
+            pass
+        else:
+            try:
+                results = requests.get(self.censys_api_endpoint + "/view/certificates/" + fingerprint, auth=(self.censys_api_id, self.censys_api_secret))
+                cert_data = results.json()
+                return cert_data
+            except Exception as error:
+                print(red("[!] Error collecting additional Censys information for {}.".format(fingerprint)))
+                print(red("L.. Details: {}".format(error)))
+
+    def parse_cert_subdomain(self, cert):
+        """Accepts the 'results' key in Censys certificate data and parses the individual
+        certificate's domain.
+        """
+        if "," in cert["parsed.subject_dn"]:
+            pos = cert["parsed.subject_dn"].find('CN=')+3
+        else:
+            pos = 3
+        tmp = cert["parsed.subject_dn"][pos:]
+        if "," in tmp:
+            pos = tmp.find(",")
+            tmp = tmp[:pos]
+
+        return tmp
+
     def parse_cert_subdomains(self, certdata):
-        """Accepts Censys certificate data and parses out subdomain information."""
+        """Accepts Censys certificate data and parses out subdomains from all of the certificates
+        returned by the Censys search.
+        """
         subdomains = []
         for cert in certdata['results']:
             if "," in cert["parsed.subject_dn"]:

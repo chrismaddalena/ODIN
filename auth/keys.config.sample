@@ -7,6 +7,9 @@ api_key:
 [Full Contact]
 api_key:
 
+[EmailHunter]
+api_key: 
+
 [URLVoid]
 api_key:
 
@@ -20,8 +23,14 @@ key_secret:
 access_token:
 token_secret: 
 
-[EmailHunter]
-api_key: 
-
 [WebDriver]
 driver_path: /Users/Odin/Downloads/chromedriver
+
+[AWS]
+access_key: 
+secret: 
+
+[GraphDatabase]
+uri: bolt://localhost:####
+username: neo4j
+password: password

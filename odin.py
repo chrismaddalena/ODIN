@@ -9,7 +9,7 @@
   ======   =======   ===  ===  ===
 
 Developer:   Chris "cmaddy" Maddalena
-Version:     1.8.6 "Muninn"
+Version:     1.9.0 "Muninn"
 Description: Observation, Detection, and Investigation of Networks
              ODIN was designed to assist with OSINT automation for penetration testing clients and
              their networks, both the types with IP address and social. Provide a client's name,
@@ -124,6 +124,7 @@ ODIN also uses various tools and APIs to collect information on the provided IP 
 and domain names, including things like DNS and IP address history.\n
 View the README for the full detailsand lists of API keys!
     """
+    click.clear()
     asciis.print_art()
     print(green("[+] OSINT Module Selected: ODIN will run all recon modules."))
 
