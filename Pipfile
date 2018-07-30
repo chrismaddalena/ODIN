@@ -25,6 +25,7 @@ lxml = "*"
 selenium = "*"
 multiprocess = "*"
 boto3 = "*"
+neo4j-driver = "*"
 
 [dev-packages]
 
