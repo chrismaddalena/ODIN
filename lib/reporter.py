@@ -365,62 +365,56 @@ the company's primary domain used for their website.".format(domain)))
 
             # Try to collect certificate data for the domain
             try:
-                cert_data = self.DC.run_censys_search_cert(domain)
+                cert_data = self.DC.search_censys_certificates(domain)
                 # Go through each certificate returned by Censys
-                for cert in cert_data['results']:
-                    # Get the domain for which the cert is issued
-                    cert_domain = self.DC.parse_cert_subdomain(cert)
+                if cert_data:
+                    for cert in cert_data:
+                        subject = cert["parsed.subject_dn"]
+                        issuer = cert["parsed.issuer_dn"]
+                        fingerprint = cert["parsed.fingerprint_sha256"]
+                        parsed_names = cert["parsed.names"]
+                        signature_algo = cert["parsed.signature_algorithm.name"]
+                        self_signed = cert["parsed.signature.self_signed"]
+                        start_date = cert["parsed.validity.start"]
+                        exp_date = cert["parsed.validity.end"]
 
-                    # Limit API calls and records by weeding out unrelated domains
-                    # Example: A search for blizzard.com also returns dairyqueenblizzard.com
-                    # which is not a subdomain of blizzard.com and unwanted
-                    if ".{}".format(domain) in cert_domain or bool(re.search("^" + re.escape(domain), cert_domain, re.IGNORECASE)):    
-                        # Fetch the extended data from Censys
-                        extended_data = self.DC.view_censys_cert(cert["parsed.fingerprint_sha256"])
-                        alt_names = extended_data["parsed"]["names"]
-                        signature_algo = extended_data["parsed"]["signature_algorithm"]["name"]
-                        self_signed = extended_data["parsed"]["signature"]["self_signed"]
-                        start_date = extended_data["parsed"]["validity"]["start"]
-                        exp_date = extended_data["parsed"]["validity"]["end"]
+                        cert_domain = self.DC.parse_cert_subdomain(subject)
 
                         # Insert the certiticate info into the certificates table
                         self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,?,?,?,?,?,?,?,?)",
-                                    (cert_domain, cert["parsed.subject_dn"],
-                                        cert["parsed.issuer_dn"], cert["parsed.fingerprint_sha256"],
-                                        signature_algo, self_signed, start_date, exp_date, ", ".join(alt_names)))
+                                    (cert_domain, subject, issuer, fingerprint, signature_algo,
+                                    self_signed, start_date, exp_date, ", ".join(parsed_names)))
                         self.conn.commit()
 
-                        # Only record certificate's domain as a subdomain if it is actually a subdomain
-                        if not bool(re.search("^" + re.escape(domain), cert_domain, re.IGNORECASE)):
-                            collected_subdomains.append(cert_domain)
+                        # Add the colelcted names to the list of subdomains
+                        collected_subdomains.append(cert_domain)
+                        collected_subdomains.extend(parsed_names)
 
-                        # Add the certificate's alternate DNS names to the list of subdomains
-                        for name in alt_names:
-                            if not bool(re.search("^" + re.escape(domain), name, re.IGNORECASE)):
-                                collected_subdomains.append(name)
+                    # Filter out any uninteresting domains caught in the net and remove duplicates
+                    collected_subdomains = self.DC.filter_subdomains(domain, collected_subdomains)
+                    unique_collected_subdomains = set(collected_subdomains)
 
-                # Add new subdomains to the hosts table and resolve the subdomains
-                unique_collected_subdomains = set(collected_subdomains)
-                for unique_sub in unique_collected_subdomains:
-                    # Check for wildcard subdomains from certificates and ignore them for this
-                    if not "*" in unique_sub:
-                        try:
-                            ip_address = socket.gethostbyname(unique_sub)
-                            # Check if this a known IP and add it to hosts if not
-                            self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
-                            res = self.c.fetchone()
-                            if res[0] == 0:
-                                self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
-                                                (ip_address, False, "Subdomain Enumeration"))
-                                self.conn.commit()
-                                # Also add it to our list of IP addresses
-                                ip_list.append(ip_address)
-                        except:
-                            ip_address = "Lookup Failed"
-                        frontable = self.DC.check_domain_fronting(unique_sub)
-                        self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?)",
-                                    (domain, unique_sub, ip_address, frontable))
-                        self.conn.commit()
+                    # Resolve the subdomains to IPa ddresses
+                    for unique_sub in unique_collected_subdomains:
+                        # Ignore wildcards for this, i.e. *.google.com doesn't resolve to anything
+                        if not "*" in unique_sub:
+                            try:
+                                ip_address = socket.gethostbyname(unique_sub)
+                                # Check if this a known IP and add it to hosts if not
+                                self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
+                                res = self.c.fetchone()
+                                if res[0] == 0:
+                                    self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                                    (ip_address, False, "Subdomain Enumeration"))
+                                    self.conn.commit()
+                                    # Also add it to our list of IP addresses
+                                    ip_list.append(ip_address)
+                            except:
+                                ip_address = "Lookup Failed"
+                            frontable = self.DC.check_domain_fronting(unique_sub)
+                            self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?)",
+                                        (domain, unique_sub, ip_address, frontable))
+                            self.conn.commit()
             except:
                 pass
 

@@ -25,6 +25,7 @@ from colors import red, green, yellow
 from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 import validators
+import censys.certificates
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
@@ -74,13 +75,16 @@ class DomainCheck(object):
             print(yellow("[!] Did not find a Full Contact API key."))
 
         try:
-            self.censys_api_id = helpers.config_section_map("Censys")["api_id"]
-            self.censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
-            self.censys_api_endpoint = "https://censys.io/api/v1"
+            censys_api_id = helpers.config_section_map("Censys")["api_id"]
+            censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
+            self.censys_cert_search = censys.certificates.CensysCertificates(api_id=censys_api_id, api_secret=censys_api_secret)
+        except censys.base.CensysUnauthorizedException:
+            self.censys_cert_search = None
+            print(yellow("[!] Censys reported your API information is invalid, so Censys searches \
+will be skipped."))
+            print(yellow("L.. You provided ID %s & Secret %s" % (censys_api_id, censys_api_secret)))
         except Exception:
-            self.censys_api_id = None
-            self.censys_api_secret = None
-            self.censys_api_endpoint = None
+            self.censys_cert_search = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
 
         try:
@@ -496,81 +500,56 @@ to be found."))
         except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
-    def run_censys_search_cert(self, target):
+    def search_censys_certificates(self, target):
         """Collect certificate information from Censys for the target domain name. This returns
         a dictionary of certificate information that includes the issuer, subject, and a hash
         Censys uses for the /view/ API calls to fetch additional information.
 
         A free API key is required.
         """
-        if self.censys_api_endpoint is None:
+        if self.censys_cert_search is None:
             pass
         else:
-            print(green("[+] Performing Censys certificate search for {}".format(target)))
-            params = {"query" : target}
             try:
-                results = requests.post(self.censys_api_endpoint + "/search/certificates", json=params, auth=(self.censys_api_id, self.censys_api_secret))
-                certs = results.json()
-                return certs
+                print(green("[+] Performing Censys certificate search for {}".format(target)))
+                query = "parsed.names: %s" % target
+                results = self.censys_cert_search.search(query, fields=['parsed.names',
+                        'parsed.signature_algorithm.name','parsed.signature.self_signed',
+                        'parsed.validity.start','parsed.validity.end','parsed.fingerprint_sha256',
+                        'parsed.subject_dn','parsed.issuer_dn'])
+
+                return results
+            except censys.base.CensysRateLimitExceededException:
+                print(red("[!] Censys reports your account has run out of API credits."))
+                return None
             except Exception as error:
                 print(red("[!] Error collecting Censys certificate data for {}.".format(target)))
                 print(red("L.. Details: {}".format(error)))
+                return None
 
-    def view_censys_cert(self, fingerprint):
-        """Collects more certificate data from Censys by look-up the fingerprint_sha256 returned
-        by a Censys API /search/ call. This includes alternative names, expiration date, trust
-        status and a lot more. The full JSON results are returned.
-
-        This requires the SHA256 fingerprint included in a successful run_censys_search_cert() result.
-
-        A free API key is required.
-        """
-        if self.censys_api_endpoint is None:
-            pass
-        else:
-            try:
-                results = requests.get(self.censys_api_endpoint + "/view/certificates/" + fingerprint, auth=(self.censys_api_id, self.censys_api_secret))
-                cert_data = results.json()
-                return cert_data
-            except Exception as error:
-                print(red("[!] Error collecting additional Censys information for {}.".format(fingerprint)))
-                print(red("L.. Details: {}".format(error)))
-
-    def parse_cert_subdomain(self, cert):
-        """Accepts the 'results' key in Censys certificate data and parses the individual
-        certificate's domain.
-        """
-        if "," in cert["parsed.subject_dn"]:
-            pos = cert["parsed.subject_dn"].find('CN=')+3
+    def parse_cert_subdomain(self, subject_dn):
+        """Accepts the Censys certificate data and parses the individual certificate's domain."""
+        if "," in subject_dn:
+            pos = subject_dn.find('CN=')+3
         else:
             pos = 3
-        tmp = cert["parsed.subject_dn"][pos:]
+        tmp = subject_dn[pos:]
         if "," in tmp:
             pos = tmp.find(",")
             tmp = tmp[:pos]
 
         return tmp
 
-    def parse_cert_subdomains(self, certdata):
-        """Accepts Censys certificate data and parses out subdomains from all of the certificates
-        returned by the Censys search.
-        """
-        subdomains = []
-        for cert in certdata['results']:
-            if "," in cert["parsed.subject_dn"]:
-                pos = cert["parsed.subject_dn"].find('CN=')+3
-            else:
-                pos = 3
-            tmp = cert["parsed.subject_dn"][pos:]
-            if "," in tmp:
-                pos = tmp.find(",")
-                tmp = tmp[:pos]
-            if "." not in tmp:
-                continue
-            subdomains.append(tmp)
+    def filter_subdomains(self, domain, subdomains):
+        """Function to filter out uninteresting domains that may be returned from certificates.
+        These are domains unrelated to the true target. For example, a search for blizzard.com
+        on Censys can return iran-blizzard.ir, an unwanted and unrelated domain.
 
-        subdomains = set(subdomains)
-        return subdomains
+        Credit to christophetd for this nice bit of code:
+
+        https://github.com/christophetd/censys-subdomain-finder/blob/master/censys_subdomain_finder.py#L31
+        """
+        return [ subdomain for subdomain in subdomains if '*' not in subdomain and subdomain.endswith(domain) ]
 
     def run_urlvoid_lookup(self, domain):
         """Collect reputation data from URLVoid for the target domain. This returns an ElementTree
