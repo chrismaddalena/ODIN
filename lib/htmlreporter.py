@@ -580,7 +580,7 @@ class HTMLReporter(object):
     def create_subdomains_page(self):
         """Function to create the subdomains.html page in the report directory."""
         with open(self.report_path + "subdomains.html", "w") as report:
-            self.c.execute("SELECT domain,subdomain,ip_address,source FROM subdomains")
+            self.c.execute("SELECT domain,subdomain,ip_address FROM subdomains")
             subdomains = self.c.fetchall()
             self.c.execute("SELECT domain,subdomain,domain_frontable FROM subdomains WHERE domain_frontable <> 0")
             frontable = self.c.fetchall()
@@ -612,18 +612,17 @@ class HTMLReporter(object):
 
             content += """
             <h2>Discovered Subdomains</h2>
-            <p>This table contains all of the subdomains ODIN identified, the IP address, and the source of the subdomain:
+            <p>This table contains all of the subdomains ODIN identified and the IP address of the subdomain:
             <table style="width:100%" border="1">
             <tr>
             <th>Base Domain</th>
             <th>Subdomain</th>
             <th>IP Address</th>
-            <th>Source</th>
             </tr>
             """
 
             for row in subdomains:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
             content += "</table><p><br /></p>"
 
             content += """

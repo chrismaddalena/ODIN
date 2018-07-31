@@ -23,9 +23,10 @@ class Reporter(object):
     sleep = 10
     hibp_sleep = 3
 
-    def __init__(self, report_name):
+    def __init__(self, report_path, report_name):
         """Everything that should be initiated with a new object goes here."""
         # Create the report database -- NOT in memory to allow for multiprocessing and archiving
+        self.report_path = report_path
         if os.path.isfile(report_name):
             confirm = input(red("[!] A report for this client already exists. Are you sure you \
 want to overwrite it? (Y\\N) "))
@@ -338,7 +339,7 @@ the company's primary domain used for their website.".format(domain)))
             if dumpster_results:
                 # See if we can save the domain map from DNS Dumpster
                 if dumpster_results['image_data']:
-                    with open("reports/" + domain + "_Domain_Map.png", "wb") as fh:
+                    with open(self.report_path + domain + "_Domain_Map.png", "wb") as fh:
                         fh.write(base64.decodebytes(dumpster_results['image_data']))
                 # Record the info from DNS Dumpster
                 for result in dumpster_results['dns_records']['host']:
@@ -436,14 +437,14 @@ the company's primary domain used for their website.".format(domain)))
                                    (domain, net_owner, ip_address))
                     self.conn.commit()
                     # Check if this a known IP and add it to hosts if not
-                    self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
-                    res = self.c.fetchone()
-                    if res[0] == 0:
-                        self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
-                                       (ip_address, False, "Netcraft Domain IP History"))
-                        self.conn.commit()
+                    # self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
+                    # res = self.c.fetchone()
+                    # if res[0] == 0:
+                    #     self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                    #                    (ip_address, False, "Netcraft Domain IP History"))
+                    #     self.conn.commit()
                         # Also add it to our list of IP addresses
-                        ip_list.append(ip_address)
+                        # ip_list.append(ip_address)
 
         # The whois lookups are only for domain names
         for domain in domain_list:
