@@ -53,7 +53,7 @@ class Grapher(object):
             query = """
             MATCH (b:Domain {Name:'%s'})
             MATCH (c:IP {Address:'%s'})
-            CREATE UNIQUE (c)<-[r1:RESOLVES_TO]-(a:Subdomain {Name:'%s', Address:'%s', DomainFrontable:'%s'})-[r2:SubdomainOf]->(b)
+            CREATE UNIQUE (c)<-[r1:RESOLVES_TO]-(a:Subdomain {Name:'%s', Address:'%s', DomainFrontable:'%s'})-[r2:SUBDOMAIN_OF]->(b)
             RETURN a,b,c
             """ % (row[0], row[2], row[1], row[2], row[3])
             execute_query(self.neo4j_driver, query)
