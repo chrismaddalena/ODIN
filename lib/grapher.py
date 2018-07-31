@@ -6,7 +6,12 @@ import sqlite3
 import click
 from neo4j.v1 import GraphDatabase
 from colors import red, green, yellow
-from helpers import setup_gdatabase_conn, is_ip, execute_query
+
+# Try importing helpers.py two different ways to allow for graphers.py to be executed independantly
+try:
+    from lib import helpers
+except:
+    import helpers
 
 
 class Grapher(object):
@@ -18,7 +23,7 @@ class Grapher(object):
         try:
             self.conn = sqlite3.connect(database_path)
             self.c = self.conn.cursor()
-            self.neo4j_driver = setup_gdatabase_conn()
+            self.neo4j_driver = helpers.setup_gdatabase_conn()
         except Exception as error:
                 print(red("[!] Could not open the database file!"))
                 print(red("L.. Details: {}".format(error)))
@@ -29,18 +34,18 @@ class Grapher(object):
         all_hosts = self.c.fetchall()
 
         for row in all_hosts:
-            if is_ip(row[0]):
+            if helpers.is_ip(row[0]):
                 query = """
                 MERGE (x:IP {Address:'%s', Scoped:'%s', Source:'%s'})
                 RETURN x
                 """% (row[0], row[1], row[2])
-                execute_query(self.neo4j_driver, query)
+                helpers.execute_query(self.neo4j_driver, query)
             else:
                 query = """
                 MERGE (x:Domain {Name:'%s', Scoped:'%s', Source:'%s'})
                 RETURN x
                 """ % (row[0], row[1], row[2])
-                execute_query(self.neo4j_driver, query)
+                helpers.execute_query(self.neo4j_driver, query)
 
     def _graph_subdomains(self):
         """Convert the subdomains table into Neo4j graph nodes with relationships to the domain
@@ -56,7 +61,7 @@ class Grapher(object):
             CREATE UNIQUE (c)<-[r1:RESOLVES_TO]-(a:Subdomain {Name:'%s', Address:'%s', DomainFrontable:'%s'})-[r2:SUBDOMAIN_OF]->(b)
             RETURN a,b,c
             """ % (row[0], row[2], row[1], row[2], row[3])
-            execute_query(self.neo4j_driver, query)
+            helpers.execute_query(self.neo4j_driver, query)
 
     def _graph_certificates(self):
         """Convert the certificates table into Neo4j graph nodes with relationships to the domain
@@ -71,7 +76,7 @@ class Grapher(object):
             MERGE (a:Certificate {Subject:"%s", Issuer:"%s", StartDate:"%s", ExpirationDate:"%s", SelfSigned:"%s", SignatureAlgo:"%s", CensysFingerprint:"%s"})-[r:ISSUED_FOR]->(b)
             RETURN a,b
             """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7])
-            execute_query(self.neo4j_driver, query)
+            helpers.execute_query(self.neo4j_driver, query)
 
             for name in row[8]:
                 query = """
@@ -79,7 +84,7 @@ class Grapher(object):
                 Match (b:Certificate {CensysFingerprint:"%s"})
                 MERGE (a)<-[r:ISSUED_FOR]-(b)
                 """ % (name, row[7])
-                execute_query(self.neo4j_driver, query)
+                helpers.execute_query(self.neo4j_driver, query)
 
     def _update_dns(self):
         """Update domain nodes with DNS information."""
@@ -92,7 +97,7 @@ class Grapher(object):
             SET a += {NameServers:'%s', ARecords:'%s', MXRecords:'%s', TXTRecords:'%s', SOARecords:'%s', DMARC:'%s'}
             RETURN a
             """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6])
-            execute_query(self.neo4j_driver, query)
+            helpers.execute_query(self.neo4j_driver, query)
 
             for address in row[2].split(","):
                 query = """
@@ -101,7 +106,7 @@ class Grapher(object):
                 CREATE UNIQUE (a)-[r:RESOLVES_TO]->(b)
                 RETURN a,r,b
                 """ % (row[0], address)
-                execute_query(self.neo4j_driver, query)
+                helpers.execute_query(self.neo4j_driver, query)
 
     def _update_rdap(self):
         """Update host nodes with RDAP information."""
@@ -114,7 +119,7 @@ class Grapher(object):
             SET a += {RDAPSource:'%s', Organization:'%s', CIDR:'%s', ASN:'%s', CountryCode:'%s', Robtex:'%s'}
             RETURN a
             """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6])
-            execute_query(self.neo4j_driver, query)
+            helpers.execute_query(self.neo4j_driver, query)
 
     def _update_whois(self):
         """Update domain nodes with whois information."""
@@ -127,7 +132,7 @@ class Grapher(object):
             SET a += {Registrar:'%s', Expiration:'%s', Organization:'%s', Registrant:'%s', Admin:'%s', Tech:'%s', Address:'%s', DNSSEC:'%s'}
             RETURN a
             """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8])
-            execute_query(self.neo4j_driver, query)
+            helpers.execute_query(self.neo4j_driver, query)
 
     def _graph_shodan(self):
         """Convert the Shodan tables with ports added as Neo4j graph nodes linked to hosts."""
@@ -141,7 +146,7 @@ class Grapher(object):
             CREATE UNIQUE (a:Port {Number:'%s', OS:'%s', Hostname:'%s', Organization:''})<-[r:HAS_PORT]-(b)<-[:RESOLVES_TO]-(c)
             RETURN a,b
             """ % (row[0], row[1], row[2], row[4], row[5])
-            execute_query(self.neo4j_driver, query)
+            helpers.execute_query(self.neo4j_driver, query)
 
         self.c.execute("SELECT ip_address,port,banner_data,os,organization FROM shodan_host_lookup")
         all_shodan_lookup = self.c.fetchall()
@@ -152,7 +157,7 @@ class Grapher(object):
             MERGE (b:Port {Number:'%s', OS:'%s', Organization:'%s', Hostname:''})<-[r:HAS_PORT]-(a)
             RETURN a,b
             """ % (row[0], row[1], row[3], row[4])
-            execute_query(self.neo4j_driver, query)
+            helpers.execute_query(self.neo4j_driver, query)
 
 
     def convert(self):
@@ -177,7 +182,7 @@ class Grapher(object):
     def clear_neo4j_database(self):
         """Clear the current Neo4j database by detaching and deleting all nodes."""
         query = """MATCH (n) DETACH DELETE n"""
-        result = execute_query(self.neo4j_driver, query)
+        result = helpers.execute_query(self.neo4j_driver, query)
 
 # Setup a class for CLICK
 class AliasedGroup(click.Group):

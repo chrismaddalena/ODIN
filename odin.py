@@ -24,7 +24,7 @@ import os
 from multiprocess import Process, Manager
 import click
 from colors import red, green, yellow
-from lib import reporter, asciis, verification, htmlreporter
+from lib import reporter, asciis, verification, htmlreporter, grapher
 
 
 def setup_reports(client):
@@ -237,7 +237,7 @@ any SQLite browser.".format(output_report)))
 
         if graph:
             graph_reporter = grapher.Grapher(output_report)
-            print(green("[+] Loading ODIN database file {} for conversion to Neo4j").format(database))
+            print(green("[+] Loading ODIN database file {} for conversion to Neo4j").format(output_report))
 
             if nuke:
                 confirm = input(red("\n[!] You set the --nuke option. This wipes out all nodes \
