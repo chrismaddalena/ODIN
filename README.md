@@ -5,29 +5,44 @@
 
 ![ODIN](https://github.com/chrismaddalena/viper/raw/master/ODIN.png)
 
-`Current version: v1.8.6 "Muninn"`
+`Current version: v1.9.1 "Muninn"`
 
 A Python tool for automating intelligence gathering, asset discovery, and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
 
-Note: ODIN is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files (mostly Office documents), is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information. YOu can always extract the metadata yourself later from the donwloaded files!
+Note: ODIN is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files (mostly Office documents), is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information. You can always extract the metadata yourself later from the donwloaded files!
+
+You may also want a SQLite3 database viewer/browser (to run your own custom queries against the OSINT database) and Neo4j installed (to view graphs of the external perimeter).
 
 ## First Things First
 ODIN is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify. Have fun :D
 
 ## What Can ODIN Do?
-ODIN is still very much in development, but it aims to automate many of the common recon tasks carried out by penetration testers and red teamers. This includes:
+ODIN is still very much in development, but it aims to automate many of the common recon tasks carried out by penetration testers and red teamers.
 
-* Harvesting email addresses and employee names for a target organization.
-* Linking employees to social media profiles.
-* Checking to see if discovered email addresses have been a part of any public security breaches or appeared in any pastes.
-* Collecting data on domains and IP addresses from Shodan, Censys, DNS records, and whois/RDAP.
-* Discovering subdomains via online resources and TLS certificates, their related IP addresses, and looking for any pointing to a CDN that might allow for domain fronting.
-* Hunting for Office files and PDFs under a target domain, downloading them, and extracting metadata.
-* Searching for AWS S3 buckets and Digital Ocean spaces using key words, like an organization's name and domain name.
-* Take screenshots of web services.
-* More to come in the future...
+### Phase 1 - Asset Discovery
+* Collect basic organization information from sources like the Full Contact marketing database.
+* Check DNS Dumpster, Netcraft, and TLS certificates to discover subdomains for the provided domains.
+* Resolve domain and subdomains to IP addresses via socket connections and DNS records.
+* Collect information for all IP addresses, such as ownership and organization data, from RDAP, whois, and other data sources.
+* Lookup domains and search for IP addresses on Shodan to collect additional data, such as operating systems, service banners, and open ports.
+* Check for the possibility of domain takeovers or domain fronting with the domains and subdomains.
 
-At the end of all of this ODIN will output a SQL database with all of the collected data. Optionally, an HTML report will be created with some default queries displaying all of the collected information in neat tables you can peruse using your preferred web browser.
+### Phase 2 - Employee Discovery
+* Harvest email addresses and employee names for the target organization.
+* Link employees to social media profiles via search engines and the Twitter API.
+* Cross check discovered email addresseswith Have I Been Pwned.
+
+### Phase 3 - Cloud and Web Services
+* Hunt for Office files and PDFs under the target domain, download them, and extract metadata.
+* Search for AWS S3 buckets and Digital Ocean Spaces using keywords related to the organization.
+* Take screenshots of discovered web services for a quick, early review of services.
+
+### Phase 4 - Reporting
+* Save all data to a SQLite3 database to allow the data to be easily queried.
+* Generate an HTML report using default SQL queries to make it simple to peruse the data in a web browser.
+* Create a Neo4j graph database that ties all of the discovered entities (IP addresses, domains, subdomains, ports, and certificates) together with relationships (e.g. RESOLVES_TO, HAS_PORT).
+
+At the end of all of this you will have multiple ways to browse and visualize the data. A simple Neo4j query like `MATCH (n) RETURN n` (display everything) can create a fascinating graph of the organization's external perimeter and make it simple to see how assets are linked.
 
 ## Getting Started
 ### Installing ODIN
@@ -38,9 +53,11 @@ ODIN requires **Python 3**. Using `pipenv` for managing the required libraries i
 3. Run: `cd ODIN && pipenv install`
 4. Start using ODIN by running: `pipenv shell`
 
-[Optional] Install PhantomJS -- `brew install phantomjs` or `apt install phtanomjs` (This may go away soon due to PhantomJS no longer being actively supported and developed with Selenium.)
+**Optional:** Install PhantomJS -- `brew install phantomjs` or `apt install phtanomjs`
 
-**Note:** On MacOS you may get an error about `pew` not being in your PATH after installing `pipenv` and attempting to install ODIN. To fix it, follow these steps in order:
+This may go away soon due to PhantomJS no longer being actively supported and developed with Selenium.)
+
+**Note 1:** On MacOS you may get an error about `pew` not being in your PATH after installing `pipenv` and attempting to install ODIN. To fix it, follow these steps in order:
 * Uninstall virtualenv, pipenv, and pew.
 * Install virtualenv
 * Install pew
@@ -152,6 +169,12 @@ Like above, please make sure you are using Python 3. ODIN must be run in Python 
 
 See the installation instructions at the top.
 
+**I don't have X API key, can I still use ODIN?**
+
+Absolutely. If an API key is missing from the keys.config file, any checks using those keys will be skipped. You are strongly encouraged to go get the free API keys to get the most out of ODIN, but you can skip any you don't want.
+
+API access for Shodan, Censys, and EmailHunter are defnitely worth it if you want to use the bare minimum.
+
 **Why do you not like "why not" questions?**
 
 If you ask "why not use X API" or "why not do Y like this," that's not very helpful. Presumably, the question is meant to convey the idea that X would be a good addition or Y is a bad way to accomplish a task and you want to know the reason it is not currently supported. The answer is most likely "I wasn't aware of this." That also means I don't know anything about it. :\)
@@ -160,11 +183,11 @@ If you have a suggestion for a change, service, or API, please explain what it d
 
 **Why not add support for the Clearbit API?**
 
-Clearbit looks useful for OSINT, but the free tier is restricted to 20 API calls in a month. That may even be 20 API calls for the life of the account. The details are unclear. Either way, that's very restrictive and I want ODIN to be as simple and free to use as possible. The paid tiers are quire expensive.
+Clearbit looks useful for OSINT, but the free tier is restricted to 20 API calls in a month. That may even be 20 API calls for the life of the account. The details are unclear. Either way, that's very restrictive and I want ODIN to be as simple and free to use as possible. The paid tiers are quite expensive.
 
 **Why not use Wappalyzer?**
 
-Wappalyzer is useful, but it's very difficult to automate fetching the results from Wappalyzer. Some tools can do this, but they use an unmaintained package called wappalyzer-python (https://github.com/scrapinghub/wappalyzer-python). This package still works, as far as I know, but there are several problems with it. The package has not been updated in three years, the developers have stated they have no plans to change that or support wappalyzer-python, and the package is Python 2. It could be used until it breaks one day, but the Python 2 bit is the real sticking point.
+Wappalyzer is useful, but it's very difficult to automate fetching the results from Wappalyzer. Some tools can do this, but they use an unmaintained package called wappalyzer-python (https://github.com/scrapinghub/wappalyzer-python). This package still works, as far as I know, but there are several problems with it. The package has not been updated in three years, the developers have stated they have no plans to change that or support wappalyzer-python, and the package is Python 2. It could be used until it breaks one day, but the Python 2 bit is the real sticking point because ODIN is written in Python 3 and the two just are not compatible.
 
 **Why not add support for the BuiltWith API?**
 
@@ -182,10 +205,6 @@ No. Brute forcing can take a long time and there are many tools that take care o
 
 For now, ODIN leverages DNS Dumpster, Netcraft, and SSL/TLS certificate data to collect subdomains to get you started. That should get you a good number of subdomains to get started.
 
-**I don't have X API key, can I still use ODIN?**
-
-Absolutely. If an API key is missing from the keys.config file, any checks using those keys will be skipped. You are strongly encouraged to go get the free API keys to get the most out of ODIN, but you can skip any you don't want.
-
 ### Special Thanks
 A big thank you to a few contributors who gave me the OK to re-use some of their code:
 
@@ -201,67 +220,3 @@ And to these folks who have created/maintained some of the tools integrated into
 * PaulSec - Creator of the [unofficial API for the DNS Dumpster](https://github.com/PaulSec/API-dnsdumpster.com)
 * Daniel Grzalek (Dagrz) - Creator of [aws_pwn](https://github.com/dagrz/aws_pwn) and the reason why I was able to build out AWS recon options. 
 * TrullJ - For making the slick [SSL Labs Scanner module](https://github.com/TrullJ/ssllabs).
-
-### Change Log
-#### July 26, 2018, 1.9.0
-This brings ODIN closer to its v2.0 release:
-* ODIN now has a helper script, grapher.py, that will take your complete ODIN SQLite3 database and convert it to a Neo4j graph database with relationships!
-* Certificates are better than ever! ODIN will now use the returned ID from Censys to look-up all of the additional details about the certificate, like alternative names. Even more subdomains and fun to be had with certificates! Additionally, certificates ar enow paired properly with the subdomains to which they are attached, not the root *.whatever.tld domain.
-* The DNSDumpster output has been cleaned-up to remove some weird artifacts (e.g. HTTP: added to the end of some subdomains during scraping).
-
-#### July 7, 2018, 1.8.6
-* Company Info table now supports a target organization having multiple profiles on one social media platform.
-* Chromium now operates in headless mode, so no more Chrome windows covering your screen.
-* Scope generation and parsing is no longer tripped up by domain names with hyphens in them.
-* Some minor text chanes for typos and small clarifications.
-* [BETA] Improved the screenshots functionality to add both HTTP and HTTPS to hostnames for screenshots.
-
-#### May 25, 2018, 1.8.5
-* Fixed a few bugs in the HTML report and made it much, much prettier.
-* The reports directory has been organized! Now a reports/<organization_name>/ directory will be made. Under that, separate file_downloads, screenshots, and html_report directories are created for these items.
-* Fixed a few misc bugs reported by users.
-* [BETA] A new `--screenshots` flag has been added. If used, ODIN will take screenshots of the web services on hosts. For now this is limited to adding "http://" to the front of the IP address, domain, or subdomain and giving it a shot.
-* [BETA] Added a screenshots.html report page to the HTML report. This page serves as a gallery for web screenshots.
-
-#### May 24, 2018, 1.8.5
-This is another large update with an all new arbitrary version number, v1.8.5! Many, many improvements and changes have been implemented to make ODIN better but also to pave the way for some plans coming for version 2.0 :D
-
-Here we go:
-
-* Fixed an issue with the Have I Been Pwned API failing to return results due to changes in API endpoints.
-* Redesigned SQLite3 database to be more in-line with design standards -- naming conventions, keys, and so forth.
-* Reworked multiprocess implementation to share variables between processes. This was to allow for the next several changes...
-* Reverse DNS is performed against all subdomains and IP addresses are added to the new hosts tables (formerly the report scope table).
-* IP addresses from DNS records and other sources are now added to the hosts table as well.
-* The hosts table now as a "source" column to note where the IP or domain was found if it wasn't in your scope file.
-    * There is also a column with True/False values that makes it easy to run a query and see the IPs and domains found that were not in the provided scope file.
-* Speaking of the scope file, it's no longer required. Feel free to not include it if you would rather just provide a name and a single domain name to get started.
-* Updated Full Contact API queries to v3, up from v2.
-* Shodan queries are now run against all IP addresses and domains discovered during the initial discovery phase instead of just those found in the provided scope file.
-* Tables have been cleaned up, made leaner, and can now be connected using keys. This will allow for link tables to create relationships between an IP address in the hosts table and DNS records or subdomains in other tables.
-* Link tables now exist to connect relationships between different information.
-* A new `--html` option now exists to generate an HTML report from the database upon completion.
-* Also fixed a dozen little things like typos, little periods hanging out at the ends of domain names, and other stuff!
-
-#### May 13, 2018
-* Full SSL/TLS certificates from Censys are now stored in their own table by default (not only verbose mode).
-* Subdomains pulled from Censys certificate data is now added to the Subdomains table.
-* Subdomains in the DB should now be unique and the table now includes a "Sources" column.
-* Fixed an issue tha could cause Censys query credits to be gobbled up if your target has a lot of certificates.
-* Cymon API searches now use Cymon API v2.
-* Added a progress bar for AWS S3 Bucket and Digital Ocean Spaces hunting.
-    * Known Issue: This causes messy terminal output, but better than nothing for when large wordlists are used.
-* URLVoid is now used for URLCrazy typosqautted domains, like the Cymon API.
-* URLVoid is no longer has its own table and there will be no ore searches for domains in scope because, really, that just didn't make sense. URLVoid is for malware/malicious domains, not domains that are in scope for testing.
-* Added a check to make sure boto3 and AWS credentials are setup prior to attempting S3 bucket hunting using awscli.
-
-#### March 6, 2018
-* Added support for detecting oportunities for DNS cache snooping.
-* Added a new option to provide a wordlist of terms to be used as prefixes and suffixes for S3 bucket hunting.
-* Added Pipfile to replace requirements.txt and avoid conflicts with Python 2.x installs.
-* Finally updated the URLCrazy module for the SQLite3 database change.
-
-#### January 3, 2018 v1.7.0
-* Converted the old XLSX reports to a SQLite3 database solution!
-* Implemented multiprocessing (!) to greatly improve efficiency and shorten runtime!
-* Various other little bug fixes and tweaks.
