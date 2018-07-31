@@ -17,7 +17,7 @@ import shodan
 from cymon import Cymon
 import whois
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
 import requests
@@ -790,6 +790,9 @@ received!".format(request.status_code)))
 
         # Ensure we have only unique search terms in our list and start hunting
         final_search_terms = list(set(final_search_terms))
+        print(yellow("[*] Your provided keywords and prefixes/suffixes have been combined to \
+create {} possible buckets and spaces to check in AWS and three Digital Ocean regions".format(
+                    len(final_search_terms))))
 
         with click.progressbar(final_search_terms,
                                label="Enumerating AWS Keywords",
@@ -855,11 +858,16 @@ received!".format(request.status_code)))
                 # Check for a 200 OK to indicate a publicly listable bucket
                 if request.status_code == 200:
                     result['public'] = True
-                    print(yellow("[*] Found a public bucket -- {}".format(result['bucketName'])))
+                    print(yellow("\n[*] Found a public bucket -- {}".format(result['bucketName'])))
             except requests.exceptions.RequestException:
                 result['exists'] = False
         except ClientError as e:
             result['exists'] = error_values[e.response['Error']['Code']]
+        except EndpointConnectionError as e:
+            print(yellow("\n[*] Warning: Could not connect to a bucket to check it. If you see this \
+message repeatedly, it's possible your awscli region is misconfigured, or this bucket is weird."))
+            print(yellow("L.. Details: {}".format(e)))
+            result['exists'] = e
 
         return result
 
