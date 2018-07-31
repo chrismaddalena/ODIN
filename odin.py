@@ -251,7 +251,7 @@ for a fresh start. Proceed? (Y\\N) "))
 Run lib/grapher.py with the appropriate options."))
 
         if html:
-            print(green("[+] Creating the HTML report using {}.".format(database)))
+            print(green("\n[+] Creating the HTML report using {}.".format(output_report)))
             html_reporter = htmlreporter.HTMLReporter(organization, report_path + "/html_report/", output_report)
             html_reporter.generate_full_report()
 
