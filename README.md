@@ -49,7 +49,7 @@ At the end of all of this you will have multiple ways to browse and visualize th
 ODIN requires **Python 3**. Using `pipenv` for managing the required libraries is the best option to avoid Python installations getting mixed-up. Do this:
 
 1. Run: `pip3 install --user pipenv` or `python3 -m pip install --user pipenv`
-2. Ru: `git clone https://github.com/chrismaddalena/ODIN.git`
+2. Run: `git clone https://github.com/chrismaddalena/ODIN.git`
 3. Run: `cd ODIN && pipenv install`
 4. Start using ODIN by running: `pipenv shell`
 
