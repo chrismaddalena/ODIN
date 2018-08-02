@@ -249,6 +249,8 @@ for a fresh start. Proceed? (Y\\N) "))
                 else:
                     print(red("[!] Then you can convert your database to a graph database later. \
 Run lib/grapher.py with the appropriate options."))
+            else:
+                graph_reporter.convert()
 
         if html:
             print(green("\n[+] Creating the HTML report using {}.".format(output_report)))

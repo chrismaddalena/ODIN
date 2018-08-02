@@ -398,7 +398,8 @@ the company's primary domain used for their website.".format(domain)))
                     # Resolve the subdomains to IPa ddresses
                     for unique_sub in unique_collected_subdomains:
                         # Ignore wildcards for this, i.e. *.google.com doesn't resolve to anything
-                        if not "*" in unique_sub:
+                        # if not "*" in unique_sub:
+                        if not bool(re.match("^" + domain, unique_sub)):
                             try:
                                 ip_address = socket.gethostbyname(unique_sub)
                                 # Check if this a known IP and add it to hosts if not
@@ -585,17 +586,21 @@ the company's primary domain used for their website.".format(domain)))
         unique_emails, unique_people, unique_twitter, job_titles, linkedin, phone_nums = \
         self.PC.process_harvested_lists(harvester_emails, harvester_people, \
         harvester_twitter, hunter_json)
-
+ 
         # If we have emails, record them and check HaveIBeenPwned
         if unique_emails:
-            print(green("[+] Checking emails with HaveIBeenPwned."))
-
-            try:
-                for email in unique_emails:
+            print(green("[+] Checking emails with HaveIBeenPwned.There is a {} second delay \
+between requests.".format(self.hibp_sleep)))
+            for email in unique_emails:
+                self.c.execute("INSERT INTO email_addresses VALUES (?,NULL,NULL)",(email,))
+                self.conn.commit()
+                try:
                     # Make sure we drop that @domain.com result Harvester often includes
                     if email == '@' + domain or email == " ":
+                        print(yellow("[*] Discarding an email address: {}".format(email)))
                         pass
                     else:
+                        print(green("[+] Checking {} with HIBP".format(email)))
                         pwned = self.PC.pwn_check(email)
                         pastes = self.PC.paste_check(email)
                         if pwned:
@@ -607,19 +612,22 @@ the company's primary domain used for their website.".format(domain)))
                             pwned_results = "None Found"
 
                         if pastes:
-                            pastes_results = pastes
+                            temp_pastes = []
+                            for paste in pastes:
+                                temp_pastes.append("Source:{} Title:{} ID:{}".format(paste['Source'], paste['Title'], paste['Id']))
+                            pastes_results = ", ".join(temp_pastes)
                         else:
                             pastes_results = "None Found"
 
-                        self.c.execute("INSERT INTO email_addresses VALUES (?,?,?)",
-                                        (email, pwned_results, pastes_results))
+                        self.c.execute("UPDATE email_addresses SET breaches=?,pastes=? WHERE email_address=?",
+                                        (pwned_results, pastes_results, email))
                         self.conn.commit()
 
                     # Give HIBP a rest for a few seconds
                     sleep(self.hibp_sleep)
-            except Exception as error:
-                print(red("[!] Error checking emails with HaveIBeenPwned's database!"))
-                print(red("L.. Detail: {}".format(error)))
+                except Exception as error:
+                    print(red("[!] Error checking {} with HaveIBeenPwned's database!".format(email)))
+                    print(red("L.. Detail: {}".format(error)))
 
         print(green("[+] Gathering Twitter account data for identified profiles."))
 

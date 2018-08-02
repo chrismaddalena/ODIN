@@ -1,4 +1,9 @@
 # Change Log
+## August 1, 2018, 1.9.1
+* Fixed Neo4j graph database not being if the --nuke flag was not used.
+* Fixed bug with email address hunting that could cause only a portion of the discovered email addresses to be recorded in the database.
+* Improved the recording of Have I Been Pwned results in the database.
+* Added some status updates for Have I Been Pwned as this process can take a while if a lot of addresses are discovered.
 
 ## July 31, 2018, 1.9.1
 * Improved boto3 / AWS error handling for unusual edge cases where the bucket is unreachable due to AWS region or other issue.

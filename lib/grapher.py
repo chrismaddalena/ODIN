@@ -34,17 +34,21 @@ class Grapher(object):
         all_hosts = self.c.fetchall()
 
         for row in all_hosts:
+            if row[1] == 0:
+                scoped = False
+            else:
+                scoped = True
             if helpers.is_ip(row[0]):
                 query = """
                 MERGE (x:IP {Address:'%s', Scoped:'%s', Source:'%s'})
                 RETURN x
-                """% (row[0], row[1], row[2])
+                """% (row[0], scoped, row[2])
                 helpers.execute_query(self.neo4j_driver, query)
             else:
                 query = """
                 MERGE (x:Domain {Name:'%s', Scoped:'%s', Source:'%s'})
                 RETURN x
-                """ % (row[0], row[1], row[2])
+                """ % (row[0], scoped, row[2])
                 helpers.execute_query(self.neo4j_driver, query)
 
     def _graph_subdomains(self):
@@ -71,11 +75,15 @@ class Grapher(object):
         all_certificates = self.c.fetchall()
 
         for row in all_certificates:
+            if row[5]:
+                self_signed = False
+            else:
+                self_signed = True
             query = """
             MATCH (b:Subdomain {Name:'%s'})
             MERGE (a:Certificate {Subject:"%s", Issuer:"%s", StartDate:"%s", ExpirationDate:"%s", SelfSigned:"%s", SignatureAlgo:"%s", CensysFingerprint:"%s"})-[r:ISSUED_FOR]->(b)
             RETURN a,b
-            """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7])
+            """ % (row[0], row[1], row[2], row[3], row[4], self_signed, row[6], row[7])
             helpers.execute_query(self.neo4j_driver, query)
 
             for name in row[8]:
@@ -136,29 +144,35 @@ class Grapher(object):
 
     def _graph_shodan(self):
         """Convert the Shodan tables with ports added as Neo4j graph nodes linked to hosts."""
-        self.c.execute("SELECT domain,ip_address,port,banner_data,os,hostname FROM shodan_search")
-        all_shodan_search = self.c.fetchall()
-
-        for row in all_shodan_search:
-            query = """
-            MATCH (c:Domain {Name:'%s'})
-            MATCH (b:IP {Address:'%s'})
-            CREATE UNIQUE (a:Port {Number:'%s', OS:'%s', Hostname:'%s', Organization:''})<-[r:HAS_PORT]-(b)<-[:RESOLVES_TO]-(c)
-            RETURN a,b
-            """ % (row[0], row[1], row[2], row[4], row[5])
-            helpers.execute_query(self.neo4j_driver, query)
-
         self.c.execute("SELECT ip_address,port,banner_data,os,organization FROM shodan_host_lookup")
         all_shodan_lookup = self.c.fetchall()
 
         for row in all_shodan_lookup:
             query = """
             MATCH (a:IP {Address:'%s'})
-            MERGE (b:Port {Number:'%s', OS:'%s', Organization:'%s', Hostname:''})<-[r:HAS_PORT]-(a)
+            CREATE UNIQUE (b:Port {Number:'%s', OS:'%s', Organization:'%s', Hostname:''})<-[r:HAS_PORT]-(a)
+            SET a.Organization = '%s'
             RETURN a,b
-            """ % (row[0], row[1], row[3], row[4])
+            """ % (row[0], row[1], row[3], row[4], row[4])
             helpers.execute_query(self.neo4j_driver, query)
 
+        self.c.execute("SELECT domain,ip_address,port,banner_data,os,hostname FROM shodan_search")
+        all_shodan_search = self.c.fetchall()
+
+        for row in all_shodan_search:
+            query = """
+            MATCH (a:Port)<-[:HAS_PORT]-(b:IP {Address:'%s'})
+            SET a.Hostname = '%s'
+            RETURN a
+            """ % (row[1], row[5])
+            helpers.execute_query(self.neo4j_driver, query)
+        #     query = """
+        #     MATCH (c:Domain {Name:'%s'})
+        #     MATCH (b:IP {Address:'%s'})
+        #     CREATE UNIQUE (a:Port {Number:'%s', OS:'%s', Hostname:'%s', Organization:''})<-[r:HAS_PORT]-(b)<-[:RESOLVES_TO]-(c)
+        #     RETURN a,b
+        #     """ % (row[0], row[1], row[2], row[4], row[5])
+        #     helpers.execute_query(self.neo4j_driver, query)
 
     def convert(self):
         """Executes the necessary Neo4j queries to convert a complete ODIN SQLite3 database to a
