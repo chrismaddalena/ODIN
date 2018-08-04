@@ -3,6 +3,7 @@
 
 import os
 import configparser
+from configparser import NoSectionError,NoOptionError,ParsingError
 import sys
 from colors import red, green, yellow
 from selenium import webdriver
@@ -11,15 +12,16 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 
 
 class SetupReview(object):
-    """ """
+    """Class used for reviewing the provided keys.config file for ODIN."""
     def __init__(self, auth_file):
+        """Everything begins here."""
         print(green("[+] This tool will check to make sure your keys.config file is present and contains \
 the API keys used by ODIN."))
         self.how_do_we_look = 0
         try:
             self.CONFIG_PARSER = configparser.ConfigParser()
             self.CONFIG_PARSER.read(auth_file)
-            print(green("[*] Loaded config file with these sections:\n"))
+            print(green("[*] Loaded {} file with these sections:\n".format(auth_file)))
             for section in self.CONFIG_PARSER.sections():
                 print(green("\t* " + section))
         except Exception as error:
@@ -49,6 +51,7 @@ the API keys used by ODIN."))
         return section_dict
 
     def check_all(self):
+        """Function to check each section of the keys.config file and perform any necessary tests."""
         try:
             SHODAN_API_KEY = self.config_section_map("Shodan")["api_key"]
             if SHODAN_API_KEY == "":
@@ -204,6 +207,19 @@ the API keys used by ODIN."))
             print(red("L.. Details: {}".format(error)))
             self.how_do_we_look += 1
 
+        try:
+            WHOXY_API = self.config_section_map("WhoXY")["api_key"]
+            if WHOXY_API == "":
+                print(red("\n[!] No WhoXY API key!"))
+                self.how_do_we_look += 1
+            else:
+                print(green("\n[+] Found WhoXY API info:"))
+                print(yellow("... API Key:\t\t{}".format(WHOXY_API)))
+        except Exception as error:
+            print(red("\n[!] Could not get the WhoXY API key!"))
+            print(red("L.. Details: {}".format(error)))
+            self.how_do_we_look += 1
+
         if self.how_do_we_look == 0:
             print(green("\n[+] It looks like keys.config is filled out! Just check to make sure those \
 all of the information is correct!"))
@@ -216,7 +232,19 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(red("[!] Provide your keys.config for review"))
         print(red("L.. Usage: setup_check.py auth/keys.config"))
+    elif len(sys.argv) > 2:
+        print(red("[!] Too many arguments"))
+        print(red("L.. Usage: setup_check.py auth/keys.config"))
     else:
         auth_file = sys.argv[1]
-        checkup = SetupReview(auth_file)
-        checkup.check_all()
+        if os.path.isfile(auth_file):
+            file_name = auth_file.split("/")
+            if file_name[-1] == "keys.config":
+                checkup = SetupReview(auth_file)
+                checkup.check_all()
+            else:
+                print(red("[!] This file path does not appear to include a keys.config file. Are \
+you sure you specified a file names keys.config?"))
+        else:
+            print(red("[!] Could not open the specified keys.config file: {}".format(auth_file)))
+            print(red("L.. Usage: setup_check.py auth/keys.config"))
