@@ -158,6 +158,15 @@ ODIN will search for Digital Ocean Spaces just like it searches for S3 buckets. 
 
 No API key is needed.
 
+### WhoXY
+WhoXY offers a nice fallback for a regular whois lookup. When whois fails to return any contact information, that can mean domain privacy is enabled or that the registrar is keeping that information behind their own whois tool. Querying individual registrars is not feasible (there's too many and not all make it remotely possible for automated queries), but WhoXY assists by cataloguing a lot of the available whois data out there. The WhoXY whois API is used as a fallback if whois fails to return anything. It's only a fallback to reduce API calls and credit usage when it's not necessary.
+
+Also, WhoXY's database can be searched with a company name, email address, or a keyword to find related domains. ODIN will take the provided organization name and any organization names returned from whois lookups and perform the reverse lookups through WhoXY for domains tied to the organization.
+
+A WhoXY API key is required.
+
+Note: A WhoXY account is free, but does eventually cost some money. It's inexpensive and they do offer a program for free API access, but you get a good number fo API credits for free with an account. Then, once you run out, whois credits are 2 for 1,000 credits and reverse whois credits are $2 for 250 credits. Just $4 will reload your account and set you up for a good long time.
+
 ## FAQ
 **I get this syntax error. What's the deal?**
 

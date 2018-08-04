@@ -18,7 +18,9 @@ import os
 
 class Reporter(object):
     """A class that can be used to call upon the other modules to collect results and then format
-    a report saved as a SQLite3 database for easy review and queries.
+    a report saved as a SQLite3 database for easy review and queries. These results can then be
+    converted to a Neo4j graph database using the grapher.py library or an HTML report using
+    the htmlreporter.py library.
     """
     sleep = 10
     hibp_sleep = 3
@@ -122,12 +124,12 @@ want to overwrite it? (Y\\N) "))
         self.c.execute("SELECT NAME FROM sqlite_master WHERE TYPE = 'table'")
         written_tables = self.c.fetchall()
         for table in written_tables:
-            print(green("[+] {} table complete!".format(table[0])))
+            print(green("[+] The {} table was created successfully.".format(table[0])))
         # Close the connection to the database
         self.conn.close()
 
     def prepare_scope(self, ip_list, domain_list, scope_file=None, domain=None):
-        """Function to split the user's scope file into IP addresses and domain names."""
+        """Function to split a provided scope file into IP addresses and domain names."""
         # Generate the scope lists from the supplied scope file, if there is one
         scope = []
         if scope_file:
@@ -140,7 +142,7 @@ want to overwrite it? (Y\\N) "))
 it has been added to the scope for OSINT.".format(domain)))
                 scope.append(domain)
 
-        # Create lists of IP addresses and domain names from scope
+        # Create lists of IP addresses and domain names from the scope
         for item in scope:
             if helpers.is_ip(item):
                 ip_list.append(item)
@@ -148,7 +150,7 @@ it has been added to the scope for OSINT.".format(domain)))
                 pass
             else:
                 domain_list.append(item)
-
+        # Insert all currently known addresses and domains into the hosts table
         for target in scope:
             self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)", (target, True, "Scope File"))
             self.conn.commit()
@@ -234,14 +236,113 @@ it has been added to the scope for OSINT.".format(domain)))
                 print(red("[!] No data found for {} in Full Contact's database. This may not be \
 the company's primary domain used for their website.".format(domain)))
 
-    def create_domain_report_table(self, scope, ip_list, domain_list, verbose):
+    def create_domain_report_table(self, organization, scope, ip_list, domain_list, verbose):
         """Function to generate a domain report consisting of information like DNS records and
         subdomains.
         """
-        # Get the DNS records for each domain
+        # Get whois records and lookup other domains registerd to the same org
         for domain in domain_list:
+            results = {}
+            try:
+                # Run whois lookup using standard whois
+                results = self.DC.run_whois(domain)
+                if results:
+                    # Check if more than one expiration date is returned
+                    if isinstance(results['expiration_date'], datetime.date):
+                        expiration_date = results['expiration_date']
+                    # We have a list, so break-up list into human readable dates and times
+                    else:
+                        expiration_date = []
+                        for date in results['expiration_date']:
+                            expiration_date.append(date.strftime("%Y-%m-%d %H:%M:%S"))
+                        expiration_date = ", ".join(expiration_date)
+
+                    registrar = results['registrar']
+                    whois_org = results['org']
+                    registrant = results['registrant']
+                    admin_email = results['admin_email']
+                    tech_email = results['tech_email']
+                    address = results['address'].rstrip()
+                    if results['dnssec'] == "unsigned":
+                        dnssec = results['dnssec']
+                    else:
+                        dnssec = ', '.join(results['dnssec'])
+
+                    self.c.execute("INSERT INTO whois_data VALUES (NULL,?,?,?,?,?,?,?,?,?)",
+                                    (domain, registrar, expiration_date, whois_org, registrant,
+                                    admin_email, tech_email, address, dnssec))
+                    self.conn.commit()
+            except Exception as error:
+                print(red("[!] There was an error running whois for {}!".format(domain)))
+                print(red("L.. Details: {}".format(error)))
+
+            # If whois failed, try a WhoXY whois lookup
+            # This is only done if whois failed so we can save on API credits
+            if not results:
+                try:
+                    # Run a whois lookup using the WhoXY API
+                    whoxy_results = self.DC.run_whoxy_whois(domain)
+                    if whoxy_results:
+                        registrar = whoxy_results['registrar']
+                        expiration_date = whoxy_results['expiry_date']
+                        whoxy_org = whoxy_results['organization']
+                        registrant = whoxy_results['registrant']
+                        address = whoxy_results['address']
+                        admin_contact = whoxy_results['admin_contact']
+                        tech_contact = whoxy_results['tech_contact']
+
+                        self.c.execute("INSERT INTO whois_data VALUES (NULL,?,?,?,?,?,?,?,?,NULL)",
+                                        (domain, registrar, expiration_date, whoxy_org, registrant,
+                                        admin_contact, tech_contact, address))
+                except Exception as error:
+                    print(red("[!] There was an error running WhoXY whois for {}!".format(domain)))
+                    print(red("L.. Details: {}".format(error)))
+
+        # Fetch any organization names found from whois lookups + provided organziation
+        self.c.execute("SELECT organization FROM whois_data")
+        all_whois_orgs = self.c.fetchall()
+        if not organization in all_whois_orgs:
+            all_whois_orgs.append(organization)
+        for org_name in all_whois_orgs:
+            # We definitely do not want to do a reverse lookup for every domain linked to a domain
+            # privacy organization, so attempt to filter those
+            if not "privacy" in org_name.lower():
+                print(green("[+] Performing WhoXY reverse domain lookup with organization name {}.".format(org_name)))
+                try:
+                    # Try to find other domains using the organization name from the whois record
+                    reverse_whoxy_results = self.DC.run_whoxy_company_search(org_name)
+                    if reverse_whoxy_results:
+                        for result in reverse_whoxy_results:
+                            rev_domain = reverse_whoxy_results[result]['domain']
+                            registrar = reverse_whoxy_results[result]['registrar']
+                            expiration_date = reverse_whoxy_results[result]['expiry_date']
+                            org = reverse_whoxy_results[result]['organization']
+                            registrant = reverse_whoxy_results[result]['registrant']
+                            address = reverse_whoxy_results[result]['address']
+                            admin_contact = reverse_whoxy_results[result]['admin_contact']
+                            tech_contact = reverse_whoxy_results[result]['tech_contact']
+
+                            # Add any new domain names to the master list
+                            if not rev_domain in domain_list:
+                                domain_list.append(rev_domain)
+
+                                self.c.execute("INSERT INTO whois_data VALUES (NULL,?,?,?,?,?,?,?,?,NULL)",
+                                                (rev_domain, registrar, expiration_date, org, registrant,
+                                                admin_contact, tech_contact, address))
+                                self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)",
+                                                (rev_domain, False, "WhoXY"))
+                except Exception as error:
+                    print(red("[!] There was an error running WhoXY reverse whois for {}!".format(domain)))
+                    print(red("L.. Details: {}".format(error)))
+            else:
+                print(yellow("[*] Whois organization looks like it's a whois privacy org, {}, so \
+this one has been skipped for WhoXY reverse lookups.".format(org_name)))
+
+        # Master list of domains may include new domains now, so resume looping through domain_list
+        for domain in domain_list:
+            print(green("[+] Fetching DNS records for {}.".format(domain)))
             vulnerable_dns_servers = []
-            # Get the NS records
+            # Get the DNS records for each domain, starting with NS
             try:
                 temp = []
                 ns_records_list = self.DC.get_dns_record(domain, "NS")
@@ -269,10 +370,11 @@ the company's primary domain used for their website.".format(domain)))
                         res = self.c.fetchone()
                         if res[0] == 0:
                             self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
-                                            (item.to_text(), False, "Scope File Domain DNS"))
+                                            (item.to_text(), False, "Domain DNS"))
                             self.conn.commit()
-                            # Also add it to our list of IP addresses
-                            ip_list.append(item.to_text())
+                            # Also add A record IP addreses it to the master list
+                            if not item.to_text() in ip_list:
+                                ip_list.append(item.to_text())
                 a_records = ", ".join(temp)
             except:
                 a_records = "None"
@@ -322,7 +424,8 @@ the company's primary domain used for their website.".format(domain)))
                             dmarc_record, ", ".join(vulnerable_dns_servers)))
             self.conn.commit()
 
-        # Collect the subdomain information from DNS Dumpster and NetCraft
+        # Next phase, loop to collect the subdomain information
+        # NetCraft, DNS Dumpster, and TLS certificates (Censys) are used for this
         for domain in domain_list:
             collected_subdomains = []
             dumpster_results = []
@@ -387,18 +490,17 @@ the company's primary domain used for their website.".format(domain)))
                                     self_signed, start_date, exp_date, ", ".join(parsed_names)))
                         self.conn.commit()
 
-                        # Add the colelcted names to the list of subdomains
+                        # Add the collected names to the list of subdomains
                         collected_subdomains.append(cert_domain)
                         collected_subdomains.extend(parsed_names)
 
                     # Filter out any uninteresting domains caught in the net and remove duplicates
+                    # Also removes wildcards, i.e. *.google.com doesn't resolve to anything
                     collected_subdomains = self.DC.filter_subdomains(domain, collected_subdomains)
                     unique_collected_subdomains = set(collected_subdomains)
 
-                    # Resolve the subdomains to IPa ddresses
+                    # Resolve the subdomains to IP addresses
                     for unique_sub in unique_collected_subdomains:
-                        # Ignore wildcards for this, i.e. *.google.com doesn't resolve to anything
-                        # if not "*" in unique_sub:
                         if not bool(re.match("^" + domain, unique_sub)):
                             try:
                                 ip_address = socket.gethostbyname(unique_sub)
@@ -413,7 +515,9 @@ the company's primary domain used for their website.".format(domain)))
                                     ip_list.append(ip_address)
                             except:
                                 ip_address = "Lookup Failed"
+                            # Check for any CDNs that can be used for domain fronting
                             frontable = self.DC.check_domain_fronting(unique_sub)
+                            # Record the results for this subdomain
                             self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?)",
                                         (domain, unique_sub, ip_address, frontable))
                             self.conn.commit()
@@ -423,6 +527,7 @@ the company's primary domain used for their website.".format(domain)))
             # Take a break for Censys's rate limits
             sleep(self.sleep)
 
+        # Loop through domains to collect IP history from NetCraft
         for domain in domain_list:
             ip_history = []
             try:
@@ -447,45 +552,9 @@ the company's primary domain used for their website.".format(domain)))
                         # Also add it to our list of IP addresses
                         # ip_list.append(ip_address)
 
-        # The whois lookups are only for domain names
-        for domain in domain_list:
-            try:
-                # Run whois lookup
-                results = self.DC.run_whois(domain)
-                if results:
-                    # Check if more than one expiration date is returned
-                    if isinstance(results['expiration_date'], datetime.date):
-                        expiration_date = results['expiration_date']
-                    # We have a list, so break-up list into human readable dates and times
-                    else:
-                        expiration_date = []
-                        for date in results['expiration_date']:
-                            expiration_date.append(date.strftime("%Y-%m-%d %H:%M:%S"))
-                        expiration_date = ", ".join(expiration_date)
-
-                    registrar = results['registrar']
-                    org = results['org']
-                    registrant = results['registrant']
-                    admin_email = results['admin_email']
-                    tech_email = results['tech_email']
-                    address = results['address'].rstrip()
-                    if results['dnssec'] == "unsigned":
-                        dnssec = results['dnssec']
-                    else:
-                        dnssec = ', '.join(results['dnssec'])
-
-                    self.c.execute("INSERT INTO whois_data VALUES (NULL,?,?,?,?,?,?,?,?,?)",
-                                    (domain, registrar, expiration_date, org, registrant,
-                                    admin_email, tech_email, address, dnssec))
-                    self.conn.commit()
-            except Exception as error:
-                print(red("[!] There was an error running whois for {}!".format(domain)))
-                print(red("L.. Details: {}".format(error)))
-
         # The RDAP lookups are only for IPs, but we get the IPs for each domain name, too
         self.c.execute("SELECT host_address FROM hosts")
         collected_hosts = self.c.fetchall()
-        # for target in scope:
         for target in collected_hosts:
             try:
                 # Slightly change output and record target if it's a domain
@@ -497,7 +566,6 @@ the company's primary domain used for their website.".format(domain)))
                     pass
                 else:
                     target_ip = socket.gethostbyname(target)
-                    # for_output = "{} ({})".format(target_ip, target)
 
                 # Log RDAP lookups
                 results = self.DC.run_rdap(target_ip)
@@ -530,9 +598,9 @@ the company's primary domain used for their website.".format(domain)))
         """Function to create a Shodan table with Shodan search results."""
         for domain in domain_list:
             try:
-                results = self.DC.run_shodan_search(domain)
-                if results['total'] > 0:
-                    for result in results['matches']:
+                shodan_search_results = self.DC.run_shodan_search(domain)
+                if shodan_search_results['total'] > 0:
+                    for result in shodan_search_results['matches']:
                         ip_address = result['ip_str']
                         hostnames = ", ".join(result['hostnames'])
                         operating_system = result['os']
@@ -543,7 +611,7 @@ the company's primary domain used for their website.".format(domain)))
                                        (domain, ip_address, hostnames, operating_system, port, data))
                         self.conn.commit()
                 else:
-                    print(yellow("[*] No results for {}.".format(domain)))
+                    print(yellow("[*] No Shodan results for {}.".format(domain)))
             except:
                 pass
 
@@ -552,17 +620,20 @@ the company's primary domain used for their website.".format(domain)))
 
         for ip in ip_list:
             try:
-                results = self.DC.run_shodan_lookup(ip)
-                ip_address = results['ip_str']
-                operating_system = results.get('os', 'n/a')
-                org = results.get('org', 'n/a')
-                # Collect the banners
-                for item in results['data']:
-                    port = item['port']
-                    data = item['data'].rstrip()
-                    self.c.execute("INSERT INTO shodan_host_lookup VALUES (NULL,?,?,?,?,?)",
-                                   (ip_address, operating_system, org, port, data))
-                    self.conn.commit()
+                shodan_lookup_results = self.DC.run_shodan_lookup(ip)
+                if shodan_lookup_results:
+                    ip_address = shodan_lookup_results['ip_str']
+                    operating_system = shodan_lookup_results.get('os', 'n/a')
+                    org = shodan_lookup_results.get('org', 'n/a')
+                    # Collect the banners
+                    for item in shodan_lookup_results['data']:
+                        port = item['port']
+                        data = item['data'].rstrip()
+                        self.c.execute("INSERT INTO shodan_host_lookup VALUES (NULL,?,?,?,?,?)",
+                                    (ip_address, operating_system, org, port, data))
+                        self.conn.commit()
+                else:
+                    print(yellow("[*] No Shodan results for {}.".format(domain)))
             except:
                 pass
 
@@ -696,12 +767,12 @@ between requests.".format(self.hibp_sleep)))
 
         # Prepare extensions to Google
         exts = extensions.split(',')
-        supported_exts = ['all', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt']
+        supported_exts = ['all', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'key']
         for i in exts:
             if i.lower() not in supported_exts:
-                print(red("[!] You've provided an unsupported file extension for --file. \
-Please try again."))
-                exit()
+                print(red("[!] You've provided an unsupported file extension for --file."))
+                print(red("L.. Discarding: {}".format(i)))
+                exts.remove(i)
         if "all" in exts:
             exts = supported_exts[1:]
 
@@ -797,7 +868,7 @@ Please try again."))
                         print(red("[!] There was an error getting the data for {}.".format(domain)))
 
     def create_cloud_table(self, client, domain, wordlist=None, fix_wordlist=None):
-        """Function to add a cloud worksheet for findings related to AWS."""
+        """Function to add a cloud worksheet for findings related to AWS and Digital Ocean."""
         verified_buckets, verified_accounts = self.DC.enumerate_buckets(client, domain, wordlist, fix_wordlist)
 
         if verified_buckets and verified_accounts:
@@ -809,7 +880,7 @@ Please try again."))
                                    bucket['arn'], bucket['public']))
                     self.conn.commit()
 
-            print(green("[+] AWS searches are complete and results are in the Cloud worksheet."))
+            print(green("[+] AWS and Digital Ocean searches are complete."))
         else:
             print(yellow("[*] Could not access the AWS API to enumerate S3 buckets and accounts."))
 

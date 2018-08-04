@@ -47,6 +47,9 @@ class DomainCheck(object):
 
     def __init__(self):
         """Everything that should be initiated with a new object goes here."""
+        self.resolver = dns.resolver.Resolver()
+        self.resolver.timeout = 1
+        self.resolver.lifetime = 1
         # Collect the API keys from the config file
         try:
             shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
@@ -88,7 +91,7 @@ will be skipped."))
             print(yellow("[!] Did not find a Censys API ID/secret."))
 
         try:
-            self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+            self.chrome_driver_path =   helpers.config_section_map("WebDriver")["driver_path"]
             # Try loading the driver as a test
             self.chrome_options = Options()
             self.chrome_options.add_argument("--headless")
@@ -115,6 +118,12 @@ to use PantomJS for Netcraft."))
         except Exception:
             self.boto3_client = None
             print(yellow("[!] Could not create an AWS client with the supplied secrets."))
+
+        try:
+            self.whoxy_api_key = helpers.config_section_map("WhoXY")["api_key"]
+        except Exception:
+            self.whoxy_api_key = None
+            print(yellow("[!] Did not find a WhoXY API key."))
 
     def generate_scope(self, scope_file):
         """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
@@ -190,7 +199,7 @@ to use PantomJS for Netcraft."))
 
     def get_dns_record(self, domain, record_type):
         """Simple function to get the specified DNS record for the target domain."""
-        answer = dns.resolver.query(domain, record_type)
+        answer = self.resolver.query(domain, record_type)
         return answer
 
     def check_dns_cache(self, name_server):
@@ -286,6 +295,89 @@ GDPR, or the registrar. You might try looking at dnsstuff.com.").format(domain))
         except Exception as error:
             print(red("[!] The whois lookup for {} failed!").format(domain))
             print(red("L.. Details: {}".format(error)))
+
+    def parse_whoxy_results(self, whoxy_data):
+        """Function to take JSON returned by WhoXY API queries and parse the data into a simpler
+        dictionary.
+        """
+        results = {}
+        results['domain'] = whoxy_data['domain_name']
+        results['registrar'] = whoxy_data['domain_registrar']['registrar_name']
+        results['expiry_date'] = whoxy_data['expiry_date']
+        results['organization'] = whoxy_data['registrant_contact']['company_name']
+        results['registrant'] = whoxy_data['registrant_contact']['full_name']
+
+        reg_address = whoxy_data['registrant_contact']['mailing_address']
+        reg_city = whoxy_data['registrant_contact']['city_name']
+        reg_state = whoxy_data['registrant_contact']['state_name']
+        reg_zip = whoxy_data['registrant_contact']['zip_code']
+        reg_email = whoxy_data['registrant_contact']['email_address']
+        reg_phone = whoxy_data['registrant_contact']['phone_number']
+
+        results['address'] = "{} {}, {} {} {} {}".format(reg_address, reg_city, reg_state, reg_zip, reg_email, reg_phone)
+
+        admin_name = whoxy_data['administrative_contact']['full_name']
+        admin_address = whoxy_data['administrative_contact']['mailing_address']
+        admin_city = whoxy_data['administrative_contact']['city_name']
+        admin_state = whoxy_data['administrative_contact']['state_name']
+        admin_zip = whoxy_data['administrative_contact']['zip_code']
+        admin_email = whoxy_data['administrative_contact']['email_address']
+        admin_phone = whoxy_data['administrative_contact']['phone_number']
+
+        results['admin_contact'] = "{} {} {}, {} {} {} {}".format(admin_name, admin_address, admin_city, admin_state, admin_zip, admin_email, admin_phone)
+
+        tech_name = whoxy_data['technical_contact']['full_name']
+        tech_address = whoxy_data['technical_contact']['mailing_address']
+        tech_city = whoxy_data['technical_contact']['city_name']
+        tech_state = whoxy_data['technical_contact']['state_name']
+        tech_zip = whoxy_data['technical_contact']['zip_code']
+        tech_email = whoxy_data['technical_contact']['email_address']
+        tech_phone = whoxy_data['technical_contact']['phone_number']
+
+        results['tech_contact'] = "{} {} {}, {} {} {} {}".format(tech_name, tech_address, tech_city, tech_state, tech_zip, tech_email, tech_phone)
+
+        return results
+
+    def run_whoxy_whois(self, domain):
+        """Perform a whois lookup for the provided target domain using WhoXY's API. The whois
+        results are returned as a dictionary.
+        """
+        if self.whoxy_api_key:
+            try:
+                whois_api_endpoint = "http://api.whoxy.com/?key=" + self.whoxy_api_key + "&whois="
+                results = requests.get(whois_api_endpoint + domain).json()
+                if results['status'] == 1:
+                    whois_results = self.parse_whoxy_results(results)
+                    return whois_results
+                else:
+                    print(yellow("[*] WhoXY returned status code 0, error/no results, for whois \
+lookup on {}.".format(domain)))
+            except requests.exceptions.RequestException as error:
+                print(red("[!] Error connecting to WhoXY for whois on {}!".format(domain)))
+                print(red("L.. Details: {}".format(error)))
+
+    def run_whoxy_company_search(self, company):
+        """Use WhoXY's API to search for a company name and return the associated domain names. The
+        information is returned as a dictionary.
+        """
+        if self.whoxy_api_key:
+            try:
+                reverse_whois_api_endpoint = "http://api.whoxy.com/?key=" + self.whoxy_api_key + "&reverse=whois&company="
+                results = requests.get(reverse_whois_api_endpoint + company).json()
+                if results['status'] == 1 and results['total_results'] > 0:
+                    whois_results = {}
+                    for domain in results['search_result']:
+                        domain_name = domain['domain_name']
+                        temp = self.parse_whoxy_results(domain)
+                        whois_results[domain_name] = temp
+
+                    return whois_results
+                else:
+                    print(yellow("[*] WhoXY returned status code 0, error/no results, for reverse \
+company search."))
+            except requests.exceptions.RequestException as error:
+                print(red("[!] Error connecting to WhoXY for reverse company search!"))
+                print(red("L.. Details: {}".format(error)))
 
     def run_rdap(self, ip_address):
         """Perform an RDAP lookup for an IP address. An RDAP lookup object is returned.

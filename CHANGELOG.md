@@ -1,4 +1,11 @@
 # Change Log
+## August 4, 2017, BlackHat Edition, 1.9.1.1
+* Implemented support and use of the WhoXY API.
+* If provided a WhoXY API key, ODIN will now use WhoXY whois as a backup for whois lookups and use WhoXY reverse whois lookups to discover additional domains.
+* Fixed an oversight in grapher that led to "orphaned" IP addresses discovered from DNS records (relationships were only created for the first A-record connected to a domain).
+* Some clean-up and organization of code.
+* DNS record lookups now have a 1 second timeout so ODIN no longer appears to be "stuck" if it hits a domain with no records.
+
 ## August 1, 2018, 1.9.1
 * Fixed Neo4j graph database not being if the --nuke flag was not used.
 * Fixed bug with email address hunting that could cause only a portion of the discovered email addresses to be recorded in the database.

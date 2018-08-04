@@ -12,8 +12,8 @@ Developer:   Chris "cmaddy" Maddalena
 Version:     1.9.1 "Muninn"
 Description: Observation, Detection, and Investigation of Networks
              ODIN was designed to assist with OSINT automation for penetration testing clients and
-             their networks, both the types with IP address and social. Provide a client's name,
-             IPs, and domains to gather information from sources like RDAP, DNS, Shodan, and
+             their networks, both the types with IP address and social. Provide a client's name and
+             some domains to gather information from sources like RDAP, DNS, Shodan, and
              so much more.
 
              ODIN is made possible through the help, input, and work provided by others. Therefore,
@@ -90,8 +90,8 @@ whatever the target uses for email and their main website. Add more domains to y
               required=True)
 # Optional arguments
 @click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, \
-              resolve_path=True), help="A text file containing your in-scope IP addresses and \
-domain names. List each one on a new line.", required=False)
+              resolve_path=True), help="A text file containing additional IP addresses and \
+domain names you want to include. List each one on a new line.", required=False)
 # File searching arguments
 @click.option('--files', is_flag=True, help="Use this option to use Google to search for files \
 under the provided domain (-d), download files, and extract metadata.")
@@ -181,7 +181,7 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         jobs.append(employee_report)
         domain_report = Process(name="Domain and IP Address Recon",
                                 target=report.create_domain_report_table,
-                                args=(scope, ip_list, domain_list, verbose))
+                                args=(organization, scope, ip_list, domain_list, verbose))
         jobs.append(domain_report)
 
         shodan_report = Process(name="Shodan Queries",
