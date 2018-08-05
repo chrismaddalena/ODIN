@@ -299,11 +299,14 @@ the company's primary domain used for their website.".format(domain)))
                     print(red("L.. Details: {}".format(error)))
 
         # Fetch any organization names found from whois lookups + provided organziation
+        all_orgs = []
         self.c.execute("SELECT organization FROM whois_data")
-        all_whois_orgs = self.c.fetchall()
-        if not organization in all_whois_orgs:
-            all_whois_orgs.append(organization)
-        for org_name in all_whois_orgs:
+        whois_orgs = self.c.fetchall()
+        for org in whois_orgs:
+            all_orgs.append(org[0])
+        if not organization in all_orgs:
+            all_orgs.append(organization)
+        for org_name in all_orgs:
             # We definitely do not want to do a reverse lookup for every domain linked to a domain
             # privacy organization, so attempt to filter those
             if not "privacy" in org_name.lower():
@@ -332,7 +335,7 @@ the company's primary domain used for their website.".format(domain)))
                                 self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)",
                                                 (rev_domain, False, "WhoXY"))
                 except Exception as error:
-                    print(red("[!] There was an error running WhoXY reverse whois for {}!".format(domain)))
+                    print(red("[!] There was an error running WhoXY reverse whois for {}!".format(org_name)))
                     print(red("L.. Details: {}".format(error)))
             else:
                 print(yellow("[*] Whois organization looks like it's a whois privacy org, {}, so \
@@ -596,6 +599,12 @@ this one has been skipped for WhoXY reverse lookups.".format(org_name)))
 
     def create_shodan_table(self, ip_list, domain_list):
         """Function to create a Shodan table with Shodan search results."""
+        num_of_addresses = len(ip_list)
+        seconds = num_of_addresses * self.sleep
+        minutes = seconds/60
+        print(yellow("[*] ODIN has {} IP addresses, so Shodan searches part will take about {} \
+minutes with the {} second API request delay.".format(num_of_addresses, minutes, self.sleep)))
+
         for domain in domain_list:
             try:
                 shodan_search_results = self.DC.run_shodan_search(domain)
@@ -632,8 +641,6 @@ this one has been skipped for WhoXY reverse lookups.".format(org_name)))
                         self.c.execute("INSERT INTO shodan_host_lookup VALUES (NULL,?,?,?,?,?)",
                                     (ip_address, operating_system, org, port, data))
                         self.conn.commit()
-                else:
-                    print(yellow("[*] No Shodan results for {}.".format(domain)))
             except:
                 pass
 
