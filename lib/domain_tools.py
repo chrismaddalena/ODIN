@@ -86,9 +86,10 @@ class DomainCheck(object):
             print(yellow("[!] Censys reported your API information is invalid, so Censys searches \
 will be skipped."))
             print(yellow("L.. You provided ID %s & Secret %s" % (censys_api_id, censys_api_secret)))
-        except Exception:
+        except Exception as error:
             self.censys_cert_search = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
+            print(yellow("L.. Details:  {}".format(error0)))
 
         try:
             self.chrome_driver_path =   helpers.config_section_map("WebDriver")["driver_path"]
