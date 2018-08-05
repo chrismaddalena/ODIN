@@ -204,7 +204,7 @@ lookups."))
         else:
             # Drop the lonely @ Harvester often includes and common false positives
             if handle == '@' or handle == '@-moz-keyframes' or \
-                handle == '@keyframes' or handle == '@media':
+                handle == '@keyframes' or handle == '@media' or handle == '@broofa.com':
                 print(yellow("[*] Skipping dead end Twitter handle, {}".format(handle)))
             else:
                 try:
