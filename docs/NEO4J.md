@@ -1,6 +1,11 @@
 # Neo4j Graph Database Schema
 
-The grapher.py library can be run independently or as part of ODIN when using the `--graph` flag. It takes the provided SQLite3 database and creates a Neo4j graph database. That database contains these nodes and relationhips:
+The grapher.py library can be run independently or as part of ODIN when using the `--graph` flag. It takes the provided SQLite3 database and creates a Neo4j graph database. That database contains the following nodes and relationhips.
+
+## Current Schema
+`CALL db.schema()`
+
+![ODIN](https://github.com/chrismaddalena/viper/raw/origin/dev/docs/GraphSchema.png)
 
 ## Nodes
 
@@ -125,7 +130,7 @@ The above nodes share these relationships:
     * IP nodes -[:HAS_PORT]-> Port nodes
 
 * :RESOLVES_TO
-    * Domain nodes -{:RESOLVES_TO]-> IP nodes}
+    * Domain nodes -[:RESOLVES_TO]-> IP nodes
 
 * :ISSUED_FOR
     * Certificate nodes are -[:ISSUED_FOR]-> Domain or Subdomain nodes
@@ -154,6 +159,6 @@ This query first matches the Organization, Domain, and IP nodes that have :OWNS 
 ```
 MATCH (org:Organization)-[r1:OWNS]->(dom:Domain)-[:RESOLVES_TO]->(add:IP)
 MATCH (sub:Subdomain)-[r2:SUBDOMAIN_OF|:RESOLVES_TO]->(n)
-MATCH (p:Port)<-[r3:HAS_PORT]-(add)
+MATCH (add)-[r3:HAS_PORT]->(p:Port)
 RETURN org,dom,sub,add,p,n,r1,r2,r3
 ```

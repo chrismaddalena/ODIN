@@ -125,18 +125,24 @@ class Grapher(object):
             else:
                 self_signed = True
             query = """
-            MATCH (b:Subdomain {Name:'%s'})
-            MERGE (a:Certificate {Subject:"%s", Issuer:"%s", StartDate:"%s", ExpirationDate:"%s", SelfSigned:"%s", SignatureAlgo:"%s", CensysFingerprint:"%s"})-[r:ISSUED_FOR]->(b)
-            RETURN a,b
-            """ % (row[0], row[1], row[2], row[3], row[4], self_signed, row[6], row[7])
+            CREATE (a:Certificate {Subject:"%s", Issuer:"%s", StartDate:"%s", ExpirationDate:"%s", SelfSigned:"%s", SignatureAlgo:"%s", CensysFingerprint:"%s"})
+            RETURN a
+            """ % (row[1], row[2], row[3], row[4], self_signed, row[6], row[7])
             helpers.execute_query(self.neo4j_driver, query)
 
-            for name in row[8]:
+            alt_names = row[8].split(",")
+            for name in alt_names:
                 query = """
                 MATCH (a:Subdomain {Name:'%s'})
-                Match (b:Certificate {CensysFingerprint:"%s"})
+                MATCH (b:Certificate {CensysFingerprint:"%s"})
                 MERGE (a)<-[r:ISSUED_FOR]-(b)
-                """ % (name, row[7])
+                """ % (name.strip(), row[7])
+                helpers.execute_query(self.neo4j_driver, query)
+                query = """
+                MATCH (a:Domain {Name:'%s'})
+                MATCH (b:Certificate {CensysFingerprint:"%s"})
+                MERGE (a)<-[r:ISSUED_FOR]-(b)
+                """ % (name.strip(), row[7])
                 helpers.execute_query(self.neo4j_driver, query)
 
     def _update_dns(self):
@@ -211,13 +217,6 @@ class Grapher(object):
             RETURN a
             """ % (row[1], row[5])
             helpers.execute_query(self.neo4j_driver, query)
-        #     query = """
-        #     MATCH (c:Domain {Name:'%s'})
-        #     MATCH (b:IP {Address:'%s'})
-        #     CREATE UNIQUE (a:Port {Number:'%s', OS:'%s', Hostname:'%s', Organization:''})<-[r:HAS_PORT]-(b)<-[:RESOLVES_TO]-(c)
-        #     RETURN a,b
-        #     """ % (row[0], row[1], row[2], row[4], row[5])
-        #     helpers.execute_query(self.neo4j_driver, query)
 
     def convert(self):
         """Executes the necessary Neo4j queries to convert a complete ODIN SQLite3 database to a
