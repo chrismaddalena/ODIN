@@ -92,6 +92,10 @@ whatever the target uses for email and their main website. Add more domains to y
 @click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, \
               resolve_path=True), help="A text file containing additional IP addresses and \
 domain names you want to include. List each one on a new line.", required=False)
+@click.option('--whoxy-limit', default=10, help="The maximum number of domains discovered via \
+reverse whois that ODIN will resolve and use when searching services like Censys and Shodan. \
+You may get hundreds of results from reverse whois, so this is intended to save time and \
+API credits. Default is 10 domains and setting it above maybe 20 or 30 is not recommended.")
 # File searching arguments
 @click.option('--files', is_flag=True, help="Use this option to use Google to search for files \
 under the provided domain (-d), download files, and extract metadata.")
@@ -116,7 +120,7 @@ web services.")
 @click.pass_context
 
 def osint(self, organization, domain, files, ext, delete, scope_file, aws, aws_fixes, html,
-          screenshots, graph, nuke):
+          screenshots, graph, nuke, whoxy_limit):
     """
 The OSINT toolkit:\n
 This is ODIN's primary module. ODIN will take the tagret organization, domain, and other data
@@ -177,11 +181,11 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         jobs.append(company_info)
         employee_report = Process(name="Employee Hunter",
                                   target=report.create_people_table,
-                                  args=(domain, organization))
+                                  args=(domain_list, organization))
         jobs.append(employee_report)
         domain_report = Process(name="Domain and IP Address Recon",
                                 target=report.create_domain_report_table,
-                                args=(organization, scope, ip_list, domain_list, verbose))
+                                args=(organization, scope, ip_list, domain_list, whoxy_limit))
         jobs.append(domain_report)
 
         shodan_report = Process(name="Shodan Queries",
@@ -208,7 +212,7 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
             files_report = Process(name="File Hunter",
                                    target=report.create_foca_table,
                                    args=(domain, ext, delete, report_path, verbose))
-            jobs.append(files_report)
+            more_jobs.append(files_report)
 
         print(green("[+] Beginning initial discovery phase! This could take some time..."))
         for job in jobs:
@@ -242,7 +246,7 @@ any SQLite browser.".format(output_report)))
             if nuke:
                 confirm = input(red("\n[!] You set the --nuke option. This wipes out all nodes \
 for a fresh start. Proceed? (Y\\N) "))
-                if confirm == "Y" or confirm == "y":
+                if confirm.lower() == "y":
                     graph_reporter.clear_neo4j_database()
                     print(green("[+] Database successfully wiped!\n"))
                     graph_reporter.convert()

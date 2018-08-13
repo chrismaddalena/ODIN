@@ -1,6 +1,11 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+"""This module contains functions and Cypher queries necessary to convert the provided SQLite3
+database to a Neo4j graph database. This module can also be run independently to convert a
+database at a later time.
+"""
+
 import sys
 import sqlite3
 import click
@@ -29,39 +34,46 @@ class Grapher(object):
                 print(red("L.. Details: {}".format(error)))
 
     def _graph_company(self):
-        """Create nodes for the organization names and link them to domains based on whois
-        records and Full Contact API results.
+        """Create nodes for the organization names and link them to domains based on whois records
+        and Full Contact API results.
         """
-        org_names =[]
-        self.c.execute("SELECT organization FROM whois_data")
-        whois_orgs = self.c.fetchall()
-        self.c.execute("SELECT company_name,website,website_overview,employees,year_founded FROM company_info")
-        company_info = self.c.fetchone()
+        org_names = []
+        try:
+            self.c.execute("SELECT organization FROM whois_data")
+            whois_orgs = self.c.fetchall()
+            for org in whois_orgs:
+                org_names.append(org[0])
+        except:
+            pass
 
-        for org in whois_orgs:
-            org_names.append(org[0])
+        try:
+            self.c.execute("SELECT company_name,website,website_overview,employees,year_founded FROM company_info")
+            company_info = self.c.fetchone()
+            org_names.append(company_info[0])
+            org_names = set(org_names)
+        except:
+            pass
 
-        org_names.append(company_info[0])
-        org_names = set(org_names)
+        if len(org_names) > 0:
+            for org in org_names:
+                query = """
+                MERGE (x:Organization {Name:"%s"})
+                RETURN x
+                """% (org)
+                helpers.execute_query(self.neo4j_driver, query)
 
-        for org in org_names:
+        if company_info:
             query = """
-            MERGE (x:Organization {Name:'%s'})
+            MATCH (x:Organization {Name:'%s'})
+            SET x += {Website:'%s', WebsiteOverview:"%s", Employees:'%s', YearFounded:'%s'}
             RETURN x
-            """% (org)
+            """% (company_info[0], company_info[1], company_info[2], company_info[3], company_info[4])
             helpers.execute_query(self.neo4j_driver, query)
 
-        query = """
-        MATCH (x:Organization {Name:'%s'})
-        SET x += {Website:'%s', WebsiteOverview:'%s', Employees:'%s', YearFounded:'%s'}
-        RETURN x
-        """% (company_info[0], company_info[1], company_info[2], company_info[3], company_info[4])
-        helpers.execute_query(self.neo4j_driver, query)
-
         for org in org_names:
             query = """
-            MATCH (o:Organization {Name:'%s'})
-            MATCH (d:Domain) WHERE d.Organization='%s'
+            MATCH (o:Organization {Name:"%s"})
+            MATCH (d:Domain) WHERE d.Organization="%s"
             MERGE (o)-[r:OWNS]->(d)
             RETURN o,r,d
             """% (org, org)
@@ -99,14 +111,14 @@ class Grapher(object):
 
         for row in all_subdomains:
             query = """
-            MERGE (x:Subdomain {Name:'%s', Address:'%s', DomainFrontable:'%s'})
+            MERGE (x:Subdomain {Name:'%s', Address:"%s", DomainFrontable:'%s'})
             """ % (row[1], row[2], row[3])
             helpers.execute_query(self.neo4j_driver, query)
 
             query = """
             MATCH (a:Subdomain {Name:'%s'})
             MATCH (b:Domain {Name:'%s'})
-            MATCH (c:IP {Address:'%s'})
+            MATCH (c:IP {Address:"%s"})
             CREATE UNIQUE (c)<-[r1:RESOLVES_TO]-(a)-[r2:SUBDOMAIN_OF]->(b)
             RETURN a,b,c
             """ % (row[1], row[0], row[2])
@@ -133,13 +145,13 @@ class Grapher(object):
             alt_names = row[8].split(",")
             for name in alt_names:
                 query = """
-                MATCH (a:Subdomain {Name:'%s'})
+                MATCH (a:Subdomain {Name:"%s"})
                 MATCH (b:Certificate {CensysFingerprint:"%s"})
                 MERGE (a)<-[r:ISSUED_FOR]-(b)
                 """ % (name.strip(), row[7])
                 helpers.execute_query(self.neo4j_driver, query)
                 query = """
-                MATCH (a:Domain {Name:'%s'})
+                MATCH (a:Domain {Name:"%s"})
                 MATCH (b:Certificate {CensysFingerprint:"%s"})
                 MERGE (a)<-[r:ISSUED_FOR]-(b)
                 """ % (name.strip(), row[7])
@@ -152,8 +164,8 @@ class Grapher(object):
 
         for row in dns_data:
             query = """
-            MATCH (a:Domain {Name:'%s'})
-            SET a += {NameServers:'%s', Address:'%s', MXRecords:'%s', TXTRecords:'%s', SOARecords:'%s', DMARC:'%s'}
+            MATCH (a:Domain {Name:"%s"})
+            SET a += {NameServers:"%s", Address:"%s", MXRecords:'%s', TXTRecords:'%s', SOARecords:'%s', DMARC:'%s'}
             RETURN a
             """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6])
             helpers.execute_query(self.neo4j_driver, query)
@@ -175,7 +187,7 @@ class Grapher(object):
         for row in all_rdap:
             query = """
             MATCH (a:IP {Address:'%s'})
-            SET a += {RDAPSource:'%s', Organization:'%s', CIDR:'%s', ASN:'%s', CountryCode:'%s', RelatedDomains:'%s'}
+            SET a += {RDAPSource:'%s', Organization:"%s", CIDR:'%s', ASN:'%s', CountryCode:'%s', RelatedDomains:'%s'}
             RETURN a
             """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6])
             helpers.execute_query(self.neo4j_driver, query)
@@ -188,7 +200,7 @@ class Grapher(object):
         for row in all_whois:
             query = """
             MATCH (a:Domain {Name:'%s'})
-            SET a += {Registrar:'%s', Expiration:'%s', Organization:'%s', Registrant:'%s', Admin:'%s', Tech:'%s', ContactAddress:'%s', DNSSEC:'%s'}
+            SET a += {Registrar:"%s", Expiration:'%s', Organization:"%s", Registrant:"%s", Admin:"%s", Tech:"%s", ContactAddress:"%s", DNSSEC:'%s'}
             RETURN a
             """ % (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8])
             helpers.execute_query(self.neo4j_driver, query)
@@ -201,8 +213,8 @@ class Grapher(object):
         for row in all_shodan_lookup:
             query = """
             MATCH (a:IP {Address:'%s'})
-            CREATE UNIQUE (b:Port {Number:'%s', OS:'%s', Organization:'%s', Hostname:''})<-[r:HAS_PORT]-(a)
-            SET a.Organization = '%s'
+            CREATE UNIQUE (b:Port {Number:'%s', OS:'%s', Organization:"%s", Hostname:''})<-[r:HAS_PORT]-(a)
+            SET a.Organization = "%s"
             RETURN a,b
             """ % (row[0], row[1], row[3], row[4], row[4])
             helpers.execute_query(self.neo4j_driver, query)
@@ -213,7 +225,7 @@ class Grapher(object):
         for row in all_shodan_search:
             query = """
             MATCH (a:Port)<-[:HAS_PORT]-(b:IP {Address:'%s'})
-            SET a.Hostname = '%s'
+            SET a.Hostname = "%s"
             RETURN a
             """ % (row[1], row[5])
             helpers.execute_query(self.neo4j_driver, query)
@@ -282,7 +294,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
               type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
 @click.option('--nuke', is_flag=True, help="Nuke the Neo4j database to start over. This destroys \
 ALL data to start fresh.")
-@click.option('-q', '--query', help="Execute a query and get back JSON.")
+@click.option('-q', '--query', help="Execute the provided query.")
 
 def visualize(database, nuke, query):
     print(green("[+] Loading ODIN database file {}").format(database))
@@ -292,13 +304,13 @@ def visualize(database, nuke, query):
         print(green("[+] Executing this query and then exiting:"))
         print(yellow(query))
         result = graph.execute_query_for_json(query)
-        print(green("[+] Query successfully executed. Quitting..."))
+        print(green("[+] Query successfully executed."))
         exit()
 
     if nuke:
         confirm = input(red("\n[!] Preparing to nuke the Neo4j database! This wipes out all nodes for a \
 fresh start. Proceed? (Y\\N) "))
-        if confirm == "Y" or confirm == "y":
+        if confirm.lower() == "y":
             graph.clear_neo4j_database()
             print(green("[+] Database successfully wiped!\n"))
         else:

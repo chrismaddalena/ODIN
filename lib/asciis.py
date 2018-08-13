@@ -59,4 +59,4 @@ def print_art():
 
 	art = [r1,r2,r3,r4,r5]
 	print(red(random.choice(art)))
-	print(yellow("Release v1.9.1, MUNINN"))
+	print(yellow("Release v1.9.2, MUNINN"))

@@ -5,7 +5,10 @@ The grapher.py library can be run independently or as part of ODIN when using th
 ## Current Schema
 `CALL db.schema()`
 
-![ODIN](https://github.com/chrismaddalena/viper/raw/origin/dev/docs/GraphSchema.png)
+![Neo4j Schema](https://github.com/chrismaddalena/viper/raw/origin/dev/docs/GraphSchema.png)
+
+### Example Graph
+![Example Neo4j Graph](https://github.com/chrismaddalena/viper/raw/origin/dev/docs/ExampleGraph.png)
 
 ## Nodes
 

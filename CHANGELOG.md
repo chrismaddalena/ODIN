@@ -1,4 +1,15 @@
 # Change Log
+## August 11, 2018, Post-Vegas Edition, 1.9.2
+* Improved WhoXY record parsing and stopped assuming whois and reverse whois results had identical JSON.
+* ODIN now checks WhoXY whois and reverse whois API crdit balances and warns users if their balance is below the user's WhoXY limit.
+* Added a new option for `--whoxy-limit` to allow users to set a limit for how many domains found via reverse whois look-ups will be automatically added to the master list of domains that are later resolved and used for queries against services like Shodan and Censys.
+* Email harvesting is now performed for all domains, both those provided and those discovered via reverse whois (see above point).
+* Switched to Full Contact's latest API, v3, for better "enriched" data.
+* Improvemed grapher.py's ability to create organization nodes in instances where an organization's name may not have been returned from Full Contact ot whois queries.
+* Tweaked the HTML report to improve some of the language.
+* Cleaned-up some of the dev branch code to prepare for merging with master.
+* Added a sample Neo4j graph for the documentation.
+
 ## August 4, 2017, BlackHat Edition, 1.9.1.1
 * Implemented support and use of the WhoXY API.
 * If provided a WhoXY API key, ODIN will now use WhoXY whois as a backup for whois lookups and use WhoXY reverse whois lookups to discover additional domains.

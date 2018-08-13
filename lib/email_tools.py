@@ -37,7 +37,7 @@ class PeopleCheck(object):
             access_token_secret = helpers.config_section_map("Twitter")["token_secret"]
             twit_auth = tweepy.OAuthHandler(consumer_key, consumer_key_secret)
             twit_auth.set_access_token(access_token, access_token_secret)
-            self.twit_api = tweepy.API(twit_auth)
+            self.twit_api = tweepy.API(twit_auth, timeout=10)
         except Exception:
             self.twit_api = None
             print(yellow("[!] Could not setup OAuth for Twitter API."))
@@ -77,15 +77,10 @@ to use PantomJS for haveIBeenPwned."))
     def pwn_check(self, email):
         """Use HIBP's API to check for the target's email in public security breaches."""
         try:
-            # if self.chrome_driver_path:
-            #     browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            # else:
-            #     browser = webdriver.PhantomJS()
             self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
             # cookies = browser.get_cookies()
             json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pwned = json.loads(json_text)
-            # browser.close()
 
             return pwned
         except TimeoutException:
@@ -103,15 +98,10 @@ to use PantomJS for haveIBeenPwned."))
         This includes sites like Slexy, Ghostbin, Pastebin.
         """
         try:
-            # if self.chrome_driver_path:
-            #     browser = webdriver.Chrome(executable_path = self.chrome_driver_path)
-            # else:
-            #     browser = webdriver.PhantomJS()
             self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
             # cookies = browser.get_cookies()
             json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pastes = json.loads(json_text)
-            # browser.close()
 
             return pastes
         except TimeoutException:
@@ -126,6 +116,7 @@ to use PantomJS for haveIBeenPwned."))
 
     def full_contact_email(self, email):
         """Use the Full Contact API to collect social information for the target email address."""
+        # TODO: Implement the use of the People API -- Also, update this for v3 of the API.
         if self.contact_api_key is None:
             print(red("[!] No Full Contact API key, so skipping these searches."))
         else:
@@ -141,9 +132,10 @@ to use PantomJS for haveIBeenPwned."))
             print(red("[!] No Full Contact API key, so skipping company lookup."))
             return None
         else:
-            base_url = "https://api.fullcontact.com/v2/company/lookup.json"
-            payload = {'domain':domain, 'apiKey':self.contact_api_key}
-            resp = requests.get(base_url, params=payload)
+            base_url = "https://api.fullcontact.com/v3/company.enrich"
+            headers = {"Authorization":"Bearer %s" % self.contact_api_key}
+            payload = {'domain':domain}
+            resp = requests.post(base_url, data=json.dumps(payload), headers=headers)
             if resp.status_code == 200:
                 return resp.json()
 
@@ -153,7 +145,7 @@ to use PantomJS for haveIBeenPwned."))
         harvest_limit = 100
         harvest_start = 0
 
-        print(green("[+] Beginning the harvesting of email addresses..."))
+        print(green("[+] Beginning the harvesting of email addresses for {}...".format(domain)))
         # Search through most of Harvester's supported engines
         # No Baidu because it always seems to hang or take way too long
         print(green("[*] Harvesting Google"))

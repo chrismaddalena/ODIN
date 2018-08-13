@@ -47,9 +47,12 @@ class DomainCheck(object):
 
     def __init__(self):
         """Everything that should be initiated with a new object goes here."""
+        # Setup a DNS resolver so a timeout can be set
+        # No timeout means a very, very long wait if a domain has no records
         self.resolver = dns.resolver.Resolver()
         self.resolver.timeout = 1
         self.resolver.lifetime = 1
+
         # Collect the API keys from the config file
         try:
             shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
@@ -122,6 +125,18 @@ to use PantomJS for Netcraft."))
 
         try:
             self.whoxy_api_key = helpers.config_section_map("WhoXY")["api_key"]
+            try:
+                balance_endpoint = "http://api.whoxy.com/?key={}&account=balance".format(self.whoxy_api_key)
+                balance_json = requests.get(balance_endpoint).json()
+                live_whois_balance = balance_json['live_whois_balance']
+                reverse_whois_balance = balance_json['reverse_whois_balance']
+                if live_whois_balance < 50:
+                    print(yellow("[*] You are low on WhoXY whois credits: {} credits".format(live_whois_balance)))
+                if reverse_whois_balance < 50:
+                    print(yellow("[*] You are low on WhoXY reverse whois credits: {} credits".format(reverse_whois_balance)))
+            except Exception:
+                print(yellow("[*] Error checking credit balance with WhoXY. There could be issues \
+communicating with WhoXY later."))
         except Exception:
             self.whoxy_api_key = None
             print(yellow("[!] Did not find a WhoXY API key."))
@@ -297,45 +312,62 @@ GDPR, or the registrar. You might try looking at dnsstuff.com.").format(domain))
             print(red("[!] The whois lookup for {} failed!").format(domain))
             print(red("L.. Details: {}".format(error)))
 
-    def parse_whoxy_results(self, whoxy_data):
+    def parse_whoxy_results(self, whoxy_data, reverse=False):
         """Function to take JSON returned by WhoXY API queries and parse the data into a simpler
         dictionary.
         """
         results = {}
         results['domain'] = whoxy_data['domain_name']
-        results['registrar'] = whoxy_data['domain_registrar']['registrar_name']
+
+        if "domain_registrar" in whoxy_data:
+            results['registrar'] = whoxy_data['domain_registrar']['registrar_name']
+        elif "registrar" in whoxy_data:
+            results['registrar'] = whoxy_data['registrar_name']
+        else:
+            results['registrar'] = "None Listed"
         results['expiry_date'] = whoxy_data['expiry_date']
         results['organization'] = whoxy_data['registrant_contact']['company_name']
         results['registrant'] = whoxy_data['registrant_contact']['full_name']
 
-        reg_address = whoxy_data['registrant_contact']['mailing_address']
-        reg_city = whoxy_data['registrant_contact']['city_name']
-        reg_state = whoxy_data['registrant_contact']['state_name']
-        reg_zip = whoxy_data['registrant_contact']['zip_code']
-        reg_email = whoxy_data['registrant_contact']['email_address']
-        reg_phone = whoxy_data['registrant_contact']['phone_number']
+        if reverse:
+            results['address'] = "Unavailable for Reverse Whois"
+            results['admin_contact'] = "Unavailable for Reverse Whois"
+            results['tech_contact'] = "Unavailable for Reverse Whois"
+        else:
+            try:
+                reg_address = whoxy_data['registrant_contact']['mailing_address']
+                reg_city = whoxy_data['registrant_contact']['city_name']
+                reg_state = whoxy_data['registrant_contact']['state_name']
+                reg_zip = whoxy_data['registrant_contact']['zip_code']
+                reg_email = whoxy_data['registrant_contact']['email_address']
+                reg_phone = whoxy_data['registrant_contact']['phone_number']
+                results['address'] = "{} {}, {} {} {} {}".format(reg_address, reg_city, reg_state, reg_zip, reg_email, reg_phone)
+            except:
+                results['address'] = "None Listed"
 
-        results['address'] = "{} {}, {} {} {} {}".format(reg_address, reg_city, reg_state, reg_zip, reg_email, reg_phone)
+            try:
+                admin_name = whoxy_data['administrative_contact']['full_name']
+                admin_address = whoxy_data['administrative_contact']['mailing_address']
+                admin_city = whoxy_data['administrative_contact']['city_name']
+                admin_state = whoxy_data['administrative_contact']['state_name']
+                admin_zip = whoxy_data['administrative_contact']['zip_code']
+                admin_email = whoxy_data['administrative_contact']['email_address']
+                admin_phone = whoxy_data['administrative_contact']['phone_number']
+                results['admin_contact'] = "{} {} {}, {} {} {} {}".format(admin_name, admin_address, admin_city, admin_state, admin_zip, admin_email, admin_phone)
+            except:
+                results['admin_contact'] = "None Listed"
 
-        admin_name = whoxy_data['administrative_contact']['full_name']
-        admin_address = whoxy_data['administrative_contact']['mailing_address']
-        admin_city = whoxy_data['administrative_contact']['city_name']
-        admin_state = whoxy_data['administrative_contact']['state_name']
-        admin_zip = whoxy_data['administrative_contact']['zip_code']
-        admin_email = whoxy_data['administrative_contact']['email_address']
-        admin_phone = whoxy_data['administrative_contact']['phone_number']
-
-        results['admin_contact'] = "{} {} {}, {} {} {} {}".format(admin_name, admin_address, admin_city, admin_state, admin_zip, admin_email, admin_phone)
-
-        tech_name = whoxy_data['technical_contact']['full_name']
-        tech_address = whoxy_data['technical_contact']['mailing_address']
-        tech_city = whoxy_data['technical_contact']['city_name']
-        tech_state = whoxy_data['technical_contact']['state_name']
-        tech_zip = whoxy_data['technical_contact']['zip_code']
-        tech_email = whoxy_data['technical_contact']['email_address']
-        tech_phone = whoxy_data['technical_contact']['phone_number']
-
-        results['tech_contact'] = "{} {} {}, {} {} {} {}".format(tech_name, tech_address, tech_city, tech_state, tech_zip, tech_email, tech_phone)
+            try:
+                tech_name = whoxy_data['technical_contact']['full_name']
+                tech_address = whoxy_data['technical_contact']['mailing_address']
+                tech_city = whoxy_data['technical_contact']['city_name']
+                tech_state = whoxy_data['technical_contact']['state_name']
+                tech_zip = whoxy_data['technical_contact']['zip_code']
+                tech_email = whoxy_data['technical_contact']['email_address']
+                tech_phone = whoxy_data['technical_contact']['phone_number']
+                results['tech_contact'] = "{} {} {}, {} {} {} {}".format(tech_name, tech_address, tech_city, tech_state, tech_zip, tech_email, tech_phone)
+            except:
+                results['tech_contact'] = "None Listed"
 
         return results
 
@@ -367,12 +399,13 @@ lookup on {}.".format(domain)))
                 results = requests.get(reverse_whois_api_endpoint + company).json()
                 if results['status'] == 1 and results['total_results'] > 0:
                     whois_results = {}
+                    total_results = results['total_results']
                     for domain in results['search_result']:
                         domain_name = domain['domain_name']
-                        temp = self.parse_whoxy_results(domain)
+                        temp = self.parse_whoxy_results(domain, True)
                         whois_results[domain_name] = temp
 
-                    return whois_results
+                    return whois_results, total_results
                 else:
                     print(yellow("[*] WhoXY returned status code 0, error/no results, for reverse \
 company search."))
@@ -391,7 +424,7 @@ company search."))
         try:
             with warnings.catch_warnings():
                 # Hide the 'allow_permutations has been deprecated' warning until ipwhois removes it
-                warnings.filterwarnings("ignore", category=UserWarning)
+                warnings.filterwarnings("ignore",category=UserWarning)
                 rdapwho = IPWhois(ip_address)
                 results = rdapwho.lookup_rdap(depth=1)
 
@@ -762,12 +795,6 @@ received!".format(request.status_code)))
         netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
         target_dom_name = domain.split(".")
 
-        # We must use a browser, so we either need PhantomJS or a Selenium web driver object
-        # if self.chrome_driver_path:
-        #     driver = webdriver.Chrome(self.chrome_driver_path)
-        # else:
-        #     driver = webdriver.PhantomJS()
-
         self.browser.get(netcraft_url)
         link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
         links_list = link_regx.findall(self.browser.page_source)
@@ -806,7 +833,6 @@ received!".format(request.status_code)))
             else:
                 pass
 
-        # driver.close()
         return results
 
     def fetch_netcraft_domain_history(self, domain):
@@ -815,12 +841,6 @@ received!".format(request.status_code)))
         ip_history = []
         endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % domain
         time.sleep(1)
-
-        # We must use Selenium, so we either need PhantomJS or a driver
-        # if self.chrome_driver_path:
-        #     driver = webdriver.Chrome(self.chrome_driver_path)
-        # else:
-        #     driver = webdriver.PhantomJS()
 
         self.browser.get(endpoint)
         soup = BeautifulSoup(self.browser.page_source, 'html.parser')
@@ -832,7 +852,6 @@ received!".format(request.status_code)))
                 str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
                 ip_history.append(result)
 
-        # driver.close()
         return ip_history
 
     def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
@@ -848,7 +867,7 @@ received!".format(request.status_code)))
         fixes = ["apps", "downloads", "software", "deployment", "qa", "dev", "test", "vpn",
                  "secret", "user", "confidential", "invoice", "config", "backup", "bak",
                  "xls", "csv", "ssn", "resources", "web", "testing", "uac", "legacy", "adhoc",
-                 "docs"]
+                 "docs", "documents", "res"]
         bucket_results = []
         account_results = []
 
@@ -1066,6 +1085,8 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
             for item in query.response.answer:
                 for text in item.items:
                     target = text.to_text()
+                    if "s3.amazonaws.com" in target:
+                        return "S3 Bucket: {}".format(target)
                     if "cloudfront" in target:
                         return "Cloudfront: {}".format(target)
                     elif "appspot.com" in target:
@@ -1100,4 +1121,4 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
             ip_json = request.json()
             return ip_json
         else:
-            print(red("[!] The provided IP for Robtex address is invalid!"))
+            print(red("[!] The provided IP for Robtex is invalid!"))

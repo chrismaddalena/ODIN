@@ -10,7 +10,7 @@ import html
 from colors import red, green, yellow
 
 class HTMLReporter(object):
-    """A class that opens an ODIN database file and generates an HTML report."""
+    """A class that opens an ODIN SQLite3 database and generates an HTML report."""
 
     def __init__(self, organization, report_path, database_path):
         """Everything that should be initiated with a new object goes here."""
@@ -45,7 +45,7 @@ class HTMLReporter(object):
     def close_out_reporting(self):
         """Function to check the new database and tables and close the connections."""
         confirm = input(green("[+] Job's done! Do you wan to view the HTML report now? (Y\\N) "))
-        if confirm == "Y" or confirm == "y":
+        if confirm.lower() == "y":
             os.system("open '{}/report.html'".format(self.report_path))
         else:
             print(green("[+] Exiting..."))
@@ -255,16 +255,16 @@ class HTMLReporter(object):
             </tr></table>
             <h2>Table of Contents</h2>
             <li><a href='hosts.html'>Hosts Report</li>
-            <li><a href='screenshots.html'>Screenshots</li>
-            <li><a href='people.html'>Social & Email</li>
             <li><a href='domains.html'>Domain Data</li>
             <li><a href='subdomains.html'>Subdomains</li>
             <li><a href='networks.html'>IP Address Data</li>
             <li><a href='shodan.html'>Shodan Data</a></li>
             <li><a href='certificates.html'>Certificates</li>
             <li><a href='metadata.html'>File Metadata</li>
-            <li><a href='cloud.html'>The Cloud</a></li>
-            <li><a href='typosquatting.html'>Domain Typosquatting</li>
+            <li><a href='cloud.html'>Cloud Services</a></li>
+            <li><a href='screenshots.html'>Screenshots</li>
+            <li><a href='people.html'>Social & Email</li>
+            <li><a href='typosquatting.html'>Lookalike Domains</li>
             </body></html>
             """.format(name, name, logo, website, employees, founded)
 
@@ -750,11 +750,11 @@ class HTMLReporter(object):
             content = """
             <html>
             <head><link rel="stylesheet" href="styles.css"></head>
-            <title>Typosquatting Report</title>
+            <title>Lookalike Domain Report</title>
             <body>
-            <h1>Typosquatting Report</h1>
+            <h1>Lookalike Domain Report</h1>
             <h2>URLCrazy Results</h2>
-            <p>This table contains the registered lookalike domains for the provided domain name:
+            <p>This table contains lookalike domains for the provided domain name that have been registered by someone:
             <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
@@ -793,10 +793,10 @@ class HTMLReporter(object):
 
             content += """
             <p>Note: A positive hit in the above table does not mean the domain/IP address is 
-            malicious. It might be a shared IP address, the malicious activity may be shutdown, 
-            or the domain may have already been seized and just happens to still be pointing 
-            at the bad IP address. Don't jump to any conclusions until you check the reports 
-            yourself!
+            malicious. It might be a shared IP address, the malicious activity may have been
+            shutdown, or the domain may have already been seized and just happens to still be
+            pointing at the bad IP address. Don't jump to any conclusions until you check the
+            threat feed reports yourself!
             </body>
             </html>
             """
