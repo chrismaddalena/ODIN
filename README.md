@@ -5,13 +5,13 @@
 
 ![ODIN](https://github.com/chrismaddalena/viper/raw/master/ODIN.png)
 
-`Current version: v1.9.1 "Muninn"`
+`Current version: v1.9.2 "Muninn"`
 
 A Python tool for automating intelligence gathering, asset discovery, and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
 
-Note: ODIN is designed to be run on Linux. About 90% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but `extract`, used for pulling metadata from non-PDF files (mostly Office documents), is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information. You can always extract the metadata yourself later from the donwloaded files!
+**Note:** ODIN is designed to be run on Linux. 99% of it will absolutely work on Windows or MacOS with Python 3 and a copy of urlcrazy, but the `extract` tool, used for pulling metadata from non-PDF files (i.e. Office documents), is exclusive to Linux. You'll be fine using an OS without access to `extract`, but you'll see some warnings and get less information. You can always extract the metadata yourself later from the donwloaded files!
 
-You may also want a SQLite3 database viewer/browser (to run your own custom queries against the OSINT database) and Neo4j installed (to view graphs of the external perimeter).
+You may also want a SQLite3 database viewer/browser (to run your own custom queries against the OSINT database) and Neo4j installed (to view graphs of the external perimeter). Neo4j is *strongly* recommended! The graphs and tables you can create are powerful tools for analysis and presentations. See the NEO4J.md documentation in the docs folder for examples and additional information.
 
 ## First Things First
 ODIN is made possible through the help, input, and work provided by others. Therefore, this project is entirely open source and available to all to use/modify. Have fun :D
@@ -224,8 +224,7 @@ A big thank you to a few contributors who gave me the OK to re-use some of their
 
 And to these folks who have created/maintained some of the tools integrated into ODIN:
 
-* Alton Johnson (altjx) - The creator of the original very cool [PyFOCA](https://github.com/altjx/ipwn) that exists here in its new Python 3 form as a part of ODIN
+* Alton Johnson (altjx) - The creator of the original and very cool [PyFOCA](https://github.com/altjx/ipwn) that exists here in its new Python 3 form as a part of ODIN.
 * Laramies - Creator of the awesome [TheHarvester](https://github.com/laramies/theHarvester).
-* PaulSec - Creator of the [unofficial API for the DNS Dumpster](https://github.com/PaulSec/API-dnsdumpster.com)
-* Daniel Grzalek (Dagrz) - Creator of [aws_pwn](https://github.com/dagrz/aws_pwn) and the reason why I was able to build out AWS recon options. 
-* TrullJ - For making the slick [SSL Labs Scanner module](https://github.com/TrullJ/ssllabs).
+* PaulSec - Creator of the [unofficial API for the DNS Dumpster](https://github.com/PaulSec/API-dnsdumpster.com).
+* Daniel Grzalek (Dagrz) - Creator of [aws_pwn](https://github.com/dagrz/aws_pwn) and the reason why I was able to build out AWS recon options.
