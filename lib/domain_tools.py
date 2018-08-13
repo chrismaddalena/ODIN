@@ -17,7 +17,7 @@ import shodan
 from cymon import Cymon
 import whois
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
 import requests
@@ -25,6 +25,7 @@ from colors import red, green, yellow
 from netaddr import IPNetwork, iter_iprange
 import dns.resolver
 import validators
+import censys.certificates
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
@@ -46,6 +47,12 @@ class DomainCheck(object):
 
     def __init__(self):
         """Everything that should be initiated with a new object goes here."""
+        # Setup a DNS resolver so a timeout can be set
+        # No timeout means a very, very long wait if a domain has no records
+        self.resolver = dns.resolver.Resolver()
+        self.resolver.timeout = 1
+        self.resolver.lifetime = 1
+
         # Collect the API keys from the config file
         try:
             shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
@@ -74,17 +81,21 @@ class DomainCheck(object):
             print(yellow("[!] Did not find a Full Contact API key."))
 
         try:
-            self.censys_api_id = helpers.config_section_map("Censys")["api_id"]
-            self.censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
-            self.censys_api_endpoint = "https://censys.io/api/v1"
-        except Exception:
-            self.censys_api_id = None
-            self.censys_api_secret = None
-            self.censys_api_endpoint = None
+            censys_api_id = helpers.config_section_map("Censys")["api_id"]
+            censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
+            self.censys_cert_search = censys.certificates.CensysCertificates(api_id=censys_api_id, api_secret=censys_api_secret)
+        except censys.base.CensysUnauthorizedException:
+            self.censys_cert_search = None
+            print(yellow("[!] Censys reported your API information is invalid, so Censys searches \
+will be skipped."))
+            print(yellow("L.. You provided ID %s & Secret %s" % (censys_api_id, censys_api_secret)))
+        except Exception as error:
+            self.censys_cert_search = None
             print(yellow("[!] Did not find a Censys API ID/secret."))
+            print(yellow("L.. Details:  {}".format(error0)))
 
         try:
-            self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+            self.chrome_driver_path =   helpers.config_section_map("WebDriver")["driver_path"]
             # Try loading the driver as a test
             self.chrome_options = Options()
             self.chrome_options.add_argument("--headless")
@@ -111,6 +122,24 @@ to use PantomJS for Netcraft."))
         except Exception:
             self.boto3_client = None
             print(yellow("[!] Could not create an AWS client with the supplied secrets."))
+
+        try:
+            self.whoxy_api_key = helpers.config_section_map("WhoXY")["api_key"]
+            try:
+                balance_endpoint = "http://api.whoxy.com/?key={}&account=balance".format(self.whoxy_api_key)
+                balance_json = requests.get(balance_endpoint).json()
+                live_whois_balance = balance_json['live_whois_balance']
+                reverse_whois_balance = balance_json['reverse_whois_balance']
+                if live_whois_balance < 50:
+                    print(yellow("[*] You are low on WhoXY whois credits: {} credits".format(live_whois_balance)))
+                if reverse_whois_balance < 50:
+                    print(yellow("[*] You are low on WhoXY reverse whois credits: {} credits".format(reverse_whois_balance)))
+            except Exception:
+                print(yellow("[*] Error checking credit balance with WhoXY. There could be issues \
+communicating with WhoXY later."))
+        except Exception:
+            self.whoxy_api_key = None
+            print(yellow("[!] Did not find a WhoXY API key."))
 
     def generate_scope(self, scope_file):
         """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
@@ -186,7 +215,7 @@ to use PantomJS for Netcraft."))
 
     def get_dns_record(self, domain, record_type):
         """Simple function to get the specified DNS record for the target domain."""
-        answer = dns.resolver.query(domain, record_type)
+        answer = self.resolver.query(domain, record_type)
         return answer
 
     def check_dns_cache(self, name_server):
@@ -262,21 +291,127 @@ to use PantomJS for Netcraft."))
         try:
             who = whois.whois(domain)
             results = {}
-            results['domain_name'] = who.domain_name
-            results['registrar'] = who.registrar
-            results['expiration_date'] = who.expiration_date
-            results['registrant'] = who.name
-            results['org'] = who.org
-            results['admin_email'] = who.emails[0]
-            results['tech_email'] = who.emails[1]
-            results['address'] = "{}, {}{}, {}, {}\n".format(who.address, \
-                who.city, who.zipcode, who.state, who.country)
-            results['dnssec'] = who.dnssec
+            # Check if info was returned before proceeding because sometimes records are protected
+            if who.registrar:
+                results['domain_name'] = who.domain_name
+                results['registrar'] = who.registrar
+                results['expiration_date'] = who.expiration_date
+                results['registrant'] = who.name
+                results['org'] = who.org
+                results['admin_email'] = who.emails[0]
+                results['tech_email'] = who.emails[1]
+                results['address'] = "{}, {}{}, {}, {}".format(who.address, \
+                    who.city, who.zipcode, who.state, who.country)
+                results['dnssec'] = who.dnssec
+            else:
+                print(yellow("[*] Whois record for {} came back empty. Could be privacy protection, \
+GDPR, or the registrar. You might try looking at dnsstuff.com.").format(domain))
 
             return results
         except Exception as error:
             print(red("[!] The whois lookup for {} failed!").format(domain))
             print(red("L.. Details: {}".format(error)))
+
+    def parse_whoxy_results(self, whoxy_data, reverse=False):
+        """Function to take JSON returned by WhoXY API queries and parse the data into a simpler
+        dictionary.
+        """
+        results = {}
+        results['domain'] = whoxy_data['domain_name']
+
+        if "domain_registrar" in whoxy_data:
+            results['registrar'] = whoxy_data['domain_registrar']['registrar_name']
+        elif "registrar" in whoxy_data:
+            results['registrar'] = whoxy_data['registrar_name']
+        else:
+            results['registrar'] = "None Listed"
+        results['expiry_date'] = whoxy_data['expiry_date']
+        results['organization'] = whoxy_data['registrant_contact']['company_name']
+        results['registrant'] = whoxy_data['registrant_contact']['full_name']
+
+        if reverse:
+            results['address'] = "Unavailable for Reverse Whois"
+            results['admin_contact'] = "Unavailable for Reverse Whois"
+            results['tech_contact'] = "Unavailable for Reverse Whois"
+        else:
+            try:
+                reg_address = whoxy_data['registrant_contact']['mailing_address']
+                reg_city = whoxy_data['registrant_contact']['city_name']
+                reg_state = whoxy_data['registrant_contact']['state_name']
+                reg_zip = whoxy_data['registrant_contact']['zip_code']
+                reg_email = whoxy_data['registrant_contact']['email_address']
+                reg_phone = whoxy_data['registrant_contact']['phone_number']
+                results['address'] = "{} {}, {} {} {} {}".format(reg_address, reg_city, reg_state, reg_zip, reg_email, reg_phone)
+            except:
+                results['address'] = "None Listed"
+
+            try:
+                admin_name = whoxy_data['administrative_contact']['full_name']
+                admin_address = whoxy_data['administrative_contact']['mailing_address']
+                admin_city = whoxy_data['administrative_contact']['city_name']
+                admin_state = whoxy_data['administrative_contact']['state_name']
+                admin_zip = whoxy_data['administrative_contact']['zip_code']
+                admin_email = whoxy_data['administrative_contact']['email_address']
+                admin_phone = whoxy_data['administrative_contact']['phone_number']
+                results['admin_contact'] = "{} {} {}, {} {} {} {}".format(admin_name, admin_address, admin_city, admin_state, admin_zip, admin_email, admin_phone)
+            except:
+                results['admin_contact'] = "None Listed"
+
+            try:
+                tech_name = whoxy_data['technical_contact']['full_name']
+                tech_address = whoxy_data['technical_contact']['mailing_address']
+                tech_city = whoxy_data['technical_contact']['city_name']
+                tech_state = whoxy_data['technical_contact']['state_name']
+                tech_zip = whoxy_data['technical_contact']['zip_code']
+                tech_email = whoxy_data['technical_contact']['email_address']
+                tech_phone = whoxy_data['technical_contact']['phone_number']
+                results['tech_contact'] = "{} {} {}, {} {} {} {}".format(tech_name, tech_address, tech_city, tech_state, tech_zip, tech_email, tech_phone)
+            except:
+                results['tech_contact'] = "None Listed"
+
+        return results
+
+    def run_whoxy_whois(self, domain):
+        """Perform a whois lookup for the provided target domain using WhoXY's API. The whois
+        results are returned as a dictionary.
+        """
+        if self.whoxy_api_key:
+            try:
+                whois_api_endpoint = "http://api.whoxy.com/?key=" + self.whoxy_api_key + "&whois="
+                results = requests.get(whois_api_endpoint + domain).json()
+                if results['status'] == 1:
+                    whois_results = self.parse_whoxy_results(results)
+                    return whois_results
+                else:
+                    print(yellow("[*] WhoXY returned status code 0, error/no results, for whois \
+lookup on {}.".format(domain)))
+            except requests.exceptions.RequestException as error:
+                print(red("[!] Error connecting to WhoXY for whois on {}!".format(domain)))
+                print(red("L.. Details: {}".format(error)))
+
+    def run_whoxy_company_search(self, company):
+        """Use WhoXY's API to search for a company name and return the associated domain names. The
+        information is returned as a dictionary.
+        """
+        if self.whoxy_api_key:
+            try:
+                reverse_whois_api_endpoint = "http://api.whoxy.com/?key=" + self.whoxy_api_key + "&reverse=whois&company="
+                results = requests.get(reverse_whois_api_endpoint + company).json()
+                if results['status'] == 1 and results['total_results'] > 0:
+                    whois_results = {}
+                    total_results = results['total_results']
+                    for domain in results['search_result']:
+                        domain_name = domain['domain_name']
+                        temp = self.parse_whoxy_results(domain, True)
+                        whois_results[domain_name] = temp
+
+                    return whois_results, total_results
+                else:
+                    print(yellow("[*] WhoXY returned status code 0, error/no results, for reverse \
+company search."))
+            except requests.exceptions.RequestException as error:
+                print(red("[!] Error connecting to WhoXY for reverse company search!"))
+                print(red("L.. Details: {}".format(error)))
 
     def run_rdap(self, ip_address):
         """Perform an RDAP lookup for an IP address. An RDAP lookup object is returned.
@@ -289,7 +424,7 @@ to use PantomJS for Netcraft."))
         try:
             with warnings.catch_warnings():
                 # Hide the 'allow_permutations has been deprecated' warning until ipwhois removes it
-                warnings.filterwarnings("ignore", category=UserWarning)
+                warnings.filterwarnings("ignore",category=UserWarning)
                 rdapwho = IPWhois(ip_address)
                 results = rdapwho.lookup_rdap(depth=1)
 
@@ -491,46 +626,56 @@ to be found."))
         except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
 
-    def run_censys_search_cert(self, target):
+    def search_censys_certificates(self, target):
         """Collect certificate information from Censys for the target domain name. This returns
-        a dictionary of certificate information. Censys can return a LOT of certificate chain
-        info, so be warned.
-
-        This function uses these fields: parsed.subject_dn and parsed.issuer_dn
+        a dictionary of certificate information that includes the issuer, subject, and a hash
+        Censys uses for the /view/ API calls to fetch additional information.
 
         A free API key is required.
         """
-        if self.censys_api_endpoint is None:
+        if self.censys_cert_search is None:
             pass
         else:
-            print(green("[+] Performing Censys certificate search for {}".format(target)))
-            params = {"query" : target}
             try:
-                results = requests.post(self.censys_api_endpoint + "/search/certificates", json = params, auth=(self.censys_api_id, self.censys_api_secret))
-                certs = results.json()
-                return certs
+                print(green("[+] Performing Censys certificate search for {}".format(target)))
+                query = "parsed.names: %s" % target
+                results = self.censys_cert_search.search(query, fields=['parsed.names',
+                        'parsed.signature_algorithm.name','parsed.signature.self_signed',
+                        'parsed.validity.start','parsed.validity.end','parsed.fingerprint_sha256',
+                        'parsed.subject_dn','parsed.issuer_dn'])
+
+                return results
+            except censys.base.CensysRateLimitExceededException:
+                print(red("[!] Censys reports your account has run out of API credits."))
+                return None
             except Exception as error:
                 print(red("[!] Error collecting Censys certificate data for {}.".format(target)))
                 print(red("L.. Details: {}".format(error)))
+                return None
 
-    def parse_cert_subdomains(self, certdata):
-        """Accepts Censys certificate data and parses out subdomain information."""
-        subdomains = []
-        for cert in certdata['results']:
-            if "," in cert["parsed.subject_dn"]:
-                pos = cert["parsed.subject_dn"].find('CN=')+3
-            else:
-                pos = 3
-            tmp = cert["parsed.subject_dn"][pos:]
-            if "," in tmp:
-                pos = tmp.find(",")
-                tmp = tmp[:pos]
-            if "." not in tmp:
-                continue
-            subdomains.append(tmp)
+    def parse_cert_subdomain(self, subject_dn):
+        """Accepts the Censys certificate data and parses the individual certificate's domain."""
+        if "," in subject_dn:
+            pos = subject_dn.find('CN=')+3
+        else:
+            pos = 3
+        tmp = subject_dn[pos:]
+        if "," in tmp:
+            pos = tmp.find(",")
+            tmp = tmp[:pos]
 
-        subdomains = set(subdomains)
-        return subdomains
+        return tmp
+
+    def filter_subdomains(self, domain, subdomains):
+        """Function to filter out uninteresting domains that may be returned from certificates.
+        These are domains unrelated to the true target. For example, a search for blizzard.com
+        on Censys can return iran-blizzard.ir, an unwanted and unrelated domain.
+
+        Credit to christophetd for this nice bit of code:
+
+        https://github.com/christophetd/censys-subdomain-finder/blob/master/censys_subdomain_finder.py#L31
+        """
+        return [ subdomain for subdomain in subdomains if '*' not in subdomain and subdomain.endswith(domain) ]
 
     def run_urlvoid_lookup(self, domain):
         """Collect reputation data from URLVoid for the target domain. This returns an ElementTree
@@ -650,12 +795,6 @@ received!".format(request.status_code)))
         netcraft_url = "http://searchdns.netcraft.com/?host=%s" % domain
         target_dom_name = domain.split(".")
 
-        # We must use a browser, so we either need PhantomJS or a Selenium web driver object
-        # if self.chrome_driver_path:
-        #     driver = webdriver.Chrome(self.chrome_driver_path)
-        # else:
-        #     driver = webdriver.PhantomJS()
-
         self.browser.get(netcraft_url)
         link_regx = re.compile('<a href="http://toolbar.netcraft.com/site_report\?url=(.*)">')
         links_list = link_regx.findall(self.browser.page_source)
@@ -694,7 +833,6 @@ received!".format(request.status_code)))
             else:
                 pass
 
-        # driver.close()
         return results
 
     def fetch_netcraft_domain_history(self, domain):
@@ -703,12 +841,6 @@ received!".format(request.status_code)))
         ip_history = []
         endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % domain
         time.sleep(1)
-
-        # We must use Selenium, so we either need PhantomJS or a driver
-        # if self.chrome_driver_path:
-        #     driver = webdriver.Chrome(self.chrome_driver_path)
-        # else:
-        #     driver = webdriver.PhantomJS()
 
         self.browser.get(endpoint)
         soup = BeautifulSoup(self.browser.page_source, 'html.parser')
@@ -720,7 +852,6 @@ received!".format(request.status_code)))
                 str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
                 ip_history.append(result)
 
-        # driver.close()
         return ip_history
 
     def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
@@ -736,7 +867,7 @@ received!".format(request.status_code)))
         fixes = ["apps", "downloads", "software", "deployment", "qa", "dev", "test", "vpn",
                  "secret", "user", "confidential", "invoice", "config", "backup", "bak",
                  "xls", "csv", "ssn", "resources", "web", "testing", "uac", "legacy", "adhoc",
-                 "docs"]
+                 "docs", "documents", "res"]
         bucket_results = []
         account_results = []
 
@@ -771,6 +902,9 @@ received!".format(request.status_code)))
 
         # Ensure we have only unique search terms in our list and start hunting
         final_search_terms = list(set(final_search_terms))
+        print(yellow("[*] Your provided keywords and prefixes/suffixes have been combined to \
+create {} possible buckets and spaces to check in AWS and three Digital Ocean regions".format(
+                    len(final_search_terms))))
 
         with click.progressbar(final_search_terms,
                                label="Enumerating AWS Keywords",
@@ -836,11 +970,16 @@ received!".format(request.status_code)))
                 # Check for a 200 OK to indicate a publicly listable bucket
                 if request.status_code == 200:
                     result['public'] = True
-                    print(yellow("[*] Found a public bucket -- {}".format(result['bucketName'])))
+                    print(yellow("\n[*] Found a public bucket -- {}".format(result['bucketName'])))
             except requests.exceptions.RequestException:
                 result['exists'] = False
         except ClientError as e:
             result['exists'] = error_values[e.response['Error']['Code']]
+        except EndpointConnectionError as e:
+            print(yellow("\n[*] Warning: Could not connect to a bucket to check it. If you see this \
+message repeatedly, it's possible your awscli region is misconfigured, or this bucket is weird."))
+            print(yellow("L.. Details: {}".format(e)))
+            result['exists'] = e
 
         return result
 
@@ -946,6 +1085,8 @@ received!".format(request.status_code)))
             for item in query.response.answer:
                 for text in item.items:
                     target = text.to_text()
+                    if "s3.amazonaws.com" in target:
+                        return "S3 Bucket: {}".format(target)
                     if "cloudfront" in target:
                         return "Cloudfront: {}".format(target)
                     elif "appspot.com" in target:
@@ -980,4 +1121,4 @@ received!".format(request.status_code)))
             ip_json = request.json()
             return ip_json
         else:
-            print(red("[!] The provided IP for Robtex address is invalid!"))
+            print(red("[!] The provided IP for Robtex is invalid!"))

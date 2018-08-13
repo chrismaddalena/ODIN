@@ -7,8 +7,10 @@ libraries.
 """
 
 import configparser
+from neo4j.v1 import GraphDatabase
 from IPy import IP
-from colors import red
+from colors import red, yellow, green
+import sys
 
 
 try:
@@ -53,13 +55,40 @@ def is_ip(value):
     return True
 
 def is_domain(value):
-    """A very basic check to see if the provided string contians any letters. This is useful for
+    """A very basic check to see if the provided string contains any letters. This is useful for
     determining if a string should be treated as an IP address range or a domain.
 
-    For example, is_ip() will recognize an idnvidual IP address or a CIDR, but will not validate a
+    The is_ip() function will recognize an indvidual IP address or a CIDR, but will not validate a
     range like 192.168.1.0-50. Ranges will never contain letters, so this serves to separate domain
-    names with hyphens from IP address ranges.
+    names with hyphens from IP address ranges with hyphens.
     """
     result = any(check.isalpha() for check in value)
 
     return result
+
+def setup_gdatabase_conn():
+    """Function to setup the database connection to the active Neo4j project meant to contain the
+    ODIN data.
+    """
+    try:
+        database_uri = config_section_map("GraphDatabase")["uri"]
+        database_user = config_section_map("GraphDatabase")["username"]
+        database_pass = config_section_map("GraphDatabase")["password"]
+        print(yellow("[*] Attempting to connect to your Neo4j project using {}:{} @ {}."
+                .format(database_user, database_pass, database_uri)))
+        neo4j_driver = GraphDatabase.driver(database_uri, auth=(database_user, database_pass))
+        print(green("[+] Success!"))
+        return neo4j_driver
+    except Exception:
+        neo4j_driver = None
+        print(red("[!] Could not create a database connection using the details provided in \
+your database.config! Please check the URI, username, and password. Also, make sure your Neo4j \
+project is running. Note that the bolt port can change."))
+        exit()
+
+def execute_query(driver, query):
+    """Execute the provided query using the provided Neo4j database connection and driver."""
+    with driver.session() as session:
+        results = session.run(query)
+
+    return results

@@ -9,11 +9,11 @@
   ======   =======   ===  ===  ===
 
 Developer:   Chris "cmaddy" Maddalena
-Version:     1.8.6 "Muninn"
+Version:     1.9.1 "Muninn"
 Description: Observation, Detection, and Investigation of Networks
              ODIN was designed to assist with OSINT automation for penetration testing clients and
-             their networks, both the types with IP address and social. Provide a client's name,
-             IPs, and domains to gather information from sources like RDAP, DNS, Shodan, and
+             their networks, both the types with IP address and social. Provide a client's name and
+             some domains to gather information from sources like RDAP, DNS, Shodan, and
              so much more.
 
              ODIN is made possible through the help, input, and work provided by others. Therefore,
@@ -24,7 +24,7 @@ import os
 from multiprocess import Process, Manager
 import click
 from colors import red, green, yellow
-from lib import reporter, asciis, verification, htmlreporter
+from lib import reporter, asciis, verification, htmlreporter, grapher
 
 
 def setup_reports(client):
@@ -90,11 +90,12 @@ whatever the target uses for email and their main website. Add more domains to y
               required=True)
 # Optional arguments
 @click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, \
-              resolve_path=True), help="A text file containing your in-scope IP addresses and \
-domain names. List each one on a new line.", required=False)
-@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output for more (maybe way \
-too much) domain contact info collected from RDAP. Seriously, you might get a lot if you povide \
-IPs owned by cloud providers (e.g. AWS).")
+              resolve_path=True), help="A text file containing additional IP addresses and \
+domain names you want to include. List each one on a new line.", required=False)
+@click.option('--whoxy-limit', default=10, help="The maximum number of domains discovered via \
+reverse whois that ODIN will resolve and use when searching services like Censys and Shodan. \
+You may get hundreds of results from reverse whois, so this is intended to save time and \
+API credits. Default is 10 domains and setting it above maybe 20 or 30 is not recommended.")
 # File searching arguments
 @click.option('--files', is_flag=True, help="Use this option to use Google to search for files \
 under the provided domain (-d), download files, and extract metadata.")
@@ -107,25 +108,46 @@ files with --file to be deleted after analysis.")
               type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.option('-wf', '--aws-fixes', help="A list of strings to be added to the start and end of \
 AWS S3 bucket names.", type=click.Path(exists=True, readable=True, resolve_path=True))
+# Reporting-related arguments
 @click.option('--html', is_flag=True, help="Create an HTML report at the end for easy browsing.")
+@click.option('--graph', is_flag=True, help="Create a Neo4j graph database from the completed \
+SQLite3 database.")
+@click.option('--nuke', is_flag=True, help="Clear the Neo4j project before converting the \
+database. This is used with --graph.")
 @click.option('--screenshots', is_flag=True, help="Attempt to take screenshots of discovered \
 web services.")
 # Pass the above arguments on to your osint function
 @click.pass_context
 
-def osint(self, organization, domain, files, ext, delete, scope_file, aws, aws_fixes, verbose, html, screenshots):
+def osint(self, organization, domain, files, ext, delete, scope_file, aws, aws_fixes, html,
+          screenshots, graph, nuke, whoxy_limit):
     """
 The OSINT toolkit:\n
 This is ODIN's primary module. ODIN will take the tagret organization, domain, and other data
 provided and hunt for information. On the human side, ODIN looks for employee names,
 email addresses, and social media profiles. Names and emails are cross-referenced with
-HaveIBeenPwned, Twitter's API, and search engines to collect additional information.\n
+HaveIBeenPwned, Twitter's API, and search engines to collect additional information.
+
 ODIN also uses various tools and APIs to collect information on the provided IP addresses
-and domain names, including things like DNS and IP address history.\n
+and domain names, including things like DNS and IP address history.
+
 View the README for the full detailsand lists of API keys!
+
+Note: If providing a scope file, acceptable IP addresses/ranges include:
+
+    * Single Address:      8.8.8.8
+
+    * Basic CIDR:          8.8.8.0/24
+
+    * Nmap-friendly Range: 8.8.8.8-10
+
+    * Underscores? OK:     8.8.8.8_8.8.8.10
     """
+    click.clear()
     asciis.print_art()
     print(green("[+] OSINT Module Selected: ODIN will run all recon modules."))
+
+    verbose = None
 
     if verbose:
         print(yellow("[*] Verbose output Enabled -- Enumeration of RDAP contact information \
@@ -142,7 +164,7 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         ip_list = manager.list()
         domain_list = manager.list()
         # Create reporter object and generate final list, the scope from scope file
-        report = reporter.Reporter(output_report)
+        report = reporter.Reporter(report_path, output_report)
         report.create_tables()
         scope, ip_list, domain_list = report.prepare_scope(ip_list, domain_list, scope_file, domain)
 
@@ -159,11 +181,11 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         jobs.append(company_info)
         employee_report = Process(name="Employee Hunter",
                                   target=report.create_people_table,
-                                  args=(domain, organization))
+                                  args=(domain_list, organization))
         jobs.append(employee_report)
         domain_report = Process(name="Domain and IP Address Recon",
                                 target=report.create_domain_report_table,
-                                args=(scope, ip_list, domain_list, verbose))
+                                args=(organization, scope, ip_list, domain_list, whoxy_limit))
         jobs.append(domain_report)
 
         shodan_report = Process(name="Shodan Queries",
@@ -190,7 +212,7 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
             files_report = Process(name="File Hunter",
                                    target=report.create_foca_table,
                                    args=(domain, ext, delete, report_path, verbose))
-            jobs.append(files_report)
+            more_jobs.append(files_report)
 
         print(green("[+] Beginning initial discovery phase! This could take some time..."))
         for job in jobs:
@@ -214,9 +236,28 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
             job.join()
 
         report.close_out_reporting()
-        print(green("[+] Job's done! Your results are in {}.".format(output_report)))
+        print(green("[+] Job's done! Your results are in {} and can be viewed and queried with \
+any SQLite browser.".format(output_report)))
+
+        if graph:
+            graph_reporter = grapher.Grapher(output_report)
+            print(green("[+] Loading ODIN database file {} for conversion to Neo4j").format(output_report))
+
+            if nuke:
+                confirm = input(red("\n[!] You set the --nuke option. This wipes out all nodes \
+for a fresh start. Proceed? (Y\\N) "))
+                if confirm.lower() == "y":
+                    graph_reporter.clear_neo4j_database()
+                    print(green("[+] Database successfully wiped!\n"))
+                    graph_reporter.convert()
+                else:
+                    print(red("[!] Then you can convert your database to a graph database later. \
+Run lib/grapher.py with the appropriate options."))
+            else:
+                graph_reporter.convert()
 
         if html:
+            print(green("\n[+] Creating the HTML report using {}.".format(output_report)))
             html_reporter = htmlreporter.HTMLReporter(organization, report_path + "/html_report/", output_report)
             html_reporter.generate_full_report()
 
@@ -236,21 +277,25 @@ findings.")
 
 def verify(self, scope_file, output, cidr, client):
     """
-HERE THERE BE DRAGONS : This code needs updating, so it might be janky.\n
+HERE THERE BE DRAGONS : This code needs updating, so it might be janky.
 
 The Verify module:
 Uses reverse DNS, ARIN, and SSL/TLS certificate information to help you verify ownership of a
-list of IP addresses.\n
+list of IP addresses.
 
 This is only for verifying IP addresses. Domains may not have public ownership information
 available. Compare the IP ownership information from ARIN and certificate information to what
-you know about the presumed owner to determine ownership.\n
+you know about the presumed owner to determine ownership.
 
-Acceptable IP addresses/ranges include:\n
-* Single Address:      8.8.8.8\n
-* Nmap-friendly Range: 8.8.8.8-10\n
-* Basic CIDR:          8.8.8.0/24\n
-* Underscores? OK:     8.8.8.8_8.8.8.10\n
+Acceptable IP addresses/ranges include:
+
+    * Single Address:      8.8.8.8
+
+    * Basic CIDR:          8.8.8.0/24
+
+    * Nmap-friendly Range: 8.8.8.8-10
+
+    * Underscores? OK:     8.8.8.8_8.8.8.10
     """
     asciis.print_art()
     print(green("[+] Scope Verification Module Selected: ODIN will attempt to verify who owns \
@@ -271,36 +316,6 @@ the provided IP addresses."))
         print(red("L.. Details: {}".format(error)))
 
     print(green("[+] Job's done! Your identity report is in {}.".format(report)))
-
-
-# TODO: HERE THERE BE DRAGONS
-# Everything below here is under construction and a little bit janky ¯\_(ツ)_/¯
-
-# The SSL module -- Run SSLLabs' scanner against the target domain
-# @odin.command(name='ssl', short_help='Check SSL cert for provided IP or domain.')
-# @click.option('-t', '--target', help='IP address with the certificate. \
-# Include the port if it is not 443, e.g. IP:8080', required=True)
-# @click.option('--labs', is_flag=True, help='Query Qualys SSL Labs in \
-# addition to pulling the certificate.')
-# @click.option('--cache', is_flag=True, help='Try to get cached scan data from \
-# a completed SSL Labs scan, if available.')
-# def ssl(target, labs, cache):
-#     """
-#     This module can be used to quickly pull an SSL certificate's information for easy reference.
-#     It can also be used to run an SSLLabs scan on the target (coming soon).
-#     """
-#     asciis.print_art()
-#     print(green("[+] SSL Module Selected: ODIN will pull SSL certificate \
-# information for the provided IP and port."))
-#     ssl_checker.check_ssl(target)
-#     if labs:
-#         if cache:
-#             print(green("[+] Checking SSL Labs' cache data for this host."))
-#             ssl_checker.get_results(target, 2)
-#         else:
-#             print(green("[+] SSL Labs scanning was enabled, so requesting \
-# information from Qualys."))
-#             ssl_checker.get_results(target, 1)
 
 if __name__ == "__main__":
     odin()

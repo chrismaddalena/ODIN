@@ -6,7 +6,6 @@
 *.nessus
 *.txt
 *.json
-*.png
 *.xlsx
 *.log
 *.lock
