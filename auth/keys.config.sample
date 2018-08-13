@@ -30,6 +30,9 @@ driver_path: /Users/Odin/Downloads/chromedriver
 access_key: 
 secret: 
 
+[WhoXY]
+api_key:
+
 [GraphDatabase]
 uri: bolt://localhost:####
 username: neo4j
