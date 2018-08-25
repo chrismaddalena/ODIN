@@ -303,7 +303,8 @@ it has been added to the scope for OSINT.".format(domain)))
         self.c.execute("SELECT organization FROM whois_data")
         whois_orgs = self.c.fetchall()
         for org in whois_orgs:
-            all_orgs.append(org[0])
+            if org[0]:
+                all_orgs.append(org[0])
         if not organization in all_orgs:
             all_orgs.append(organization)
         for org_name in all_orgs:
