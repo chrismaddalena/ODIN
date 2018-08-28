@@ -9,7 +9,7 @@
   ======   =======   ===  ===  ===
 
 Developer:   Chris "cmaddy" Maddalena
-Version:     1.9.1 "Muninn"
+Version:     2.0.0 "Huginn"
 Description: Observation, Detection, and Investigation of Networks
              ODIN was designed to assist with OSINT automation for penetration testing clients and
              their networks, both the types with IP address and social. Provide a client's name and
@@ -21,10 +21,15 @@ Description: Observation, Detection, and Investigation of Networks
 """
 
 import os
-from multiprocess import Process, Manager
+
 import click
-from colors import red, green, yellow
+from multiprocess import Process, Manager
+
 from lib import reporter, asciis, verification, htmlreporter, grapher
+
+
+version = "2.0.0"
+codename = "HUGINN"
 
 
 def setup_reports(client):
@@ -36,8 +41,8 @@ def setup_reports(client):
             os.makedirs("reports/{}/file_downloads".format(client))
             os.makedirs("reports/{}/html_report".format(client))
         except OSError as error:
-            print(red("[!] Could not create the reports directory!"))
-            print(red("L.. Details: {}".format(error)))
+            click.secho("[!] Could not create the reports directory!", fg="red")
+            click.secho("L.. Details: {}".format(error), fg="red")
 
 
 # Setup a class for CLICK
@@ -63,7 +68,7 @@ class AliasedGroup(click.Group):
         ctx.fail("Too many matches: %s" % ", ".join(sorted(matches)))
 
 # That's right, we support -h and --help! Not using -h for an argument like 'host'! ;D
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"], max_content_width=200)
 
 @click.group(cls=AliasedGroup, context_settings=CONTEXT_SETTINGS)
 
@@ -84,18 +89,23 @@ Run 'odin.py <MODULE> --help' for more information on a specific module.
 # Basic, required arguments
 @odin.command(name='osint', short_help="The full OSINT suite of tools will be run (see README).")
 @click.option('-o', '--organization', help="The target client, such as `ABC Company`, to use for \
-report titles and some keyword searches.", required=True)
+report titles and searches for domains and cloud storage buckets.", required=True)
 @click.option('-d', '--domain', help="The target's primary domain, such as example.com. Use \
-whatever the target uses for email and their main website. Add more domains to your scope file.",
-              required=True)
+whatever the target uses for email and their main website. Provide additional domains in a scope \
+file using --scope-file.",required=True)
 # Optional arguments
 @click.option('-sf', '--scope-file', type=click.Path(exists=True, readable=True, \
-              resolve_path=True), help="A text file containing additional IP addresses and \
-domain names you want to include. List each one on a new line.", required=False)
+resolve_path=True), help="A text file containing additional domain names you want to include. IP \
+addresses can also be provided, if necessary. List each one on a new line.", required=False)
 @click.option('--whoxy-limit', default=10, help="The maximum number of domains discovered via \
 reverse whois that ODIN will resolve and use when searching services like Censys and Shodan. \
 You may get hundreds of results from reverse whois, so this is intended to save time and \
-API credits. Default is 10 domains and setting it above maybe 20 or 30 is not recommended.")
+API credits. Default is 10 domains and setting it above maybe 20 or 30 is not recommended. \
+It is preferable to perform a search using a tool like Vincent Yiu's DomLink and then provide \
+the newly discovered domains in your scope file with --scope-file.")
+@click.option('--typo', is_flag=True, help="Use urlcrazy (must be in user's PATH) to locate \
+registered lookalike domains and then check those domains agaisnt URLVoid and Cymon.io to see \
+if the domains or associated IP addresses have been flagged as malicious.")
 # File searching arguments
 @click.option('--files', is_flag=True, help="Use this option to use Google to search for files \
 under the provided domain (-d), download files, and extract metadata.")
@@ -104,23 +114,23 @@ Default is 'all' or you can pick from key, pdf, doc, docx, xls, xlsx, and ppt.")
 @click.option('-x', '--delete', is_flag=True, help="Set this option if you want the downloaded \
 files with --file to be deleted after analysis.")
 # Cloud-related arguments
-@click.option('-w', '--aws', help="A list of AWS S3 bucket names to validate.",  \
-              type=click.Path(exists=True, readable=True, resolve_path=True))
+@click.option('-w', '--aws', help="A list of additional keywords to be used when searching for \
+cloud sotrage buckets.",type=click.Path(exists=True, readable=True, resolve_path=True))
 @click.option('-wf', '--aws-fixes', help="A list of strings to be added to the start and end of \
-AWS S3 bucket names.", type=click.Path(exists=True, readable=True, resolve_path=True))
+the cloud storage bucket names.", type=click.Path(exists=True, readable=True, resolve_path=True))
 # Reporting-related arguments
 @click.option('--html', is_flag=True, help="Create an HTML report at the end for easy browsing.")
 @click.option('--graph', is_flag=True, help="Create a Neo4j graph database from the completed \
 SQLite3 database.")
 @click.option('--nuke', is_flag=True, help="Clear the Neo4j project before converting the \
-database. This is used with --graph.")
+database. This is only used with --graph.")
 @click.option('--screenshots', is_flag=True, help="Attempt to take screenshots of discovered \
 web services.")
 # Pass the above arguments on to your osint function
 @click.pass_context
 
 def osint(self, organization, domain, files, ext, delete, scope_file, aws, aws_fixes, html,
-          screenshots, graph, nuke, whoxy_limit):
+          screenshots, graph, nuke, whoxy_limit, typo):
     """
 The OSINT toolkit:\n
 This is ODIN's primary module. ODIN will take the tagret organization, domain, and other data
@@ -131,7 +141,7 @@ HaveIBeenPwned, Twitter's API, and search engines to collect additional informat
 ODIN also uses various tools and APIs to collect information on the provided IP addresses
 and domain names, including things like DNS and IP address history.
 
-View the README for the full detailsand lists of API keys!
+View the README for the full detailsand lists of API keys.
 
 Note: If providing a scope file, acceptable IP addresses/ranges include:
 
@@ -144,14 +154,9 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
     * Underscores? OK:     8.8.8.8_8.8.8.10
     """
     click.clear()
-    asciis.print_art()
-    print(green("[+] OSINT Module Selected: ODIN will run all recon modules."))
-
-    verbose = None
-
-    if verbose:
-        print(yellow("[*] Verbose output Enabled -- Enumeration of RDAP contact information \
-is enabled, so you may get a lot of it if scope includes a large cloud provider."))
+    click.secho(asciis.print_art(version, codename), fg="magenta")
+    click.secho("\tRelease v{}, {}".format(version, codename), fg="magenta")
+    click.secho("[+] OSINT Module Selected: ODIN will run all recon modules.", fg="green")
 
     # Perform prep work for reporting
     setup_reports(organization)
@@ -175,6 +180,8 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
         more_jobs = []
         # Job queue 3 is used for jobs that take a while and use the progress bar, i.e. AWS enum
         even_more_jobs = []
+
+        # Phase 1 jobs
         company_info = Process(name="Company Info Collector",
                                target=report.create_company_info_table,
                                args=(domain,))
@@ -183,81 +190,81 @@ is enabled, so you may get a lot of it if scope includes a large cloud provider.
                                   target=report.create_people_table,
                                   args=(domain_list, organization))
         jobs.append(employee_report)
-        domain_report = Process(name="Domain and IP Address Recon",
+        domain_report = Process(name="Domain and IP Hunter",
                                 target=report.create_domain_report_table,
                                 args=(organization, scope, ip_list, domain_list, whoxy_limit))
         jobs.append(domain_report)
 
-        shodan_report = Process(name="Shodan Queries",
+        # Phase 2 jobs
+        shodan_report = Process(name="Shodan Hunter",
                                 target=report.create_shodan_table,
                                 args=(ip_list, domain_list))
         more_jobs.append(shodan_report)
-        urlcrazy_report = Process(name="Domain Squatting Recon",
-                                  target=report.create_urlcrazy_table,
-                                  args=(organization, domain))
-        more_jobs.append(urlcrazy_report)
-
-        cloud_report = Process(name="Cloud Recon",
-                               target=report.create_cloud_table,
-                               args=(organization, domain, aws, aws_fixes))
-        even_more_jobs.append(cloud_report)
-
+        if typo:
+            urlcrazy_report = Process(name="Lookalike Domain Reviewer",
+                                    target=report.create_urlcrazy_table,
+                                    args=(organization, domain))
+            more_jobs.append(urlcrazy_report)
         if screenshots:
             take_screenshots = Process(name="Screenshot Snapper",
                                        target=report.capture_web_snapshots,
                                        args=(report_path,))
             more_jobs.append(take_screenshots)
-
         if files:
             files_report = Process(name="File Hunter",
                                    target=report.create_foca_table,
-                                   args=(domain, ext, delete, report_path, verbose))
+                                   args=(domain, ext, delete, report_path))
             more_jobs.append(files_report)
 
-        print(green("[+] Beginning initial discovery phase! This could take some time..."))
+        # Phase 3 jobs
+        cloud_report = Process(name="Cloud Hunter",
+                               target=report.create_cloud_table,
+                               args=(organization, domain, aws, aws_fixes))
+        even_more_jobs.append(cloud_report)
+
+        click.secho("[+] Beginning initial discovery phase! This could take some time...", fg="green")
         for job in jobs:
-            print(green("[+] Starting new process: {}".format(job.name)))
+            click.secho("[+] Starting new process: {}".format(job.name), fg="green")
             job.start()
         for job in jobs:
             job.join()
 
-        print(green("[+] Initial discovery is complete! Proceeding with additional queries..."))
+        click.secho("[+] Initial discovery is complete! Proceeding with additional queries...", fg="green")
         for job in more_jobs:
-            print(green("[+] Starting new process: {}".format(job.name)))
+            click.secho("[+] Starting new process: {}".format(job.name), fg="green")
             job.start()
         for job in more_jobs:
             job.join()
 
-        print(green("[+] Final phase: checking the cloud and web services..."))
+        click.secho("[+] Final phase: checking the cloud and web services...", fg="green")
         for job in even_more_jobs:
-            print(green("[+] Starting new process: {}".format(job.name)))
+            click.secho("[+] Starting new process: {}".format(job.name), fg="green")
             job.start()
         for job in even_more_jobs:
             job.join()
 
         report.close_out_reporting()
-        print(green("[+] Job's done! Your results are in {} and can be viewed and queried with \
-any SQLite browser.".format(output_report)))
+        click.secho("[+] Job's done! Your results are in {} and can be viewed and queried with \
+any SQLite browser.".format(output_report), fg="green")
 
         if graph:
             graph_reporter = grapher.Grapher(output_report)
-            print(green("[+] Loading ODIN database file {} for conversion to Neo4j").format(output_report))
+            click.secho("[+] Loading ODIN database file {} for conversion to Neo4j".format(output_report), fg="green")
 
             if nuke:
-                confirm = input(red("\n[!] You set the --nuke option. This wipes out all nodes \
-for a fresh start. Proceed? (Y\\N) "))
-                if confirm.lower() == "y":
+                if click.confirm(click.style("[!] You set the --nuke option. This wipes out all nodes for a \
+fresh start. Proceed?", fg="red"), default=True):
                     graph_reporter.clear_neo4j_database()
-                    print(green("[+] Database successfully wiped!\n"))
+                    click.secho("[+] Database successfully wiped!\n", fg="green")
                     graph_reporter.convert()
                 else:
-                    print(red("[!] Then you can convert your database to a graph database later. \
-Run lib/grapher.py with the appropriate options."))
+                    click.secho("[!] Then you can convert your database to a graph database later. \
+Run lib/grapher.py with the appropriate options.", fg="red")
             else:
                 graph_reporter.convert()
 
         if html:
-            print(green("\n[+] Creating the HTML report using {}.".format(output_report)))
+            click.secho("\n[+] Creating the HTML report using {}.".format(output_report), fg="green")
             html_reporter = htmlreporter.HTMLReporter(organization, report_path + "/html_report/", output_report)
             html_reporter.generate_full_report()
 
@@ -271,14 +278,11 @@ report titles and some keyword searches.", required=True)
               type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
 @click.option('-r', '--report', default="Verification.csv", help="Output file (CSV) for the \
 findings.")
-@click.option('--cidr', is_flag=True, help="Use if the scoped IPs include any CIDRs.")
 # Pass the above arguments on to your verify function
 @click.pass_context
 
-def verify(self, scope_file, output, cidr, client):
+def verify(self, organization, scope_file, report):
     """
-HERE THERE BE DRAGONS : This code needs updating, so it might be janky.
-
 The Verify module:
 Uses reverse DNS, ARIN, and SSL/TLS certificate information to help you verify ownership of a
 list of IP addresses.
@@ -297,25 +301,26 @@ Acceptable IP addresses/ranges include:
 
     * Underscores? OK:     8.8.8.8_8.8.8.10
     """
-    asciis.print_art()
-    print(green("[+] Scope Verification Module Selected: ODIN will attempt to verify who owns \
-the provided IP addresses."))
+    click.secho(asciis.print_art(version, codename), fg="magenta")
+    click.secho("\tRelease v{}, {}".format(version, codename), fg="magenta")
+    click.secho("[+] Scope Verification Module Selected: ODIN will attempt to verify who owns \
+the provided IP addresses.", fg="green")
 
-    setup_reports(client)
-    report = "reports/{}/{}".format(client, output)
+    setup_reports(organization)
+    report_path = "reports/{}/{}".format(organization, report)
 
-    ip_list = []
-    out = {}
+    expanded_scope = []
+    results = {}
 
     try:
-        verification.prepare_scope(scope_file, ip_list, cidr)
-        verification.perform_whois(ip_list, out)
-        verification.print_output(out, report)
+        verification.prepare_scope(scope_file, expanded_scope)
+        verification.perform_whois(expanded_scope, results)
+        verification.print_output(results, report_path)
     except Exception as error:
-        print(red("[!] Verification failed!"))
-        print(red("L.. Details: {}".format(error)))
+        click.secho("[!] Verification failed!", fg="red")
+        click.secho("L.. Details: {}".format(error), fg="red")
 
-    print(green("[+] Job's done! Your identity report is in {}.".format(report)))
+    click.secho("[+] Job's done! Your identity report is in {}.".format(report_path), fg="green")
 
 if __name__ == "__main__":
     odin()

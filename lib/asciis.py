@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""This module prints ASCII art banners and version information."""
+"""
+This module prints ASCII art banners, version information, and the current release's codename.
+"""
 
 import random
-from colors import red, green, yellow
 
-def print_art():
+
+def print_art(version, codename):
 	r1 = """
  :::====     :::====     :::    :::= ===
  :::  ===    :::  ===    :::    :::=====
  ===  ===    ===  ===    ===    ========
  ===  ===    ===  ===    ===    === ====
   ======  :: =======  :: === :: ===  === ::
- 		"""
+		 """
 
 
 	r2 = """
@@ -23,7 +25,7 @@ def print_art():
 ██║   ██║   ██║  ██║   ██║   ██║╚██╗██║
 ╚██████╔╝██╗██████╔╝██╗██║██╗██║ ╚████║██╗
  ╚═════╝ ╚═╝╚═════╝ ╚═╝╚═╝╚═╝╚═╝  ╚═══╝╚═╝
- 		"""
+		 """
 
 	r3 = """
  ▒█████       ▓█████▄       ██▓      ███▄    █
@@ -36,7 +38,7 @@ def print_art():
 ░ ░ ░ ▒   ░    ░ ░  ░  ░    ▒ ░ ░      ░   ░ ░  ░
     ░ ░    ░     ░      ░   ░    ░           ░   ░
            ░   ░        ░        ░               ░
- 		"""
+		 """
 
 	r4 = """
  ▄██████▄  ████████▄   ▄█  ███▄▄▄▄
@@ -58,5 +60,5 @@ def print_art():
  		"""
 
 	art = [r1,r2,r3,r4,r5]
-	print(red(random.choice(art)))
-	print(yellow("Release v1.9.2, MUNINN"))
+	chosen_ascii = random.choice(art)
+	return chosen_ascii

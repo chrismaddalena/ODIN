@@ -1,12 +1,16 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This script opens the provided ODIN SQLite database and generates an HTML report."""
+"""
+This script opens the provided ODIN SQLite3 database and generates an HTML report. In the process
+of doing so, link tables are created in the SQLite3 database to support the queries.
+"""
 
-import sqlite3
 import sys
 import os
 import html
+import sqlite3
+
 from colors import red, green, yellow
 
 class HTMLReporter(object):
@@ -63,7 +67,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(dns_id) REFERENCES dns(id))
                     ''')
         except:
-            print("[!] Could not create DNS link table! ")
+            print("[!] Could not create DNS link table! It may already exist.")
             
         try:
             self.c.execute('''CREATE TABLE 'whois_link'
@@ -71,7 +75,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(whois_id) REFERENCES whois_data(id))
                     ''')
         except:
-            print("[!] Could not create Whois link table! ")
+            print("[!] Could not create Whois link table! It may already exist.")
 
         try:
             self.c.execute('''CREATE TABLE 'rdap_link'
@@ -79,7 +83,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(rdap_id) REFERENCES rdap_data(id))
                     ''')
         except:
-            print("[!] Could not create RDAP link table! ")
+            print("[!] Could not create RDAP link table! It may already exist.")
 
         try:
             self.c.execute('''CREATE TABLE 'subdomain_link'
@@ -87,7 +91,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(subdomain_id) REFERENCES subdomains(id))
                     ''')
         except:
-            print("[!] Could not create Subdomain link table! ")
+            print("[!] Could not create Subdomain link table! It may already exist.")
 
         try:
             self.c.execute('''CREATE TABLE 'shodan_search_link'
@@ -95,7 +99,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_host_lookup(id))
                     ''')
         except:
-            print("[!] Could not create Shodan Search link table! ")
+            print("[!] Could not create Shodan Search link table! It may already exist.")
 
         try:
             self.c.execute('''CREATE TABLE 'shodan_host_link'
@@ -103,7 +107,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_search(id))
                     ''')
         except:
-            print("[!] Could not create Shodan Host link table! ")
+            print("[!] Could not create Shodan Host link table! It may already exist.")
 
         try:
             self.c.execute('''CREATE TABLE 'ip_hist_link'
@@ -111,7 +115,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(hist_id) REFERENCES ip_history(id))
                     ''')
         except:
-            print("[!] Could not create IP History link table! ")
+            print("[!] Could not create IP History link table! It may already exist.")
 
 
         try:
@@ -120,7 +124,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(cert_id) REFERENCES certificates(id))
                     ''')
         except:
-            print("[!] Could not create Certificate link table! ")
+            print("[!] Could not create Certificate link table! It may already exist.")
 
     def link_the_tables(self):
         """Function to populate the link tables."""
@@ -855,9 +859,9 @@ class HTMLReporter(object):
 
             for screenshot in screenshot_images:
                 content += """
-                <h2>{}</h2>
+                <h2># {}</h2>
                 <img src='{}' />
-                """.format(screenshot, "../screenshots/" + screenshot)
+                """.format(screenshot.strip(".png"), "../screenshots/" + screenshot)
 
             content += """
             </body>

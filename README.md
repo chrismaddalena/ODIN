@@ -5,7 +5,7 @@
 
 ![ODIN](https://github.com/chrismaddalena/viper/raw/master/ODIN.png)
 
-`Current version: v1.9.2 "Muninn"`
+`Current version: v2.0.0 "Huginn"`
 
 A Python tool for automating intelligence gathering, asset discovery, and reporting. ODIN is still in active development, so check the dev branch for the bleeding edge. Feedback is welcome!
 

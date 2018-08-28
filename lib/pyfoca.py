@@ -8,10 +8,11 @@ under a provided domain and then extract metadata from discovered files.
 import os
 import re
 import time
-import subprocess
 import requests
-from colors import red, green, yellow
+import subprocess
+
 from PyPDF2 import PdfFileReader
+from colors import red, green, yellow
 
 
 TOTAL_FILES = 0
@@ -22,7 +23,7 @@ class Metaparser:
     """This class will search a domain for files and then attempt to extract metadata from any
     discovered files.
     """
-    def __init__(self, domain_name, page_results, exts, del_files, download_dir, verbose):
+    def __init__(self, domain_name, page_results, exts, del_files, download_dir):
         self.container = list()
         self.offset = [0]
         self.data_exists = [0]
@@ -36,7 +37,6 @@ class Metaparser:
         self.exts = exts
         self.del_files = del_files
         self.download_dir = download_dir + "file_downloads/"
-        self.verbose = verbose
 
         while len(self.offset) < len(self.top_row):
             self.offset.append(0)

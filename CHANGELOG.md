@@ -1,4 +1,22 @@
 # Change Log
+## August 28, 2016, v2.0.0 BETA
+* ODIN now makes better use of wider terminals for help text.
+* Began moving away from using the additional ANSI colors library and leveraging CLICK's built-in color support for macOS and Linux.
+* Added "." to wordlist generation for S3 bucket hunting. ODIN now generates wordlists using all possible DNS-compliant names for the given keywords and affixes. This means a 33% increase in wordlist size, but that just means more buckets that can be found!
+* Reworked large pieces of email and social media discovery:
+    * ODIN used to rely on TheHarvester for the bulk of this work. TheHarvester has been removed, but the new code is still based on its concepts and ideas.
+    * Jigsaw has been removed. It no longer exists and probably stopped being a thing a long time ago. Jigsaw now just redirects to https://connect.data.com/.
+    * Replaced LinkedIn search functions. The old LinkedIn search produced a lot unrelated and duplicate names and the profile link search was really just a stab in the dark most of the time. ODIN now does a better job of finding LinkedIn profiles for people that may be related to the target organization and will try to pull names and job titles from the results to go with the discovered profile links.
+    * Replaced Twitter profile search functions. The old Twitter profile search relied on regex for "@some_handle" which missed some profiles when the handle did not make it into the search egnine result description and also returned a lot of false positives, i.e. returned webpage elements with "@something" that were not Twitter handles. This has been improved and now the results are much better and cleaner.
+    * Email harvesting functions are now in harvester.py.
+    * Parse class used for finding Twitter profiles and email addresses in search results are now in searchparser.py.
+* The urlcrazy/lookalike domain/malicious domain checks are now optional and enabled using `--typo`.
+* Overhauled the `verify` module to make it much better at its job, a bit faster, and improve the output. It might actually be useful now.
+* Cleaned-up a lot of function descriptors and some lines of code. Nothing of consequence worth documenting specifically.
+
+## August 25, 2018, 1.9.3
+* Fixed a bug that could occur during whois lookups that would cause ODIN to stop.
+
 ## August 11, 2018, Post-Vegas Edition, 1.9.2
 * Improved WhoXY record parsing and stopped assuming whois and reverse whois results had identical JSON.
 * ODIN now checks WhoXY whois and reverse whois API crdit balances and warns users if their balance is below the user's WhoXY limit.

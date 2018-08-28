@@ -1,13 +1,15 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module contains functions and Cypher queries necessary to convert the provided SQLite3
+"""
+This module contains functions and Cypher queries necessary to convert the provided SQLite3
 database to a Neo4j graph database. This module can also be run independently to convert a
-database at a later time.
+SQLite3 database at a later time.
 """
 
 import sys
 import sqlite3
+
 import click
 from neo4j.v1 import GraphDatabase
 from colors import red, green, yellow

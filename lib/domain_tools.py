@@ -1,36 +1,40 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module contains all of tools and functions used for evaluating IP addresses/ranges and
-domain names.
+"""
+This module contains all of tools and functions used for evaluating IP addresses/ranges, domain
+names, and cloud services.
 """
 
-import warnings
-import os
-import subprocess
-from xml.etree import ElementTree as ET
-import csv
-import base64
 import re
+import os
+import csv
 import time
-import shodan
-from cymon import Cymon
+import base64
+import subprocess
+import warnings
+from xml.etree import ElementTree as ET
+
+import click
 import whois
-import boto3
-from botocore.exceptions import ClientError, EndpointConnectionError
+import shodan
+import requests
+import validators
+import dns.resolver
+from cymon import Cymon
+import censys.certificates
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
-import requests
 from colors import red, green, yellow
 from netaddr import IPNetwork, iter_iprange
-import dns.resolver
-import validators
-import censys.certificates
+import boto3
+from botocore.exceptions import ClientError, EndpointConnectionError
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+
 from lib import helpers
-import click
+
 
 
 class DomainCheck(object):
@@ -66,7 +70,7 @@ class DomainCheck(object):
             self.cymon_api = Cymon(self.cymon_api_key)
         except Exception:
             self.cymon_api = Cymon()
-            print(yellow("[!] Did not find a Cymon API key, so proceeding without API auth."))
+            print(yellow("[!] Did not find a Cymon API key."))
 
         try:
             self.urlvoid_api_key = helpers.config_section_map("URLVoid")["api_key"]
@@ -117,7 +121,7 @@ to use PantomJS for Netcraft."))
 
         try:
             self.boto3_client = boto3.client('s3')
-            # Test connecting to S3 with the creds supplied to `aws configure`
+            # Test connecting to a test S3 with the creds supplied to `aws configure`
             self.boto3_client.head_bucket(Bucket="hostmenow")
         except Exception:
             self.boto3_client = None
@@ -191,7 +195,7 @@ communicating with WhoXY later."))
                                 scope.append(str_address)
                     else:
                         scope.append(target.rstrip())
-        except Exception as error:
+        except IOError as error:
             print(red("[!] Parsing of scope file failed!"))
             print(red("L.. Details: {}".format(error)))
 
@@ -214,7 +218,7 @@ communicating with WhoXY later."))
                 return resp.text.encode('ascii', 'ignore')
 
     def get_dns_record(self, domain, record_type):
-        """Simple function to get the specified DNS record for the target domain."""
+        """Simple function to get the specified DNS record type for the target domain."""
         answer = self.resolver.query(domain, record_type)
         return answer
 
@@ -242,7 +246,7 @@ communicating with WhoXY later."))
         return vulnerable_dns_servers
 
     def dns_cache_request(self, domain, nameserver_ip, checkttl=False, dns_snooped=False):
-        """Function to perform cache requests against the name server for the provided domain."""
+        """Perform cache requests against the name server for the provided domain."""
         query = dns.message.make_query(domain, dns.rdatatype.A, dns.rdataclass.IN)
         # Negate recursion desired bit
         query.flags ^= dns.flags.RD
@@ -313,9 +317,7 @@ GDPR, or the registrar. You might try looking at dnsstuff.com.").format(domain))
             print(red("L.. Details: {}".format(error)))
 
     def parse_whoxy_results(self, whoxy_data, reverse=False):
-        """Function to take JSON returned by WhoXY API queries and parse the data into a simpler
-        dictionary.
-        """
+        """Take JSON returned by WhoXY API queries and parse the data into a simpler dictionary."""
         results = {}
         results['domain'] = whoxy_data['domain_name']
 
@@ -567,17 +569,26 @@ to be found."))
                 print(red("[!] No Shodan data for {}!".format(target)))
                 print(red("L.. Details: {}".format(error)))
 
+    def run_shodan_resolver(self, target):
+        """Resolve a hosname to an IP address using the Shodan API's DNS endpoint.
+        
+        A Shodan API key is required.
+        """
+        if not helpers.is_ip(target):
+            dns_resolve = "https://api.shodan.io/dns/resolve?hostnames=" \
+                        + target + "&key=" + shodan_api_key
+            resolved = requests.get(dnsResolve)
+            target_ip = resolved.json()[target]
+            return target_ip
+        else:
+            print(red("[!] Only a hostname can be resolved to an IP address."))
+
     def run_shodan_lookup(self, target):
         """Collect information Shodan has for target IP address. This uses the Shodan host lookup
         instead of search and returns the target results dictionary from Shodan.
 
         A Shodan API key is required.
         """
-        # dns_resolve = "https://api.shodan.io/dns/resolve?hostnames=" \
-        #     + target + "&key=" + shodan_api_key
-        # resolved = requests.get(dnsResolve)
-        # target_ip = resolved.json()[target]
-
         if self.shodan_api is None:
             pass
         else:
@@ -590,7 +601,7 @@ to be found."))
                 print(red("L.. Details: {}".format(error)))
 
     def run_shodan_exploit_search(self, CVE):
-        """Function to lookup CVEs through Shodan and return the results."""
+        """Lookup CVEs through Shodan and return the results."""
         exploits = self.shodan_api.exploits.search(CVE)
         return exploits
 
@@ -598,7 +609,7 @@ to be found."))
         """Get reputation data from Cymon.io for target IP address. This returns two dictionaries
         for domains and security events.
 
-        An API key is not required, but is recommended.
+        A Cymon API key is not required, but is recommended.
         """
         try:
             # Search for IP and domains tied to the IP
@@ -607,7 +618,6 @@ to be found."))
             # Search for security events for the IP
             data = self.cymon_api.ip_events(target)
             ip_results = data['results']
-            print(green("[+] Cymon search completed!"))
             return domains_results, ip_results
         except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
@@ -616,12 +626,11 @@ to be found."))
         """Get reputation data from Cymon.io for target domain. This returns a dictionary for
         the IP addresses tied to the domain.
 
-        An API key is not required, but is recommended.
+        A Cymon API key is not required, but is recommended.
         """
         try:
             # Search for domains and IP addresses tied to the domain
             results = self.cymon_api.domain_lookup(target)
-            print(green("[+] Cymon search completed!"))
             return results
         except Exception:
             print(red("[!] Cymon.io returned a 404 indicating no results."))
@@ -631,7 +640,7 @@ to be found."))
         a dictionary of certificate information that includes the issuer, subject, and a hash
         Censys uses for the /view/ API calls to fetch additional information.
 
-        A free API key is required.
+        A Censys API key is required.
         """
         if self.censys_cert_search is None:
             pass
@@ -667,9 +676,9 @@ to be found."))
         return tmp
 
     def filter_subdomains(self, domain, subdomains):
-        """Function to filter out uninteresting domains that may be returned from certificates.
-        These are domains unrelated to the true target. For example, a search for blizzard.com
-        on Censys can return iran-blizzard.ir, an unwanted and unrelated domain.
+        """Filter out uninteresting domains that may be returned from certificates. These are
+        domains unrelated to the true target. For example, a search for blizzard.com on Censys
+        can return iran-blizzard.ir, an unwanted and unrelated domain.
 
         Credit to christophetd for this nice bit of code:
 
@@ -681,7 +690,7 @@ to be found."))
         """Collect reputation data from URLVoid for the target domain. This returns an ElementTree
         object.
 
-        A free API key is required.
+        A URLVoid API key is required.
         """
         if not helpers.is_ip(domain):
             try:
@@ -702,8 +711,8 @@ to be found."))
             print(red("[!] Target is not a domain, so skipping URLVoid queries."))
 
     def check_dns_dumpster(self, domain):
-        """Function to collect subdomains known to DNS Dumpster for the provided domain. This is
-        based on PaulSec's unofficial DNS Dumpster API available on GitHub.
+        """Collect subdomains known to DNS Dumpster for the provided domain. This is based on
+        PaulSec's unofficial DNS Dumpster API available on GitHub.
         """
         dnsdumpster_url = "https://dnsdumpster.com/"
         results = {}
@@ -776,7 +785,7 @@ received!".format(request.status_code)))
         return results
 
     def retrieve_txt_record(self, table):
-        """Secondary helper function for check_dns_dumpster which extracts the TXT records."""
+        """Helper function for check_dns_dumpster which extracts the TXT records."""
         results = []
         for td in table.findAll('td'):
             results.append(td.text)
@@ -784,9 +793,8 @@ received!".format(request.status_code)))
         return results
 
     def check_netcraft(self, domain):
-        """Function to collect subdomains known to NetCraft for the provided domain. NetCraft blocks
-        scripted requests by requiring cookies and JavaScript for all browser, so Selenium is
-        required.
+        """Collect subdomains known to NetCraft for the provided domain. NetCraft blocks scripted
+        requests by requiring cookies and JavaScript for all browser, so Selenium is required.
 
         This is based on code from the DataSploit project, but updated to work with today's
         NetCraft.
@@ -836,7 +844,7 @@ received!".format(request.status_code)))
         return results
 
     def fetch_netcraft_domain_history(self, domain):
-        """Function to fetch a domain's IP address history from NetCraft."""
+        """Fetch a domain's IP address history from NetCraft."""
         # TODO: See if the "Last Seen" and other data can be easily collected for here
         ip_history = []
         endpoint = "http://toolbar.netcraft.com/site_report?url=%s" % domain
@@ -855,8 +863,8 @@ received!".format(request.status_code)))
         return ip_history
 
     def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
-        """Function to search for AWS S3 buckets and accounts. Default search terms are the
-        client, domain, and domain without its TLD. A wordlist is optional.
+        """Search for AWS S3 buckets and accounts. Default search terms are the client, domain, and
+        domain without its TLD. A wordlist is optional.
 
         This is based on modules from aws_pwn by dagrz on GitHub.
         """
@@ -894,6 +902,8 @@ received!".format(request.status_code)))
             for term in search_terms:
                 final_search_terms.append(fix + "-" + term)
                 final_search_terms.append(term + "-" + fix)
+                final_search_terms.append(fix + "." + term)
+                final_search_terms.append(term + "." + fix)
                 final_search_terms.append(fix + term)
                 final_search_terms.append(term + fix)
         # Now include our original list of base terms
@@ -936,10 +946,10 @@ create {} possible buckets and spaces to check in AWS and three Digital Ocean re
 
 
     def validate_bucket_head(self, bucket_name):
-        """Function to check a string to see if it exists as the name of an Amazon S3 bucket. This
-        version uses awscli to identify a bucket and then uses Requests to check public access. The
-        benefit of this is awscli will gather information from buckets that are otherwise
-        inaccessible via web requests.
+        """Check a string to see if it exists as the name of an Amazon S3 bucket. This version uses
+        awscli to identify a bucket and then uses Requests to check public access. The benefit of
+        this is awscli will gather information from buckets that are otherwise inaccessible via
+        web requests.
         """
         # This test requires authentication
         # Warning: Check credentials before use
@@ -984,8 +994,8 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
         return result
 
     def validate_bucket_noncli(self, bucket_name):
-        """Function to check a string to see if it exists as the name of an Amazon S3 bucket. This
-        version uses only Requests and the bucket's URL.
+        """Check a string to see if it exists as the name of an Amazon S3 bucket. This version uses
+        only Requests and the bucket's URL.
 
         This is deprecated, but here just in case.
         """
@@ -1015,7 +1025,7 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
         return result
 
     def validate_do_space(self, region, space_name):
-        """Function to check a string to see if it exists as the name of a Digital Ocean Space."""
+        """Check a string to see if it exists as the name of a Digital Ocean Space."""
         space_uri = "http://" + space_name + region + ".digitaloceanspaces.com"
         result = {
             'bucketName': space_name,
@@ -1042,7 +1052,7 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
         return result
 
     def validate_account(self, account):
-        """Function to check a string to see if it exists as the name of an AWS alias."""
+        """Check a string to see if it exists as the name of an AWS alias."""
         result = {
             'accountAlias': None,
             'accountId': None,
@@ -1072,8 +1082,8 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
         return result
 
     def check_domain_fronting(self, subdomain):
-        """Function to check the A records for a given subdomain and look for references to various
-        CDNs to flag the submdomain for domain frontability.
+        """Check the A records for a given subdomain and look for references to various CDNs to
+        flag the submdomain for domain frontability.
 
         Many CDN keywords provided by rvrsh3ll on GitHub:
         https://github.com/rvrsh3ll/FindFrontableDomains

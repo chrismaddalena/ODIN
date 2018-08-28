@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 """
-Helper functions for ODIN and ODIN's custom libraries. These functions are shared between
-libraries.
+Helper functions for ODIN's custom libraries. These functions are used across different modules.
 """
 
-import configparser
-from neo4j.v1 import GraphDatabase
-from IPy import IP
-from colors import red, yellow, green
 import sys
+import configparser
+
+from IPy import IP
+from neo4j.v1 import GraphDatabase
+from colors import red, yellow, green
 
 
 try:

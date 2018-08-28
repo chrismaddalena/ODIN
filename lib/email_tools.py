@@ -1,28 +1,28 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module contains all of tools and functions used for seeking out individuals and collecting
+"""
+This module contains all of tools and functions used for seeking out individuals and collecting
 data, such as email addresses and social media account data.
 """
 
-import requests
+import json
+from time import sleep
+
 import tweepy
-from colors import red, green, yellow
+import requests
 from bs4 import BeautifulSoup as BS
+from colors import red, green, yellow
+from http.cookiejar import CookieJar, Cookie
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
-from http.cookiejar import CookieJar, Cookie
-from time import sleep
-import json
-from lib.theharvester import googlesearch, linkedinsearch, \
-twittersearch, yahoosearch, bingsearch, jigsaw
-from lib import helpers
+from selenium.common.exceptions import TimeoutException,NoSuchElementException,WebDriverException
+
+from lib import helpers, harvester
 
 
 class PeopleCheck(object):
     """A class containing the tools for performing OSINT for people."""
-
     # Headers for use with Requests
     user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
     headers = {'User-Agent' : user_agent}
@@ -37,6 +37,7 @@ class PeopleCheck(object):
             access_token_secret = helpers.config_section_map("Twitter")["token_secret"]
             twit_auth = tweepy.OAuthHandler(consumer_key, consumer_key_secret)
             twit_auth.set_access_token(access_token, access_token_secret)
+            # Setup Tweepy with a timeout value, the default is 60 seconds
             self.twit_api = tweepy.API(twit_auth, timeout=10)
         except Exception:
             self.twit_api = None
@@ -75,7 +76,7 @@ keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBe
 to use PantomJS for haveIBeenPwned."))
 
     def pwn_check(self, email):
-        """Use HIBP's API to check for the target's email in public security breaches."""
+        """Check for the target's email in public security breaches using HIBP's API."""
         try:
             self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
             # cookies = browser.get_cookies()
@@ -94,8 +95,8 @@ to use PantomJS for haveIBeenPwned."))
             return []
 
     def paste_check(self, email):
-        """Use HIBP's API to check for the target's email in pastes across multiple paste websites.
-        This includes sites like Slexy, Ghostbin, Pastebin.
+        """Check for the target's email in pastes across multiple paste websites. This includes
+        sites like Slexy, Ghostbin, Pastebin using HIBP's API.
         """
         try:
             self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
@@ -115,7 +116,7 @@ to use PantomJS for haveIBeenPwned."))
             return []
 
     def full_contact_email(self, email):
-        """Use the Full Contact API to collect social information for the target email address."""
+        """Collect social information for the target email address using the Full Contact API."""
         # TODO: Implement the use of the People API -- Also, update this for v3 of the API.
         if self.contact_api_key is None:
             print(red("[!] No Full Contact API key, so skipping these searches."))
@@ -127,7 +128,7 @@ to use PantomJS for haveIBeenPwned."))
                 return resp.json()
 
     def full_contact_company(self, domain):
-        """Use the Full Contact API to collect company profile information for the target domain."""
+        """Collect company profile information for the target domain using the Full Contact API."""
         if self.contact_api_key is None:
             print(red("[!] No Full Contact API key, so skipping company lookup."))
             return None
@@ -140,112 +141,102 @@ to use PantomJS for haveIBeenPwned."))
                 return resp.json()
 
     def harvest_all(self, domain):
-        """Use TheHarvester to discover email addresses and employee names."""
-        # Set the search configuration for TheHarvester
+        """Discover email addresses and employee names using search engines like Google, Yahoo,
+        and Bing.
+        """
+        # Set the search configuration for harvesting email addresses and social media profiles
         harvest_limit = 100
         harvest_start = 0
 
         print(green("[+] Beginning the harvesting of email addresses for {}...".format(domain)))
-        # Search through most of Harvester's supported engines
-        # No Baidu because it always seems to hang or take way too long
-        print(green("[*] Harvesting Google"))
-        search = googlesearch.search_google(domain, harvest_limit, harvest_start)
+        search = harvester.SearchGoogle(domain, harvest_limit, harvest_start)
         search.process()
         google_harvest = search.get_emails()
 
-        print(green("[*] Harvesting LinkedIn"))
-        search = linkedinsearch.search_linkedin(domain, harvest_limit)
-        search.process()
-        link_harvest = search.get_people()
-
-        print(green("[*] Harvesting Twitter"))
-        search = twittersearch.search_twitter(domain, harvest_limit)
+        search = harvester.SearchTwitter(domain, harvest_limit)
         search.process()
         twit_harvest = search.get_people()
 
-        print(green("[*] Harvesting Yahoo"))
-        search = yahoosearch.search_yahoo(domain, harvest_limit)
+        search = harvester.SearchYahoo(domain, harvest_limit)
         search.process()
         yahoo_harvest = search.get_emails()
 
-        print(green("[*] Harvesting Bing"))
-        search = bingsearch.search_bing(domain, harvest_limit, harvest_start)
-        search.process('no')
-        bing_harvest = search.get_emails()
-
-        print(green("[*] Harvesting Jigsaw"))
-        search = jigsaw.search_jigsaw(domain, harvest_limit)
+        search = harvester.SearchBing(domain, harvest_limit, harvest_start)
         search.process()
-        jigsaw_harvest = search.get_people()
+        bing_harvest = search.get_emails()
 
         # Combine lists and strip out duplicate findings for unique lists
         all_emails = google_harvest + bing_harvest + yahoo_harvest
-        all_people = link_harvest + jigsaw_harvest
 
-        print(green("[+] The search engines returned {} emails, {} names, and {} Twitter \
-handles.".format(len(all_emails), len(all_people), len(twit_harvest))))
+        print(green("[+] The search engines returned {} emails and {} Twitter handles.".format(len(all_emails), len(twit_harvest))))
 
         # Return the results for emails, people, and Twitter accounts
-        return all_emails, all_people, twit_harvest
+        return all_emails, twit_harvest
 
     def harvest_twitter(self, handle):
-        """Function to lookup the provided handle on Twitter using Tweepy."""
+        """Check the provided Twitter handle using Tweepy and the Twitter API."""
         if self.twit_api is None:
             print(yellow("[*] Twitter API access is not setup, so skipping Twitter handle \
 lookups."))
         else:
-            # Drop the lonely @ Harvester often includes and common false positives
-            if handle == '@' or handle == '@-moz-keyframes' or \
-                handle == '@keyframes' or handle == '@media' or handle == '@broofa.com':
-                print(yellow("[*] Skipping dead end Twitter handle, {}".format(handle)))
-            else:
-                try:
-                    print(green("[+] Looking up {} on Twitter".format(handle)))
-                    user_data = {}
-                    user = self.twit_api.get_user(handle.strip('@'))
-                    user_data['real_name'] = user.name
-                    user_data['handle'] = user.screen_name
-                    user_data['location'] = user.location
-                    user_data['followers'] = user.followers_count
-                    user_data['user_description'] = user.description
+            try:
+                print(green("[+] Looking up {} on Twitter".format(handle)))
+                user_data = {}
+                user = self.twit_api.get_user(handle.strip('@'))
+                user_data['real_name'] = user.name
+                user_data['handle'] = user.screen_name
+                user_data['location'] = user.location
+                user_data['followers'] = user.followers_count
+                user_data['user_description'] = user.description
 
-                    return user_data
-                except Exception as error:
-                    print(red("[!] Error involving {} -- could be an invalid \
-account.".format(handle)))
-                    print(red("L.. Details: {}".format(error)))
+                return user_data
+            except Exception as error:
+                print(red("[!] Error involving {} -- could be an invalid account.".format(handle)))
+                print(red("L.. Details: {}".format(error)))
 
-    def harvest_linkedin(self, target, company):
-        """Construct a Bing search URL and scrape for LinkedIn profile links related to the
-        target's name and company.
+    def harvest_linkedin(self, company, limit=100):
+        """Construct a Bing search URL and scrape LinkedIn profile information related to the
+        given company name.
         """
-        print(green("[+] Looking for potential LinkedIn profiles \
-for {} at {}".format(target, company)))
-        url = 'http://www.bing.com/search?q=site:linkedin.com%20"{}"%20"{}"'.format(target, company)
-        html = requests.get(url)
-        soup = BS(html.text, "html.parser")
-        result = soup.findAll('li', {'class': 'b_algo'})
-        name = target.split(" ")
-        refs = []
-        for i in result:
-            # Get href links from Bing's source
-            link = i.a['href']
-            if '/dir/' in link or '/title/' in link or 'groupItem' in link or \
-                not 'linkedin.com' in link:
-                continue
-            else:
-                if name[0].lower() in link or name[1].lower() in link:
-                    refs.append(link)
-                    # Take just the first result to avoid large, unmanageable lists
-                    break
-        # Remove duplicate results
-        no_dups = set(refs)
+        profiles = {}
+        counter = 0
+        company = company.replace(" ", "%20")
+        while (counter < limit):
+            try:
+                url = 'http://www.bing.com/search?q=site:linkedin.com/in%20"' + company + '"&count=50&first=' + str(counter)
+                self.browser.get(url)
+                soup = BS(self.browser.page_source, "html.parser")
+                results = soup.findAll('li', {'class': 'b_algo'})
+                for hit in results:
+                    # Get href links from Bing's source
+                    link = hit.a['href']
+                    link_text = hit.a.getText().strip(" ...")
+                    name = link_text.split(" - ")[0]
+                    try:
+                        job_title = link_text.split(" - ")[1]
+                    except:
+                        job_title = ""
+                    if '/dir/' in link or '/title/' in link or 'groupItem' in link or \
+                        not 'linkedin.com' in link:
+                        continue
+                    else:
+                        profiles[name] = {'job_title': job_title, 'linkedin_profile': link}
+            except TimeoutException:
+                pass
+            except NoSuchElementException:
+                pass
+            except WebDriverException:
+                pass
 
-        return no_dups
+            sleep(1)
+            counter += 50
+
+        return profiles
+
 
     def harvest_emailhunter(self, domain):
-        """"Call upon EmailHunter's API to collect known email addresses for a domain and other
-        information, such as names, job titles, and the original source of the data.
+        """"Collect known email addresses for a domain and other information, such as names and job
+        titles, using EmailHunter's API.
 
         A free EmailHunter API key is required.
         """
@@ -267,23 +258,26 @@ people.".format(len(results['data']['emails']))))
 
         return results
 
-    def process_harvested_lists(self, harvester_emails, harvester_people,\
-    harvester_twitter, hunter_json):
-        """Take data harvested from EmailHunter and TheHarvester, combine it, make unique lists,
-        and return the total results.
+    def process_harvested_lists(self, harvester_emails, harvester_twitter, hunter_json):
+        """Take data harvested from EmailHunter and search engines, combine the data, make unique
+        lists, and return the total results.
         """
         temp_emails = []
         twitter_handles = []
+        harvester_people = []
         job_titles = {}
         linkedin = {}
         phone_nums = {}
 
-        # Process emails found by TheHarvester
+        # Convert all emails from search engines to lowercase for de-duping
         for email in harvester_emails:
             email = email.lower()
-            temp_emails.append(email)
+            # Drop the occasional bad email address that is found, like 'n@gmail.com'
+            # Also check for any truncated emails with ".."
+            if len(email.split("@")[0]) > 1 and ".." not in email:
+                temp_emails.append(email)
 
-        # Process emails and people found by Hunter
+        # Process emails and people found by Hunter.io
         if hunter_json:
             for result in hunter_json['data']['emails']:
                 email = result['value'].lower()
