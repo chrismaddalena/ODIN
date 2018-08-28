@@ -3,11 +3,13 @@
 
 """This module contains all of tools and functions used for takin screenshots of webpages."""
 
+import click
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
-from colors import red, green, yellow
+
 from lib import helpers
+
 
 class Screenshotter(object):
     """A class containing the tools for taking screenshots of webpages."""
@@ -24,28 +26,31 @@ class Screenshotter(object):
             self.chrome_options.add_argument('--ignore-certificate-errors')
             self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
             self.browser_capable = True
+            click.secho("[*] Headless Chrome for web screenshots test was successful!", fg="green")
         # Catch issues with the web driver or path
         except WebDriverException:
             self.chrome_driver_path = None
             self.browser_capable = False
+            click.secho("[*] Headless Chrome for web screenshots failed! Will try PhantomJS...", fg="red")
         # Catch issues loading the value from the config file
         except Exception:
             self.chrome_driver_path = None
             self.browser_capable = False
+            click.secho("[*] Headless Chrome for web screenshots failed! Will try PhantomJS...", fg="red")
 
         if self.browser_capable is False:
             try:
                 self.browser = webdriver.PhantomJS()
                 self.browser_capable = True
-                print(green("[*] PhantomJS for web screenshots test was successful!"))
+                click.secho("[*] PhantomJS for web screenshots test was successful!", fg="green")
             except WebDriverException:
                 self.chrome_driver_path = None
                 self.browser_capable = False
-                print(red("[*] PhantomJS test failed, so we won't take web screenshots."))
+                click.secho("[*] PhantomJS test also failed, so we won't take web screenshots.", fg="red")
             except Exception:
                 self.chrome_driver_path = None
                 self.browser_capable = False
-                print(red("[*] PhantomJS test failed, so we won't take web screenshots."))
+                click.secho("[*] PhantomJS test also failed, so we won't take web screenshots.", fg="red")
 
     def take_screenshot(self, target, directory):
         """Function to take a screenshot of a target webpage."""
