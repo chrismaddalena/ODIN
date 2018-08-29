@@ -8,18 +8,18 @@ Helper functions for ODIN's custom libraries. These functions are used across di
 import sys
 import configparser
 
+import click
 from IPy import IP
 from neo4j.v1 import GraphDatabase
-from colors import red, yellow, green
 
 
 try:
     CONFIG_PARSER = configparser.ConfigParser()
     CONFIG_PARSER.read("auth/keys.config")
 except configparser.Error as error:
-    print(red("[!] Could not open keys.config file inside the auth directory -- make sure it \
-exists and is readable."))
-    print(red("L.. Details: {}".format(error)))
+    click.secho("[!] Could not open keys.config file inside the auth directory -- make sure it \
+exists and is readable.", fg="red")
+    click.secho("L.. Details: {}".format(error), fg="red")
 
 def config_section_map(section):
     """This function helps by reading a config file section and returning a dictionary object 
@@ -34,13 +34,13 @@ def config_section_map(section):
             # Get the section and option and add it to the dictionary
             section_dict[option] = CONFIG_PARSER.get(section, option)
             if section_dict[option] == -1:
-                print("[-] Skipping: {}".format(option))
+                click.secho("[*] Skipping: {}".format(option), fg="yellow")
 
         # Return the dictionary of settings and values
         return section_dict
     except configparser.Error as error:
-        print(red("[!] There was an error with: {}".format(section)))
-        print(red("L.. Details: {}".format(error)))
+        click.secho("[!] There was an error with: {}".format(section), fg="red")
+        click.secho("L.. Details: {}".format(error), fg="red")
 
 def is_ip(value):
     """Checks if the provided string is an IP address or not. If the check fails, it will be 
@@ -74,16 +74,16 @@ def setup_gdatabase_conn():
         database_uri = config_section_map("GraphDatabase")["uri"]
         database_user = config_section_map("GraphDatabase")["username"]
         database_pass = config_section_map("GraphDatabase")["password"]
-        print(yellow("[*] Attempting to connect to your Neo4j project using {}:{} @ {}."
-                .format(database_user, database_pass, database_uri)))
+        click.secho("[*] Attempting to connect to your Neo4j project using {}:{} @ {}."
+                .format(database_user, database_pass, database_uri), fg="yellow")
         neo4j_driver = GraphDatabase.driver(database_uri, auth=(database_user, database_pass))
-        print(green("[+] Success!"))
+        click.secho("[+] Success!", fg="green")
         return neo4j_driver
     except Exception:
         neo4j_driver = None
-        print(red("[!] Could not create a database connection using the details provided in \
+        click.secho("[!] Could not create a database connection using the details provided in \
 your database.config! Please check the URI, username, and password. Also, make sure your Neo4j \
-project is running. Note that the bolt port can change."))
+project is running. Note that the bolt port can change.", fg="red")
         exit()
 
 def execute_query(driver, query):

@@ -11,8 +11,8 @@ import time
 import requests
 import subprocess
 
+import click
 from PyPDF2 import PdfFileReader
-from colors import red, green, yellow
 
 
 TOTAL_FILES = 0
@@ -121,16 +121,16 @@ class Metaparser:
                 try:
                     extract_status = subprocess.getstatusoutput("extract")
                 except:
-                    print(yellow("[*] We found an Office document, but 'extract' is not installed \
-on this system to get the metadata. It is downloaded for later analysis."))
+                    click.secho("[*] We found an Office document, but 'extract' is not installed \
+on this system to get the metadata. It is downloaded for later analysis.", fg="yellow")
 
                 if extract_status[0] == 0:
                     output = subprocess.check_output("extract -V " + curr_file, shell=True)\
                         .decode('utf-8').split('\n')
                     if "extract: not found" in output[0]:
-                        print(red("[!] PyFOCA requires the 'extract' command."))
-                        print(red("L.. Please install extract by typing 'apt-get install extract' \
-    in terminal."))
+                        click.secho("[!] PyFOCA requires the 'extract' command.", fg="red")
+                        click.secho("L.. Please install extract by typing 'apt-get install extract' \
+    in terminal.", fg="red")
 
                     for i in output:
                         if "creator" in i:
@@ -173,13 +173,13 @@ on this system to get the metadata. It is downloaded for later analysis."))
                         self.container.append([" | " + curr_file, created, author,
                                             producer, modded, last_saved])
                 else:
-                    print(yellow("[*] We found an Office document, but 'extract' is not installed \
-on this system to get the metadata. It is downloaded for later analysis."))
+                    click.secho("[*] We found an Office document, but 'extract' is not installed \
+on this system to get the metadata. It is downloaded for later analysis.", fg="yellow")
             except Exception as error:
                 if "command not found" in str(error):
-                    print(red("[!] PyFOCA requires the 'extract' command."))
-                    print(red("L.. Please install on Linux extract by typing 'apt-get install extract' \
-in terminal."))
+                    click.secho("[!] PyFOCA requires the 'extract' command.", fg="red")
+                    click.secho("L.. Please install on Linux extract by typing 'apt-get install extract' \
+in terminal.", fg="red")
                     # exit()
                 return
 
@@ -206,12 +206,12 @@ in terminal."))
                 TOTAL_FILES = len(files)
 
         if len(files) == 0:
-            print(green("[+] No files were located within Google based on the extension(s) and \
-domain you provided."))
+            click.secho("[+] No files were located within Google based on the extension(s) and \
+domain you provided.", fg="green")
             exit()
 
-        print(green("[+] Discovered {} files from {} total Google \
-searches...").format(len(files), total_count))
+        click.secho("[+] Discovered {} files from {} total Google searches..."
+                     .format(len(files), total_count), fg="green")
 
         # Create pyfoca-downloads directory if it doesn't exist
         # if not os.path.exists('reports/pyfoca-downloads'):
@@ -226,7 +226,7 @@ searches...").format(len(files), total_count))
             if len(short_file) > spaces:
                 spaces = len(short_file) + 3
 
-        print(green("[+] Attempting to download files..."))
+        click.secho("[+] Attempting to download files...", fg="green")
 
         # Download each file that has been added to the 'files' variable
         for item in files:
@@ -242,9 +242,8 @@ searches...").format(len(files), total_count))
                 pdf_name = pdf_name.replace("(", "\(").replace(")", "\)")
                 short_file = pdf_name
             except Exception as error:
-                print(red("[!] There was an error downloading a file from this URL:\n{}"
-                      .format(item)))
-                # print(red("L.. Details: {}").format(error))
+                click.secho("[!] There was an error downloading a file from this URL:\n{}"
+                      .format(item), fg="red")
                 continue
 
         for item in files:
@@ -256,11 +255,11 @@ searches...").format(len(files), total_count))
     def clean_up(self):
         """Small function to clean-up downloaded files."""
         if self.del_files is True:
-            print(green("[+] Done and deleting file_downloads directory for clean-up."))
+            click.secho("[+] Done and deleting file_downloads directory for clean-up.", fg="green")
             try:
                 subprocess.Popen("rm -rf {}".format(self.download_dir, shell=True))
             except Exception as error:
-                print(red("[!] Failed to delete file_downloads directory!"))
-                print(red("L.. Details: {}".format(error)))
+                click.secho("[!] Failed to delete file_downloads directory!", fg="red")
+                click.secho("L.. Details: {}".format(error), fg="red")
         else:
-            print(green("[+] Job's done! Downloaded files can be found in {}.".format(self.download_dir)))
+            click.secho("[+] Job's done! Downloaded files can be found in {}.".format(self.download_dir), fg="green")

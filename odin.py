@@ -258,7 +258,7 @@ fresh start. Proceed?", fg="red"), default=True):
                     click.secho("[+] Database successfully wiped!\n", fg="green")
                     graph_reporter.convert()
                 else:
-                    click.secho("[!] Then you can convert your database to a graph database later. \
+                    click.secho("[!] You can convert your database to a graph database later. \
 Run lib/grapher.py with the appropriate options.", fg="red")
             else:
                 graph_reporter.convert()

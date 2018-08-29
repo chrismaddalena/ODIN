@@ -1,8 +1,9 @@
 # Change Log
 ## August 28, 2016, v2.0.0 BETA
 * ODIN now makes better use of wider terminals for help text.
-* Began moving away from using the additional ANSI colors library and leveraging CLICK's built-in color support for macOS and Linux.
+* Removed the need for an additional ANSI colors library. ODIN now leverages CLICK's built-in color support for macOS and Linux.
 * Added "." to wordlist generation for S3 bucket hunting. ODIN now generates wordlists using all possible DNS-compliant names for the given keywords and affixes. This means a 33% increase in wordlist size, but that just means more buckets that can be found!
+* Added progress bars to reduce some terminal noise and simultaneously improve visibility into what ODIN is crunching when it may appear to be "stuck."
 * Reworked large pieces of email and social media discovery:
     * ODIN used to rely on TheHarvester for the bulk of this work. TheHarvester has been removed, but the new code is still based on its concepts and ideas.
     * Jigsaw has been removed. It no longer exists and probably stopped being a thing a long time ago. Jigsaw now just redirects to https://connect.data.com/.

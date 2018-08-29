@@ -11,7 +11,8 @@ import os
 import html
 import sqlite3
 
-from colors import red, green, yellow
+import click
+
 
 class HTMLReporter(object):
     """A class that opens an ODIN SQLite3 database and generates an HTML report."""
@@ -36,30 +37,31 @@ class HTMLReporter(object):
             try:
                 os.makedirs(report_path)
             except OSError as error:
-                print(red("[!] Could not create the HTML report directory!"))
-                print(red("L.. Details: {}".format(error)))
+                click.secho("[!] Could not create the HTML report directory!", fg="red")
+                click.secho("L.. Details: {}".format(error), fg="red")
 
         try:
             self.conn = sqlite3.connect(database_path)
             self.c = self.conn.cursor()
-        except Exception as error:
-                print(red("[!] Could not open the database file!"))
-                print(red("L.. Details: {}".format(error)))
+        except sqlite3.DatabaseError as error:
+                click.secho("[!] Could not create a connection with the database file!", fg="red")
+                click.secho("L.. Details: {}".format(error), fg="red")
 
     def close_out_reporting(self):
-        """Function to check the new database and tables and close the connections."""
-        confirm = input(green("[+] Job's done! Do you wan to view the HTML report now? (Y\\N) "))
-        if confirm.lower() == "y":
+        """Check the new database and tables and close the connection."""
+        if click.confirm(click.style("[+] Job's done! Do you wan to view the HTML report \
+now?", fg="green"), default=True):
             os.system("open '{}/report.html'".format(self.report_path))
         else:
-            print(green("[+] Exiting..."))
+            click.secho("[+] Exiting...", fg="green")
+            click.secho("", fg="green")
             exit()
         # Close the connection to the database
         self.conn.close()
 
     def generate_link_tables(self):
-        """Function to create link tables between the hosts table and tables with IP address and
-        domain info. Each table is named <something>_link and uses a link_id as its primary key.
+        """Create link tables between the hosts table and tables with IP address and domain info.
+        Each table is named <something>_link and uses a link_id as its primary key.
         """
         try:
             self.c.execute('''CREATE TABLE 'dns_link'
@@ -67,7 +69,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(dns_id) REFERENCES dns(id))
                     ''')
         except:
-            print("[!] Could not create DNS link table! It may already exist.")
+            click.secho("[!] Could not create DNS link table! It may already exist.", fg="red")
             
         try:
             self.c.execute('''CREATE TABLE 'whois_link'
@@ -75,7 +77,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(whois_id) REFERENCES whois_data(id))
                     ''')
         except:
-            print("[!] Could not create Whois link table! It may already exist.")
+            click.secho("[!] Could not create Whois link table! It may already exist.", fg="red")
 
         try:
             self.c.execute('''CREATE TABLE 'rdap_link'
@@ -83,7 +85,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(rdap_id) REFERENCES rdap_data(id))
                     ''')
         except:
-            print("[!] Could not create RDAP link table! It may already exist.")
+            click.secho("[!] Could not create RDAP link table! It may already exist.", fg="red")
 
         try:
             self.c.execute('''CREATE TABLE 'subdomain_link'
@@ -91,7 +93,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(subdomain_id) REFERENCES subdomains(id))
                     ''')
         except:
-            print("[!] Could not create Subdomain link table! It may already exist.")
+            click.secho("[!] Could not create Subdomain link table! It may already exist.", fg="red")
 
         try:
             self.c.execute('''CREATE TABLE 'shodan_search_link'
@@ -99,7 +101,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_host_lookup(id))
                     ''')
         except:
-            print("[!] Could not create Shodan Search link table! It may already exist.")
+            click.secho("[!] Could not create Shodan link table! It may already exist.", fg="red")
 
         try:
             self.c.execute('''CREATE TABLE 'shodan_host_link'
@@ -107,7 +109,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_search(id))
                     ''')
         except:
-            print("[!] Could not create Shodan Host link table! It may already exist.")
+            click.secho("[!] Could not create Shodan Host link table! It may already exist.", fg="red")
 
         try:
             self.c.execute('''CREATE TABLE 'ip_hist_link'
@@ -115,8 +117,7 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(hist_id) REFERENCES ip_history(id))
                     ''')
         except:
-            print("[!] Could not create IP History link table! It may already exist.")
-
+            click.secho("[!] Could not create IP History link table! It may already exist.", fg="red")
 
         try:
             self.c.execute('''CREATE TABLE 'certificate_link'
@@ -124,10 +125,10 @@ class HTMLReporter(object):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(cert_id) REFERENCES certificates(id))
                     ''')
         except:
-            print("[!] Could not create Certificate link table! It may already exist.")
+            click.secho("[!] Could not create Certificate link table! It may already exist.", fg="red")
 
     def link_the_tables(self):
-        """Function to populate the link tables."""
+        """Perform the queries necessary to populate the link tables."""
         # Link hosts and the dns records
         self.c.execute('SELECT id,domain FROM dns')
         records = self.c.fetchall()
@@ -209,7 +210,7 @@ class HTMLReporter(object):
                         self.conn.commit()
 
     def create_css(self):
-        """Function to create the styles.css and define styling."""
+        """Create the styles.css and define styling used for the HTML report pages."""
         with open(self.report_path + "styles.css", "w") as styles:
             styling = """
             table {
@@ -231,7 +232,7 @@ class HTMLReporter(object):
             styles.write(styling)
 
     def create_report_page(self):
-        """Function to create the main reports.html page in the report directory."""
+        """Create the main reports.html page in the report directory."""
         with open(self.report_path + "report.html", "w") as report:
             self.c.execute("SELECT * FROM company_info")
             company_info = self.c.fetchone()
@@ -275,7 +276,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_hosts_page(self):
-        """Function to create the hosts.html page in the report directory."""
+        """Create the hosts.html page in the report directory."""
         with open(self.report_path + "hosts.html", "w") as report:
             self.c.execute("SELECT host_address,source FROM hosts WHERE in_scope_file=0")
             out_of_scope = self.c.fetchall()
@@ -323,7 +324,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_people_page(self):
-        """Function to create the people.html page in the report directory."""
+        """Create the people.html page in the report directory."""
         with open(self.report_path + "people.html", "w") as report:
             self.c.execute("SELECT * FROM email_addresses")
             emails = self.c.fetchall()
@@ -394,7 +395,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_certificates_page(self):
-        """Function to create the certificates.html page in the report directory."""
+        """Create the certificates.html page in the report directory."""
         with open(self.report_path + "certificates.html", "w") as report:
             self.c.execute("SELECT host,subject,issuer FROM certificates")
             certificates = self.c.fetchall()
@@ -427,7 +428,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_cloud_page(self):
-        """Function to create the cloud.html page in the report directory."""
+        """Create the cloud.html page in the report directory."""
         with open(self.report_path + "cloud.html", "w") as report:
             self.c.execute("SELECT name,bucket_uri,bucket_arn,publicly_accessible FROM cloud")
             all_cloud = self.c.fetchall()
@@ -475,7 +476,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_domains_page(self):
-        """Function to create the people.html page in the report directory."""
+        """Create the people.html page in the report directory."""
         with open(self.report_path + "domains.html", "w") as report:
             self.c.execute("SELECT domain,registrar,expiration FROM whois_data")
             registration_data = self.c.fetchall()
@@ -582,7 +583,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_subdomains_page(self):
-        """Function to create the subdomains.html page in the report directory."""
+        """Create the subdomains.html page in the report directory."""
         with open(self.report_path + "subdomains.html", "w") as report:
             self.c.execute("SELECT domain,subdomain,ip_address FROM subdomains")
             subdomains = self.c.fetchall()
@@ -637,7 +638,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_networks_page(self):
-        """Function to create the networks.html page in the report directory."""
+        """Create the networks.html page in the report directory."""
         with open(self.report_path + "networks.html", "w") as report:
             self.c.execute("SELECT ip_address,rdap_source,organization,network_cidr,asn,country_code FROM rdap_data")
             rdap_data = self.c.fetchall()
@@ -689,7 +690,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_shodan_page(self):
-        """Function to create the shodan.html page in the report directory."""
+        """Create the shodan.html page in the report directory."""
         with open(self.report_path + "shodan.html", "w") as report:
             self.c.execute("SELECT ip_address,os,organization,port,banner_data FROM shodan_host_lookup")
             shodan_lookup = self.c.fetchall()
@@ -744,7 +745,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_typo_page(self):
-        """Function to create the typosquatting.html page in the report directory."""
+        """Create the typosquatting.html page in the report directory."""
         with open(self.report_path + "typosquatting.html", "w") as report:
             self.c.execute("SELECT domain,a_record,mx_record FROM urlcrazy")
             typosquat = self.c.fetchall()
@@ -808,7 +809,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_metadata_page(self):
-        """Function to create the typosquatting.html page in the report directory."""
+        """Create the typosquatting.html page in the report directory."""
         with open(self.report_path + "metadata.html", "w") as report:
             self.c.execute("SELECT filename,creation_date,author,produced_by,modification_date FROM file_metadata")
             metadata = self.c.fetchall()
@@ -843,7 +844,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def create_screenshots_page(self):
-        """Function to create the screenshots.html page in the report directory."""
+        """Create the screenshots.html page in the report directory."""
         with open(self.report_path + "screenshots.html", "w") as report:
 
             content = """
@@ -871,7 +872,7 @@ class HTMLReporter(object):
             report.write(content)
 
     def generate_full_report(self):
-        """Function to generate all report pages."""
+        """Perform all actions necessary to generate a full HTML report for the ODIN database."""
         self.generate_link_tables()
         self.create_css()
         self.create_report_page()

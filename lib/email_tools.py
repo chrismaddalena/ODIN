@@ -9,10 +9,10 @@ data, such as email addresses and social media account data.
 import json
 from time import sleep
 
+import click
 import tweepy
 import requests
 from bs4 import BeautifulSoup as BS
-from colors import red, green, yellow
 from http.cookiejar import CookieJar, Cookie
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -41,19 +41,19 @@ class PeopleCheck(object):
             self.twit_api = tweepy.API(twit_auth, timeout=10)
         except Exception:
             self.twit_api = None
-            print(yellow("[!] Could not setup OAuth for Twitter API."))
+            click.secho("[!] Could not setup OAuth for Twitter API.", fg="yellow")
 
         try:
             self.emailhunter_api_key = helpers.config_section_map("EmailHunter")["api_key"]
         except Exception:
             self.emailhunter_api_key = ""
-            print(yellow("[!] Could not fetch EmailHunter API key."))
+            click.secho("[!] Could not fetch EmailHunter API key.", fg="yellow")
 
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
         except Exception:
             self.contact_api_key = ""
-            print(yellow("[!] Could not fetch Full Contact API key."))
+            click.secho("[!] Could not fetch Full Contact API key.", fg="yellow")
 
         try:
             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
@@ -66,14 +66,14 @@ class PeopleCheck(object):
         except WebDriverException:
             self.chrome_driver_path = None
             self.browser = webdriver.PhantomJS()
-            print(yellow("[!] There was a problem with the specified Chrome web driver in your \
-keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned."))
+            click.secho("[!] There was a problem with the specified Chrome web driver in your \
+keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned.", fg="yellow")
         # Catch issues loading the value from the config file
         except Exception:
             self.chrome_driver_path = None
             self.browser = webdriver.PhantomJS()
-            print(yellow("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
-to use PantomJS for haveIBeenPwned."))
+            click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
+to use PantomJS for haveIBeenPwned.", fg="yellow")
 
     def pwn_check(self, email):
         """Check for the target's email in public security breaches using HIBP's API."""
@@ -85,13 +85,12 @@ to use PantomJS for haveIBeenPwned."))
 
             return pwned
         except TimeoutException:
-            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+            click.secho("[!] The connectionto HaveIBeenPwned timed out!", fg="red")
             return []
         except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
             return []
         except WebDriverException:
-            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
 
     def paste_check(self, email):
@@ -106,20 +105,19 @@ to use PantomJS for haveIBeenPwned."))
 
             return pastes
         except TimeoutException:
-            print(red("[!] Connectionto HaveIBeenPwned timed out!"))
+            click.secho("[!] The connection to HaveIBeenPwned timed out!", fg="red")
             return []
         except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
             return []
         except WebDriverException:
-            # print(red("[!] Connectionto HaveIBeenPwned timed out!"))
             return []
 
     def full_contact_email(self, email):
         """Collect social information for the target email address using the Full Contact API."""
         # TODO: Implement the use of the People API -- Also, update this for v3 of the API.
         if self.contact_api_key is None:
-            print(red("[!] No Full Contact API key, so skipping these searches."))
+            click.secho("[!] No Full Contact API key, so skipping these searches.", fg="red")
         else:
             base_url = "https://api.fullcontact.com/v2/person.json"
             payload = {'email':email, 'apiKey':self.contact_api_key}
@@ -130,7 +128,7 @@ to use PantomJS for haveIBeenPwned."))
     def full_contact_company(self, domain):
         """Collect company profile information for the target domain using the Full Contact API."""
         if self.contact_api_key is None:
-            print(red("[!] No Full Contact API key, so skipping company lookup."))
+            click.secho("[!] No Full Contact API key, so skipping company lookup.", fg="red")
             return None
         else:
             base_url = "https://api.fullcontact.com/v3/company.enrich"
@@ -148,7 +146,7 @@ to use PantomJS for haveIBeenPwned."))
         harvest_limit = 100
         harvest_start = 0
 
-        print(green("[+] Beginning the harvesting of email addresses for {}...".format(domain)))
+        click.secho("[+] Beginning the harvesting of email addresses for {}...".format(domain), fg="green")
         search = harvester.SearchGoogle(domain, harvest_limit, harvest_start)
         search.process()
         google_harvest = search.get_emails()
@@ -168,7 +166,8 @@ to use PantomJS for haveIBeenPwned."))
         # Combine lists and strip out duplicate findings for unique lists
         all_emails = google_harvest + bing_harvest + yahoo_harvest
 
-        print(green("[+] The search engines returned {} emails and {} Twitter handles.".format(len(all_emails), len(twit_harvest))))
+        click.secho("[+] The search engines returned {} emails and {} Twitter handles."
+                     .format(len(all_emails), len(twit_harvest)), fg="green")
 
         # Return the results for emails, people, and Twitter accounts
         return all_emails, twit_harvest
@@ -176,11 +175,11 @@ to use PantomJS for haveIBeenPwned."))
     def harvest_twitter(self, handle):
         """Check the provided Twitter handle using Tweepy and the Twitter API."""
         if self.twit_api is None:
-            print(yellow("[*] Twitter API access is not setup, so skipping Twitter handle \
-lookups."))
+            click.secho("[*] Twitter API access is not setup, so skipping Twitter handle \
+lookups.", fg="yellow")
         else:
             try:
-                print(green("[+] Looking up {} on Twitter".format(handle)))
+                # click.secho("[+] Looking up {} on Twitter".format(handle), fg="green")
                 user_data = {}
                 user = self.twit_api.get_user(handle.strip('@'))
                 user_data['real_name'] = user.name
@@ -191,8 +190,8 @@ lookups."))
 
                 return user_data
             except Exception as error:
-                print(red("[!] Error involving {} -- could be an invalid account.".format(handle)))
-                print(red("L.. Details: {}".format(error)))
+                click.secho("\n[!] Error involving {} -- could be an invalid account.".format(handle), fg="red")
+                click.secho("L.. Details: {}".format(error), fg="red")
 
     def harvest_linkedin(self, company, limit=100):
         """Construct a Bing search URL and scrape LinkedIn profile information related to the
@@ -249,13 +248,12 @@ domain={}&api_key={}".format(domain, self.emailhunter_api_key)
             results = request.json()
 
             if "errors" in results:
-                print(red("[!] The request to EmailHunter returned an error!"))
-                print(red("L.. Details: {}".format(results['errors'])))
+                click.secho("[!] The request to EmailHunter returned an error!", fg="red")
+                click.secho("L.. Details: {}".format(results['errors']), fg="red")
                 return None
 
-            print(green("[+] Hunter has contact data for {} \
-people.".format(len(results['data']['emails']))))
-
+            click.secho("[+] Hunter has contact data for {} people."
+                         .format(len(results['data']['emails'])), fg="green")
         return results
 
     def process_harvested_lists(self, harvester_emails, harvester_twitter, hunter_json):
@@ -316,7 +314,7 @@ people.".format(len(results['data']['emails']))))
         unique = set(twitter_handles)
         unique_twitter = list(unique)
 
-        print(green("[+] Final unique findings: {} emails, {} people, \
-{} Twitter handles.".format(len(unique_emails), len(unique_people), len(unique_twitter))))
+        click.secho("[+] Final unique findings: {} emails, {} people, {} Twitter handles."
+                     .format(len(unique_emails), len(unique_people), len(unique_twitter)), fg="green")
 
         return unique_emails, unique_people, unique_twitter, job_titles, linkedin, phone_nums
