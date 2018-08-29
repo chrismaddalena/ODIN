@@ -11,6 +11,9 @@ import configparser
 import click
 from IPy import IP
 from neo4j.v1 import GraphDatabase
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException,NoSuchElementException,WebDriverException
 
 
 try:
@@ -92,3 +95,29 @@ def execute_query(driver, query):
         results = session.run(query)
 
     return results
+
+def setup_headless_chrome():
+    """Attempt to setup a Selenium webdriver using headless Chrome. If this fails, fallback to
+    PhantomJS. PhantomJS is a last resort, but better than nothing for the time being."""
+    try:
+        chrome_driver_path = config_section_map("WebDriver")["driver_path"]
+        # Try loading the driver as a test
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--window-size=1920x1080")
+        browser = webdriver.Chrome(chrome_options=chrome_options, executable_path=chrome_driver_path)
+        click.secho("[*] Headless Chrome browser test was successful!", fg="yellow")
+    # Catch issues with the web driver or path
+    except WebDriverException:
+        chrome_driver_path = None
+        browser = webdriver.PhantomJS()
+        click.secho("[!] There was a problem with the specified Chrome web driver in your \
+keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned.", fg="yellow")
+    # Catch issues loading the value from the config file
+    except Exception:
+        chrome_driver_path = None
+        browser = webdriver.PhantomJS()
+        click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
+to use PantomJS for haveIBeenPwned.", fg="yellow")
+
+    return browser

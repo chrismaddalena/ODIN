@@ -20,9 +20,7 @@ ED_FROM = 0
 
 
 class Metaparser:
-    """This class will search a domain for files and then attempt to extract metadata from any
-    discovered files.
-    """
+    """Search a domain for files and then attempt to extract metadata from any discovered files."""
     def __init__(self, domain_name, page_results, exts, del_files, download_dir):
         self.container = list()
         self.offset = [0]
@@ -43,8 +41,8 @@ class Metaparser:
             self.data_exists.append(0)
 
     def process_file(self, curr_file):
-        """Function to process the provided file. If the file is a PDF, the PyPDF2 library will be
-        used. Otherwise, the extract tool is used, so extract must be installed. This is the one
+        """Process the provided file. If the file is a PDF, the PyPDF2 library will be used.
+        Otherwise, the extract tool is used, so extract must be installed. This is the one
         piece that requires Linux.
         """
         global ED_FROM
@@ -180,11 +178,10 @@ on this system to get the metadata. It is downloaded for later analysis.", fg="y
                     click.secho("[!] PyFOCA requires the 'extract' command.", fg="red")
                     click.secho("L.. Please install on Linux extract by typing 'apt-get install extract' \
 in terminal.", fg="red")
-                    # exit()
                 return
 
     def grab_meta(self):
-        """This function collects the metadata from files."""
+        """Extrct the metadata from downloaded files."""
         global TOTAL_FILES
         files = []
 
@@ -210,11 +207,10 @@ in terminal.", fg="red")
 domain you provided.", fg="green")
             exit()
 
-        click.secho("[+] Discovered {} files from {} total Google searches..."
-                     .format(len(files), total_count), fg="green")
+        # click.secho("[+] Discovered {} files from {} total Google searches..."
+        #              .format(len(files), total_count), fg="green")
 
         # Create pyfoca-downloads directory if it doesn't exist
-        # if not os.path.exists('reports/pyfoca-downloads'):
         if not os.path.exists(self.download_dir):
             os.makedirs(self.download_dir)
 
@@ -253,7 +249,7 @@ domain you provided.", fg="green")
         return self.container
 
     def clean_up(self):
-        """Small function to clean-up downloaded files."""
+        """Clean-up/delete downloaded files."""
         if self.del_files is True:
             click.secho("[+] Done and deleting file_downloads directory for clean-up.", fg="green")
             try:

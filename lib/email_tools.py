@@ -27,8 +27,9 @@ class PeopleCheck(object):
     user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
     headers = {'User-Agent' : user_agent}
 
-    def __init__(self):
+    def __init__(self, webdriver):
         """Everything that should be initiated with a new object goes here."""
+        self.browser = webdriver
         # Collect the API keys from the config file
         try:
             consumer_key = helpers.config_section_map("Twitter")["consumer_key"]
@@ -55,25 +56,25 @@ class PeopleCheck(object):
             self.contact_api_key = ""
             click.secho("[!] Could not fetch Full Contact API key.", fg="yellow")
 
-        try:
-            self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
-            # Try loading the driver as a test
-            self.chrome_options = Options()
-            self.chrome_options.add_argument("--headless")
-            self.chrome_options.add_argument("--window-size=1920x1080")
-            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
-        # Catch issues with the web driver or path
-        except WebDriverException:
-            self.chrome_driver_path = None
-            self.browser = webdriver.PhantomJS()
-            click.secho("[!] There was a problem with the specified Chrome web driver in your \
-keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned.", fg="yellow")
-        # Catch issues loading the value from the config file
-        except Exception:
-            self.chrome_driver_path = None
-            self.browser = webdriver.PhantomJS()
-            click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
-to use PantomJS for haveIBeenPwned.", fg="yellow")
+#         try:
+#             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
+#             # Try loading the driver as a test
+#             self.chrome_options = Options()
+#             self.chrome_options.add_argument("--headless")
+#             self.chrome_options.add_argument("--window-size=1920x1080")
+#             self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
+#         # Catch issues with the web driver or path
+#         except WebDriverException:
+#             self.chrome_driver_path = None
+#             self.browser = webdriver.PhantomJS()
+#             click.secho("[!] There was a problem with the specified Chrome web driver in your \
+# keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned.", fg="yellow")
+#         # Catch issues loading the value from the config file
+#         except Exception:
+#             self.chrome_driver_path = None
+#             self.browser = webdriver.PhantomJS()
+#             click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
+# to use PantomJS for haveIBeenPwned.", fg="yellow")
 
     def pwn_check(self, email):
         """Check for the target's email in public security breaches using HIBP's API."""
@@ -146,7 +147,7 @@ to use PantomJS for haveIBeenPwned.", fg="yellow")
         harvest_limit = 100
         harvest_start = 0
 
-        click.secho("[+] Beginning the harvesting of email addresses for {}...".format(domain), fg="green")
+        # click.secho("[+] Beginning the harvesting of email addresses for {}...".format(domain), fg="green")
         search = harvester.SearchGoogle(domain, harvest_limit, harvest_start)
         search.process()
         google_harvest = search.get_emails()

@@ -48,8 +48,10 @@ class DomainCheck(object):
     # Robtex's free API endpoint
     robtex_api = "https://freeapi.robtex.com/ipquery/"
 
-    def __init__(self):
+    def __init__(self, webdriver):
         """Everything that should be initiated with a new object goes here."""
+        self.browser = webdriver
+
         # Setup a DNS resolver so a timeout can be set
         # No timeout means a very, very long wait if a domain has no records
         self.resolver = dns.resolver.Resolver()
@@ -97,26 +99,26 @@ will be skipped.", fg="yellow")
             click.secho("[!] Did not find a Censys API ID/secret.", fg="yellow")
             click.secho("L.. Details:  {}".format(error0), fg="yellow")
 
-        try:
-            self.chrome_driver_path =   helpers.config_section_map("WebDriver")["driver_path"]
-            # Try loading the driver as a test
-            self.chrome_options = Options()
-            self.chrome_options.add_argument("--headless")
-            self.chrome_options.add_argument("--window-size=1920x1080")
-            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
-            click.secho("[*] Headless Chrome browser test was successful!", fg="yellow")
-        # Catch issues with the web driver or path
-        except WebDriverException:
-            self.chrome_driver_path = None
-            self.browser = webdriver.PhantomJS()
-            click.secho("[!] There was a problem with the specified Chrome web driver in your \
-keys.config! Please check it. For now ODIN will try to use PhantomJS for Netcraft.", fg="yellow")
-        # Catch issues loading the value from the config file
-        except Exception:
-            self.chrome_driver_path = None
-            self.browser = webdriver.PhantomJS()
-            click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will try \
-to use PantomJS for Netcraft.", fg="yellow")
+#         try:
+#             self.chrome_driver_path =   helpers.config_section_map("WebDriver")["driver_path"]
+#             # Try loading the driver as a test
+#             self.chrome_options = Options()
+#             self.chrome_options.add_argument("--headless")
+#             self.chrome_options.add_argument("--window-size=1920x1080")
+#             self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
+#             click.secho("[*] Headless Chrome browser test was successful!", fg="yellow")
+#         # Catch issues with the web driver or path
+#         except WebDriverException:
+#             self.chrome_driver_path = None
+#             self.browser = webdriver.PhantomJS()
+#             click.secho("[!] There was a problem with the specified Chrome web driver in your \
+# keys.config! Please check it. For now ODIN will try to use PhantomJS for Netcraft.", fg="yellow")
+#         # Catch issues loading the value from the config file
+#         except Exception:
+#             self.chrome_driver_path = None
+#             self.browser = webdriver.PhantomJS()
+#             click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will try \
+# to use PantomJS for Netcraft.", fg="yellow")
 
         try:
             self.boto3_client = boto3.client('s3')
@@ -552,12 +554,12 @@ to be found.", fg="yellow")
         if self.shodan_api is None:
             pass
         else:
-            click.secho("[+] Performing Shodan domain search for {}.".format(target), fg="green")
+            # click.secho("[+] Performing Shodan domain search for {}.".format(target), fg="green")
             try:
                 target_results = self.shodan_api.search(target)
                 return target_results
             except shodan.APIError as error:
-                click.secho("[!] No Shodan data for {}!".format(target), fg="red")
+                click.secho("\n[!] No Shodan data for {}!".format(target), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
 
     def run_shodan_resolver(self, target):
@@ -583,12 +585,12 @@ to be found.", fg="yellow")
         if self.shodan_api is None:
             pass
         else:
-            click.secho("[+] Performing Shodan IP lookup for {}.".format(target), fg="green")
+            # click.secho("[+] Performing Shodan IP lookup for {}.".format(target), fg="green")
             try:
                 target_results = self.shodan_api.host(target)
                 return target_results
             except shodan.APIError as error:
-                click.secho("[!] No Shodan data for {}!".format(target), fg=+"red")
+                click.secho("\n[!] No Shodan data for {}!".format(target), fg=+"red")
                 click.secho("L.. Details: {}".format(error), fg="red")
 
     def run_shodan_exploit_search(self, CVE):
@@ -637,7 +639,7 @@ to be found.", fg="yellow")
             pass
         else:
             try:
-                click.secho("[+] Performing Censys certificate search for {}".format(target), fg="green")
+                # click.secho("[+] Performing Censys certificate search for {}".format(target), fg="green")
                 query = "parsed.names: %s" % target
                 results = self.censys_cert_search.search(query, fields=['parsed.names',
                         'parsed.signature_algorithm.name','parsed.signature.self_signed',
@@ -646,10 +648,10 @@ to be found.", fg="yellow")
 
                 return results
             except censys.base.CensysRateLimitExceededException:
-                click.secho("[!] Censys reports your account has run out of API credits.", fg="red")
+                click.secho("\n[!] Censys reports your account has run out of API credits.", fg="red")
                 return None
             except Exception as error:
-                click.secho("[!] Error collecting Censys certificate data for {}.".format(target), fg="red")
+                click.secho("\n[!] Error collecting Censys certificate data for {}.".format(target), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
                 return None
 
@@ -721,7 +723,7 @@ to be found.", fg="yellow")
         request = session.post(dnsdumpster_url, cookies=cookies, data=data, headers=headers)
 
         if request.status_code != 200:
-            click.secho("[!] There appears to have been an error communicating with DNS Dumpster -- {} \
+            click.secho("\n[!] There appears to have been an error communicating with DNS Dumpster -- {} \
 received!".format(request.status_code), fg="red")
 
         soup = BeautifulSoup(request.content, 'lxml')
@@ -908,7 +910,7 @@ create {} possible buckets and spaces to check in AWS and three Digital Ocean re
                     len(final_search_terms)), fg="yellow")
 
         with click.progressbar(final_search_terms,
-                               label="Enumerating AWS Keywords",
+                               label="[*] Enumerating AWS Keywords",
                                length=len(final_search_terms)) as bar:
             for term in bar:
                 # Check for buckets and spaces
