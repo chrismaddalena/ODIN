@@ -182,7 +182,7 @@ See the installation instructions at the top.
 
 Absolutely. If an API key is missing from the keys.config file, any checks using those keys will be skipped. You are strongly encouraged to go get the free API keys to get the most out of ODIN, but you can skip any you don't want.
 
-API access for Shodan, Censys, and EmailHunter are defnitely worth it if you want to use the bare minimum.
+API access for Shodan, Censys, and EmailHunter are definitely worth it if you want to use only the bare minimum.
 
 **Why do you not like "why not" questions?**
 
@@ -210,9 +210,9 @@ Currently only the Company API is used. There are plans to incorproate the Peopl
 
 **Does ODIN perform DNS brute forcing?**
 
-No. Brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into ODIN without just running the commands for those tools. For subdomain discovery via guessing, it's hard to beat Aquatone right now and there's alwas Fierce and DNSRecon.
+No. Brute forcing can take a long time and there are many tools that take care of this quite well. Those tools are not so easy to incorporate into ODIN without just running the commands for those tools. For subdomain discovery via guessing, it's hard to beat Aquatone (Ruby gem) and Amass (OWASP project) right now and there's alwas Fierce and DNSRecon.
 
-For now, ODIN leverages DNS Dumpster, Netcraft, and SSL/TLS certificate data to collect subdomains to get you started. That should get you a good number of subdomains to get started.
+For now, ODIN leverages DNS Dumpster, Netcraft, and SSL/TLS certificate data to collect subdomains. That should get you a good number of subdomains to get started.
 
 ### Special Thanks
 A big thank you to a few contributors who gave me the OK to re-use some of their code:

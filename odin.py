@@ -25,11 +25,11 @@ import os
 import click
 from multiprocess import Process, Manager
 
-from lib import reporter, asciis, verification, htmlreporter, grapher
+from lib import reporter, asciis, verification, htmlreporter, grapher, helpers
 
 
-version = "2.0.0"
-codename = "HUGINN"
+VERSION = "2.0.0"
+CODENAME = "HUGINN"
 
 
 def setup_reports(client):
@@ -154,8 +154,8 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
     * Underscores? OK:     8.8.8.8_8.8.8.10
     """
     click.clear()
-    click.secho(asciis.print_art(version, codename), fg="magenta")
-    click.secho("\tRelease v{}, {}".format(version, codename), fg="magenta")
+    click.secho(asciis.print_art(), fg="magenta")
+    click.secho("\tRelease v{}, {}".format(VERSION, CODENAME), fg="magenta")
     click.secho("[+] OSINT Module Selected: ODIN will run all recon modules.", fg="green")
 
     # Perform prep work for reporting
@@ -169,7 +169,8 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         ip_list = manager.list()
         domain_list = manager.list()
         # Create reporter object and generate final list, the scope from scope file
-        report = reporter.Reporter(report_path, output_report)
+        browser = helpers.setup_headless_chrome()
+        report = reporter.Reporter(report_path, output_report, browser)
         report.create_tables()
         scope, ip_list, domain_list = report.prepare_scope(ip_list, domain_list, scope_file, domain)
 
@@ -208,7 +209,7 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         if screenshots:
             take_screenshots = Process(name="Screenshot Snapper",
                                        target=report.capture_web_snapshots,
-                                       args=(report_path,))
+                                       args=(report_path, browser))
             more_jobs.append(take_screenshots)
         if files:
             files_report = Process(name="File Hunter",
@@ -301,8 +302,8 @@ Acceptable IP addresses/ranges include:
 
     * Underscores? OK:     8.8.8.8_8.8.8.10
     """
-    click.secho(asciis.print_art(version, codename), fg="magenta")
-    click.secho("\tRelease v{}, {}".format(version, codename), fg="magenta")
+    click.secho(asciis.print_art(), fg="magenta")
+    click.secho("\tRelease v{}, {}".format(VERSION, CODENAME), fg="magenta")
     click.secho("[+] Scope Verification Module Selected: ODIN will attempt to verify who owns \
 the provided IP addresses.", fg="green")
 

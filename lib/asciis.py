@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-This module prints ASCII art banners, version information, and the current release's codename.
+This module prints ASCII art banners, for fun!
 """
 
 import random
 
 
-def print_art(version, codename):
+def print_art():
 	r1 = """
  :::====     :::====     :::    :::= ===
  :::  ===    :::  ===    :::    :::=====
