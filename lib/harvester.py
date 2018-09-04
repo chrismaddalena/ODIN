@@ -24,6 +24,7 @@ from . import searchparser
 
 class SearchTwitter:
     """Class for searching Google using 'site:twitter.com intitle:{keyword}' to find Twitter profiles."""
+
     def __init__(self, word, limit):
         """Everything that should be initiated with a new object goes here."""
         self.word = word.replace(' ', '%20')
@@ -44,10 +45,10 @@ class SearchTwitter:
         headers = {'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:34.0) Gecko/20100101 Firefox/34.0'}
         try:
             req = requests.get(urly, headers=headers)
+            self.results = req.content
+            self.totalresults += str(self.results)
         except Exception as error:
-            print(error)
-        self.results = req.content
-        self.totalresults += str(self.results)
+            pass
 
     def get_people(self):
         """Parse the Google search results to get Twitter handles."""
@@ -63,6 +64,7 @@ class SearchTwitter:
 
 class SearchYahoo:
     """Class for searching Yahoo using a domain as the keyword to collect email addresses."""
+
     def __init__(self, word, limit):
         """Everything that should be initiated with a new object goes here."""
         self.word = word
@@ -81,10 +83,10 @@ class SearchYahoo:
             print(error)
         try:
             req = requests.get(urly, headers=headers)
+            self.results = req.content
+            self.totalresults += str(self.results)
         except Exception as error:
-            print(error)
-        self.results = req.content
-        self.totalresults += str(self.results)
+            pass
 
     def process(self):
         """Process the Yahoo search results page by page up to the limit."""
@@ -101,6 +103,7 @@ class SearchYahoo:
 
 class SearchGoogle:
     """Class for searching Google using a domain as the keyword to collect email addresses."""
+
     def __init__(self, word, limit, start):
         """Everything that should be initiated with a new object goes here."""
         self.word = word
@@ -121,10 +124,10 @@ class SearchGoogle:
             print(error)
         try:
             req = requests.get(urly, headers=headers)
+            self.results = req.content
+            self.totalresults += str(self.results)
         except Exception as error:
-            print(error)
-        self.results = req.content
-        self.totalresults += str(self.results)
+            pass
 
     def get_emails(self):
         """Parse Google search results to get email addresses."""
@@ -141,6 +144,7 @@ class SearchGoogle:
 
 class SearchBing:
     """Class for searching Bing using a domain as the keyword to collect email addresses."""
+
     def __init__(self, word, limit, start):
         """Everything that should be initiated with a new object goes here."""
         self.word = word.replace(' ', '%20')
@@ -161,10 +165,10 @@ class SearchBing:
             print(error)
         try:
             req = requests.get(urly, headers=headers)
+            self.results = req.content
+            self.totalresults += str(self.results)
         except Exception as error:
-            print(error)
-        self.results = req.content
-        self.totalresults += str(self.results)
+            pass
 
     def get_emails(self):
         """Parse Bing search results to get email addresses."""

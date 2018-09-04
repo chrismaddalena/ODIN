@@ -111,8 +111,6 @@ if the domains or associated IP addresses have been flagged as malicious.")
 under the provided domain (-d), download files, and extract metadata.")
 @click.option('-e', '--ext', default="all", help="File extensions to look for with --file. \
 Default is 'all' or you can pick from key, pdf, doc, docx, xls, xlsx, and ppt.")
-@click.option('-x', '--delete', is_flag=True, help="Set this option if you want the downloaded \
-files with --file to be deleted after analysis.")
 # Cloud-related arguments
 @click.option('-w', '--aws', help="A list of additional keywords to be used when searching for \
 cloud sotrage buckets.",type=click.Path(exists=True, readable=True, resolve_path=True))
@@ -126,11 +124,15 @@ SQLite3 database.")
 database. This is only used with --graph.")
 @click.option('--screenshots', is_flag=True, help="Attempt to take screenshots of discovered \
 web services.")
+@click.option('--unsafe', is_flag=True, help="Adding this flag will spawn the headless Chrome \
+browser with the --no-sandbox command line flag. This is NOT recommended for any users who are \
+NOT running ODIN on a Kali Linux VM as root. Chrome will not run as the root user on Kali \
+without this option.")
 # Pass the above arguments on to your osint function
 @click.pass_context
 
-def osint(self, organization, domain, files, ext, delete, scope_file, aws, aws_fixes, html,
-          screenshots, graph, nuke, whoxy_limit, typo):
+def osint(self, organization, domain, files, ext, scope_file, aws, aws_fixes, html,
+          screenshots, graph, nuke, whoxy_limit, typo, unsafe):
     """
 The OSINT toolkit:\n
 This is ODIN's primary module. ODIN will take the tagret organization, domain, and other data
@@ -169,7 +171,7 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         ip_list = manager.list()
         domain_list = manager.list()
         # Create reporter object and generate final list, the scope from scope file
-        browser = helpers.setup_headless_chrome()
+        browser = helpers.setup_headless_chrome(unsafe)
         report = reporter.Reporter(report_path, output_report, browser)
         report.create_tables()
         scope, ip_list, domain_list = report.prepare_scope(ip_list, domain_list, scope_file, domain)
@@ -214,7 +216,7 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         if files:
             files_report = Process(name="File Hunter",
                                    target=report.create_foca_table,
-                                   args=(domain, ext, delete, report_path))
+                                   args=(domain, ext, report_path))
             more_jobs.append(files_report)
 
         # Phase 3 jobs

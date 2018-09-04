@@ -51,9 +51,10 @@ class Grapher(object):
             self.c.execute("SELECT company_name,website,website_overview,employees,year_founded FROM company_info")
             company_info = self.c.fetchone()
             org_names.append(company_info[0])
-            org_names = set(org_names)
         except:
             pass
+
+        org_names = set(org_names)
 
         if len(org_names) > 0:
             for org in org_names:
@@ -72,13 +73,33 @@ class Grapher(object):
             helpers.execute_query(self.neo4j_driver, query)
 
         for org in org_names:
-            query = """
-            MATCH (o:Organization {Name:"%s"})
-            MATCH (d:Domain) WHERE d.Organization="%s"
-            MERGE (o)-[r:OWNS]->(d)
-            RETURN o,r,d
-            """% (org, org)
-            helpers.execute_query(self.neo4j_driver, query)
+            if len(org_names) == 1:
+                # If only one org is known, all domains will be tied to this org.
+                # This ensure the example queries for mapping the external perimeter work as expected
+                click.secho("\n[*] Only one organization, {}, name is known, so all domains will be \
+attached to this organization name.".format(org), fg="yellow")
+                query = """
+                MATCH (d:Domain)
+                SET d += {Organization:'%s'}
+                RETURN d
+                """% (org)
+                helpers.execute_query(self.neo4j_driver, query)
+
+                query = """
+                MATCH (o:Organization {Name:"%s"})
+                MATCH (d:Domain) WHERE d.Organization="%s"
+                MERGE (o)-[r:OWNS]->(d)
+                RETURN o,r,d
+                """% (org, org)
+                helpers.execute_query(self.neo4j_driver, query)            
+            else:
+                query = """
+                MATCH (o:Organization {Name:"%s"})
+                MATCH (d:Domain) WHERE d.Organization="%s"
+                MERGE (o)-[r:OWNS]->(d)
+                RETURN o,r,d
+                """% (org, org)
+                helpers.execute_query(self.neo4j_driver, query)
 
     def _graph_hosts(self):
         """Convert the hosts table into Neo4j graph nodes."""
@@ -269,7 +290,7 @@ class Grapher(object):
     def clear_neo4j_database(self):
         """Clear the current Neo4j database by detaching and deleting all nodes."""
         query = "MATCH (n) DETACH DELETE n"
-        result = helpers.execute_query(self.neo4j_driver, query)
+        helpers.execute_query(self.neo4j_driver, query)
 
 
 # Setup a class for CLICK
@@ -318,7 +339,6 @@ fresh start. Proceed?", fg="red"), default=True):
             exit()
 
     graph.convert()
-
     click.secho("\n[+] Data successfully graphed!", fg="green")
 
 if __name__ == "__main__":

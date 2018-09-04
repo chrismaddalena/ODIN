@@ -12,7 +12,7 @@ from lib import helpers
 
 
 class Screenshotter(object):
-    """A class containing the tools for taking screenshots of webpages."""
+    """Class containing the tools for taking screenshots of webpages."""
 
     def __init__(self, webdriver):
         """Everything that should be initiated with a new object goes here."""
@@ -26,7 +26,12 @@ class Screenshotter(object):
             out_name = target
             target = "http://" + target
             target_ssl = "https://" + target
-
+        # Attempt to dismiss any alerts
+        try:
+            alert = self.browser.switch_to.alert
+            alert.dismiss()
+        except:
+            pass
         # Attempt to take a screenshot of the target
         try: 
             self.browser.get(target)

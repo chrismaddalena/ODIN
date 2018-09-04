@@ -31,7 +31,6 @@ socket.setdefaulttimeout(5)
 def prepare_scope(scope_file, expanded_scope):
     """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
     with hyphens, underscores, and CIDRs."""
-    scope = []
     try:
         with open(scope_file, "r") as scope_file:
             for target in scope_file:

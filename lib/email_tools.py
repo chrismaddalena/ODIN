@@ -43,38 +43,16 @@ class PeopleCheck(object):
         except Exception:
             self.twit_api = None
             click.secho("[!] Could not setup OAuth for Twitter API.", fg="yellow")
-
         try:
             self.emailhunter_api_key = helpers.config_section_map("EmailHunter")["api_key"]
         except Exception:
             self.emailhunter_api_key = ""
             click.secho("[!] Could not fetch EmailHunter API key.", fg="yellow")
-
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
         except Exception:
             self.contact_api_key = ""
             click.secho("[!] Could not fetch Full Contact API key.", fg="yellow")
-
-#         try:
-#             self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
-#             # Try loading the driver as a test
-#             self.chrome_options = Options()
-#             self.chrome_options.add_argument("--headless")
-#             self.chrome_options.add_argument("--window-size=1920x1080")
-#             self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
-#         # Catch issues with the web driver or path
-#         except WebDriverException:
-#             self.chrome_driver_path = None
-#             self.browser = webdriver.PhantomJS()
-#             click.secho("[!] There was a problem with the specified Chrome web driver in your \
-# keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned.", fg="yellow")
-#         # Catch issues loading the value from the config file
-#         except Exception:
-#             self.chrome_driver_path = None
-#             self.browser = webdriver.PhantomJS()
-#             click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
-# to use PantomJS for haveIBeenPwned.", fg="yellow")
 
     def pwn_check(self, email):
         """Check for the target's email in public security breaches using HIBP's API."""
@@ -83,7 +61,6 @@ class PeopleCheck(object):
             # cookies = browser.get_cookies()
             json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pwned = json.loads(json_text)
-
             return pwned
         except TimeoutException:
             click.secho("[!] The connectionto HaveIBeenPwned timed out!", fg="red")
@@ -103,7 +80,6 @@ class PeopleCheck(object):
             # cookies = browser.get_cookies()
             json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pastes = json.loads(json_text)
-
             return pastes
         except TimeoutException:
             click.secho("[!] The connection to HaveIBeenPwned timed out!", fg="red")
@@ -138,6 +114,9 @@ class PeopleCheck(object):
             resp = requests.post(base_url, data=json.dumps(payload), headers=headers)
             if resp.status_code == 200:
                 return resp.json()
+            elif resp.status_code == 401:
+                click.secho("[!] Full Contact says the provided API key is no good. Make sure you \
+are using a valid key for API v3.", fg="red")
 
     def harvest_all(self, domain):
         """Discover email addresses and employee names using search engines like Google, Yahoo,
@@ -146,30 +125,27 @@ class PeopleCheck(object):
         # Set the search configuration for harvesting email addresses and social media profiles
         harvest_limit = 100
         harvest_start = 0
-
         # click.secho("[+] Beginning the harvesting of email addresses for {}...".format(domain), fg="green")
+        # Google search
         search = harvester.SearchGoogle(domain, harvest_limit, harvest_start)
         search.process()
         google_harvest = search.get_emails()
-
-        search = harvester.SearchTwitter(domain, harvest_limit)
-        search.process()
-        twit_harvest = search.get_people()
-
+        # Yahoo search
         search = harvester.SearchYahoo(domain, harvest_limit)
         search.process()
         yahoo_harvest = search.get_emails()
-
+        # Bing search
         search = harvester.SearchBing(domain, harvest_limit, harvest_start)
         search.process()
         bing_harvest = search.get_emails()
-
+        # Twitter search
+        search = harvester.SearchTwitter(domain, harvest_limit)
+        search.process()
+        twit_harvest = search.get_people()
         # Combine lists and strip out duplicate findings for unique lists
         all_emails = google_harvest + bing_harvest + yahoo_harvest
-
-        click.secho("[+] The search engines returned {} emails and {} Twitter handles."
-                     .format(len(all_emails), len(twit_harvest)), fg="green")
-
+        click.secho("[+] The search engines returned {} emails and {} Twitter handles for {}."
+                     .format(len(all_emails), len(twit_harvest), domain), fg="green")
         # Return the results for emails, people, and Twitter accounts
         return all_emails, twit_harvest
 
@@ -188,7 +164,6 @@ lookups.", fg="yellow")
                 user_data['location'] = user.location
                 user_data['followers'] = user.followers_count
                 user_data['user_description'] = user.description
-
                 return user_data
             except Exception as error:
                 click.secho("\n[!] Error involving {} -- could be an invalid account.".format(handle), fg="red")
@@ -227,12 +202,9 @@ lookups.", fg="yellow")
                 pass
             except WebDriverException:
                 pass
-
             sleep(1)
             counter += 50
-
         return profiles
-
 
     def harvest_emailhunter(self, domain):
         """"Collect known email addresses for a domain and other information, such as names and job
@@ -241,18 +213,14 @@ lookups.", fg="yellow")
         A free EmailHunter API key is required.
         """
         results = None
-
         if self.emailhunter_api_key:
-            emailhunter_api_url = "https://api.hunter.io/v2/domain-search?\
-domain={}&api_key={}".format(domain, self.emailhunter_api_key)
+            emailhunter_api_url = "https://api.hunter.io/v2/domain-search?domain={}&api_key={}".format(domain, self.emailhunter_api_key)
             request = requests.get(emailhunter_api_url)
             results = request.json()
-
             if "errors" in results:
                 click.secho("[!] The request to EmailHunter returned an error!", fg="red")
                 click.secho("L.. Details: {}".format(results['errors']), fg="red")
                 return None
-
             click.secho("[+] Hunter has contact data for {} people."
                          .format(len(results['data']['emails'])), fg="green")
         return results
@@ -267,7 +235,6 @@ domain={}&api_key={}".format(domain, self.emailhunter_api_key)
         job_titles = {}
         linkedin = {}
         phone_nums = {}
-
         # Convert all emails from search engines to lowercase for de-duping
         for email in harvester_emails:
             email = email.lower()
@@ -275,7 +242,6 @@ domain={}&api_key={}".format(domain, self.emailhunter_api_key)
             # Also check for any truncated emails with ".."
             if len(email.split("@")[0]) > 1 and ".." not in email:
                 temp_emails.append(email)
-
         # Process emails and people found by Hunter.io
         if hunter_json:
             for result in hunter_json['data']['emails']:
@@ -295,7 +261,6 @@ domain={}&api_key={}".format(domain, self.emailhunter_api_key)
                         if "phone_number" in result:
                             if result['phone_number'] is not None:
                                 phone_nums[person] = result['phone_number']
-
                 if "twitter" in email:
                     if result['twitter'] is not None:
                         harvester_twitter.append(result['twitter'])
@@ -303,7 +268,6 @@ domain={}&api_key={}".format(domain, self.emailhunter_api_key)
         # Remove any duplicate results
         unique = set(temp_emails)
         unique_emails = list(unique)
-
         unique = set(harvester_people)
         unique_people = list(unique)
 
@@ -317,5 +281,4 @@ domain={}&api_key={}".format(domain, self.emailhunter_api_key)
 
         click.secho("[+] Final unique findings: {} emails, {} people, {} Twitter handles."
                      .format(len(unique_emails), len(unique_people), len(unique_twitter)), fg="green")
-
         return unique_emails, unique_people, unique_twitter, job_titles, linkedin, phone_nums

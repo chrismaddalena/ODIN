@@ -13,11 +13,11 @@ import base64
 import datetime
 import sqlite3
 from time import sleep
-from xml.etree import ElementTree  as ET
 
 import click
+from xml.etree import ElementTree as ET
 
-from lib import domain_tools, email_tools, pyfoca, helpers, screenshots
+from lib import domain_tools, email_tools, filehunter, helpers, screenshots, typosquat
 
 
 class Reporter(object):
@@ -31,6 +31,7 @@ class Reporter(object):
     def __init__(self, report_path, report_name, webdriver):
         """Everything that should be initiated with a new object goes here."""
         # Create the report database -- NOT in memory to allow for multiprocessing and archiving
+        self.webdriver = webdriver
         self.report_path = report_path
         if os.path.isfile(report_name):
             if click.confirm(click.style("[!] A report for this client already exists. Are you \
@@ -39,10 +40,10 @@ sure you want to overwrite it?", fg="red"), default=True):
             else:
                 click.secho("[!] Exiting...", fg="red")
                 exit()
-
         # Initiate the new class objects
-        self.DC = domain_tools.DomainCheck(webdriver)
-        self.PC = email_tools.PeopleCheck(webdriver)
+        self.DC = domain_tools.DomainCheck(self.webdriver)
+        self.PC = email_tools.PeopleCheck(self.webdriver)
+        self.TC = typosquat.TypoCheck()
         # Connect to our database
         self.conn = sqlite3.connect(report_name)
         self.c = self.conn.cursor()
@@ -163,7 +164,6 @@ it has been added to the scope for OSINT.".format(domain), fg="yellow")
         """Record the company information provided by the Full Contact API."""
         # Try to collect the info from Full Contact
         info_json = self.PC.full_contact_company(domain)
-
         if info_json is not None:
             try:
                 # INSERT the data from Full Contact
@@ -191,7 +191,6 @@ it has been added to the scope for OSINT.".format(domain), fg="yellow")
                                 (name, logo, website, approx_employees, year_founded, website_overview,
                                     corp_keywords))
                 self.conn.commit()
-
                 # If Full Contact returned any social media info, add columns for the service
                 temp = []
                 for profile in info_json['details']['profiles']:
@@ -206,7 +205,6 @@ it has been added to the scope for OSINT.".format(domain), fg="yellow")
                         self.c.execute("UPDATE company_info SET '%s' = '%s'" % (service, profile_url))
                         self.conn.commit()
                         temp.append(service)
-
                 # Update the table with information that is not always available
                 if "emails" in info_json['details']:
                     email_addresses = []
@@ -258,7 +256,6 @@ the company's primary domain used for their website.".format(domain), fg="red")
                         for date in results['expiration_date']:
                             expiration_date.append(date.strftime("%Y-%m-%d %H:%M:%S"))
                         expiration_date = ", ".join(expiration_date)
-
                     registrar = results['registrar']
                     whois_org = results['org']
                     registrant = results['registrant']
@@ -277,7 +274,6 @@ the company's primary domain used for their website.".format(domain), fg="red")
             except Exception as error:
                 click.secho("[!] There was an error running whois for {}!".format(domain), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
-
             # If whois failed, try a WhoXY whois lookup
             # This is only done if whois failed so we can save on API credits
             if not results:
@@ -299,7 +295,6 @@ the company's primary domain used for their website.".format(domain), fg="red")
                 except Exception as error:
                     click.secho("[!] There was an error running WhoXY whois for {}!".format(domain), fg="red")
                     click.secho("L.. Details: {}".format(error), fg="red")
-
         # Fetch any organization names found from whois lookups and the provided organziation
         all_orgs = []
         self.c.execute("SELECT organization FROM whois_data")
@@ -345,7 +340,6 @@ Censys.".format(total_results, org_name, whoxy_limit), fg="yellow")
                             address = reverse_whoxy_results[result]['address']
                             admin_contact = reverse_whoxy_results[result]['admin_contact']
                             tech_contact = reverse_whoxy_results[result]['tech_contact']
-
                             # Add any new domain names to the master list
                             if not rev_domain in domain_list:
                                 if not total_results > whoxy_limit:
@@ -364,10 +358,9 @@ Censys.".format(total_results, org_name, whoxy_limit), fg="yellow")
 so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="yellow")
 
         # Master list of domains may include new domains now, so resume looping through domain_list
-        with click.progressbar(domain_list,
-                        label="[*] Collecting DNS records",
+        with click.progressbar(label="[*] Collecting DNS records",
                         length=len(domain_list)) as bar:
-            for domain in bar:
+            for domain in domain_list:
                 # click.secho("[+] Fetching DNS records for {}.".format(domain), fg="green")
                 vulnerable_dns_servers = []
                 # Get the DNS records for each domain, starting with NS
@@ -385,7 +378,7 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                             vulnerable_dns_servers.append(result)
                 except:
                     ns_records = "None"
-                # Get the A records
+                # Collect each type of DNS record for the domain(s)
                 try:
                     temp = []
                     a_records = self.DC.get_dns_record(domain, "A")
@@ -400,50 +393,29 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                                 self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
                                                 (item.to_text(), False, "Domain DNS"))
                                 self.conn.commit()
-                                # Also add A record IP addreses it to the master list
+                                # Also add A record IP addressess to the master list
                                 if not item.to_text() in ip_list:
                                     ip_list.append(item.to_text())
                     a_records = ", ".join(temp)
                 except:
                     a_records = "None"
-                # Get the MX records
                 try:
-                    temp = []
-                    mx_records = self.DC.get_dns_record(domain, "MX")
-                    for rdata in mx_records.response.answer:
-                        for item in rdata.items:
-                            temp.append(item.to_text())
-                    mx_records = ", ".join(x.strip(".") for x in temp)
+                    mx_records = self.DC.return_dns_record_list(domain, "MX")
                 except:
                     mx_records = "None"
-                # Get the TXT records
                 try:
                     temp = []
-                    txt_records = self.DC.get_dns_record(domain, "TXT")
-                    for rdata in txt_records.response.answer:
-                        for item in rdata.items:
-                            temp.append(item.to_text())
-                    txt_records = ", ".join(temp)
+                    txt_records = self.DC.return_dns_record_list(domain, "TXT")
                 except:
                     txt_records = "None"
-                # Get the SOA records
                 try:
                     temp = []
-                    soa_records = self.DC.get_dns_record(domain, "SOA")
-                    for rdata in soa_records.response.answer:
-                        for item in rdata.items:
-                            temp.append(item.to_text())
-                    soa_records = ", ".join(temp)
+                    soa_records = self.DC.return_dns_record_list(domain, "SOA")
                 except:
                     soa_records = "None"
-                # Get the _DMARC TXT record
                 try:
                     temp = []
-                    dmarc_record = self.DC.get_dns_record("_dmarc." + domain, "TXT")
-                    for rdata in dmarc_record.response.answer:
-                        for item in rdata.items:
-                            temp.append(item.to_text())
-                    dmarc_record = ", ".join(temp)
+                    dmarc_record = self.DC.return_dns_record_list("_dmarc" + domain, "TXT")
                 except:
                     dmarc_record = "None"
                 # INSERT the DNS records into the table
@@ -451,13 +423,13 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                             (domain, ns_records, a_records, mx_records, txt_records, soa_records,
                                 dmarc_record, ", ".join(vulnerable_dns_servers)))
                 self.conn.commit()
+                bar.update(1)
 
         # Next phase, loop to collect the subdomain information
         # NetCraft, DNS Dumpster, and TLS certificates (Censys) are used for this
-        with click.progressbar(domain_list,
-                        label="[*] Collecting subdomains",
+        with click.progressbar(label="[*] Collecting subdomains",
                         length=len(domain_list)) as bar:
-            for domain in bar:
+            for domain in domain_list:
                 # click.secho("[+] Collecting subdomain data for {}...".format(domain), fg="green")
                 collected_subdomains = []
                 dumpster_results = []
@@ -472,7 +444,7 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                 except:
                     click.secho("\n[!] There was a problem collecting results from NetCraft for {}."
                                 .format(domain), fg="red")
-
+                # Check DNS Dumpster data
                 if dumpster_results:
                     # See if we can save the domain map from DNS Dumpster
                     if dumpster_results['image_data']:
@@ -490,17 +462,15 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                             ip = result['ip']
                             # asn = result['as']
                             # provider = result['provider']
-
                         # Avoid adding the base domain to our subdomains list
                         if not bool(re.search("^" + re.escape(domain), subdomain.rstrip("HTTP:"), re.IGNORECASE)):
                             collected_subdomains.append(subdomain.rstrip("HTTP:"))
-
+                # Check Netcraft data
                 if netcraft_results:
                     for result in netcraft_results:
                         # Avoid adding the base domain to our subdomains list
                         if not bool(re.search("^" + re.escape(domain), result, re.IGNORECASE)):
                             collected_subdomains.append(result)
-
                 # Try to collect certificate data for the domain
                 try:
                     cert_data = self.DC.search_censys_certificates(domain)
@@ -515,19 +485,15 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                             self_signed = cert["parsed.signature.self_signed"]
                             start_date = cert["parsed.validity.start"]
                             exp_date = cert["parsed.validity.end"]
-
                             cert_domain = self.DC.parse_cert_subdomain(subject)
-
                             # Insert the certiticate info into the certificates table
                             self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,?,?,?,?,?,?,?,?)",
                                         (cert_domain, subject, issuer, fingerprint, signature_algo,
                                         self_signed, start_date, exp_date, ", ".join(parsed_names)))
                             self.conn.commit()
-
                             # Add the collected names to the list of subdomains
                             collected_subdomains.append(cert_domain)
                             collected_subdomains.extend(parsed_names)
-
                         # Filter out any uninteresting domains caught in the net and remove duplicates
                         # Also removes wildcards, i.e. *.google.com doesn't resolve to anything
                         collected_subdomains = self.DC.filter_subdomains(domain, collected_subdomains)
@@ -558,6 +524,7 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                     pass
                 # Take a break for Censys's rate limits
                 sleep(self.sleep)
+                bar.update(1)
 
         # Loop through domains to collect IP history from NetCraft
         for domain in domain_list:
@@ -567,7 +534,6 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
             except:
                 click.secho("[!] There was a problem collecting domain history from NetCraft for {}."
                              .format(domain), fg="red")
-
             if ip_history:
                 for result in ip_history:
                     net_owner = result[0]
@@ -599,7 +565,6 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                     pass
                 else:
                     target_ip = socket.gethostbyname(target)
-
                 # Log RDAP lookups
                 results = self.DC.run_rdap(target_ip)
                 if results:
@@ -608,7 +573,6 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                     net_cidr = results['network']['cidr']
                     asn = results['asn']
                     country_code = results['asn_country_code']
-
                     # Check Robtex for results for the current target
                     robtex = self.DC.lookup_robtex_ipinfo(target_ip)
                     if robtex:
@@ -618,13 +582,13 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                         robtex_results = ", ".join(results)
                     else:
                         robtex_results = "None"
-
                     self.c.execute("INSERT INTO rdap_data VALUES (NULL,?,?,?,?,?,?,?)",
                                    (target_ip, rdap_source, org, net_cidr, asn, country_code,
                                     robtex_results))
                     self.conn.commit()
-            except socket.error:
+            except socket.error as error:
                 click.secho("[!] Could not resolve {}!".format(target), fg="red")
+                click.secho("L.. Details: {}".format(error), fg="red")
             except Exception as error:
                 click.secho("[!] The RDAP lookup failed for {}!".format(target), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
@@ -653,7 +617,6 @@ minutes with the {} second API request delay."
                             operating_system = result['os']
                             port = result['port']
                             data = result['data']
-
                             self.c.execute("INSERT INTO shodan_search VALUES (NULL,?,?,?,?,?,?)",
                                         (domain, ip_address, hostnames, operating_system, port, data))
                             self.conn.commit()
@@ -707,18 +670,15 @@ minutes with the {} second API request delay."
             # Search for emails, names, and social media handles
             harvesterd_emails, harvested_twitter = self.PC.harvest_all(domain)
             hunter_json = self.PC.harvest_emailhunter(domain)
-
             # Process the collected data
             temp_emails, temp_people, temp_twitter, temp_job_titles, temp_linkedin, temp_phone_nums = \
             self.PC.process_harvested_lists(harvesterd_emails, harvested_twitter, hunter_json)
-
             unique_emails.extend(temp_emails)
             unique_people.extend(temp_people)
             unique_twitter.extend(temp_twitter)
             hunter_job_titles.update(temp_job_titles)
             hunter_linkedin.update(temp_linkedin)
             hunter_phone_nums.update(temp_phone_nums)
-
         # If we have emails, record them and check HaveIBeenPwned
         if unique_emails:
             unique_emails = list(set(unique_emails))
@@ -762,7 +722,6 @@ between requests.".format(self.hibp_sleep), fg="green")
                     except Exception as error:
                         click.secho("[!] Error checking {} with HaveIBeenPwned's database!".format(email), fg="red")
                         click.secho("L.. Detail: {}".format(error), fg="red")
-
         # If we have Twitter handles, check Twitter for user data
         if unique_twitter:
             unique_twitter = list(set(unique_twitter))
@@ -781,7 +740,6 @@ between requests.".format(self.hibp_sleep), fg="green")
                             self.conn.commit()
                     except:
                         pass
-
         # If we have names, check if EmailHunter returned any additional information for them
         if harvested_linkedin:
             for profile in harvested_linkedin:
@@ -790,7 +748,6 @@ between requests.".format(self.hibp_sleep), fg="green")
                 profile_link = harvested_linkedin[profile]['linkedin_profile']
                 self.c.execute("INSERT INTO employee_data VALUES (?,?,NULL,?)", (profile, job_title, profile_link))
                 self.conn.commit()
-
         if unique_people:
             unique_people = list(set(unique_people))
             for person in unique_people:
@@ -801,23 +758,21 @@ between requests.".format(self.hibp_sleep), fg="green")
                         self.conn.commit()
                     # Record their job title, if we have one from Hunter
                     if person in hunter_job_titles:
-                        for name, title in job_titles.items():
+                        for name, title in hunter_job_titles.items():
                             if name == person:
                                 self.c.execute("UPDATE employee_data SET JobTitle = ? WHERE Name = ?",
                                             (title, person))
                                 self.conn.commit()
-
                     # Record their phone number, if we have one from Hunter
                     if person in hunter_phone_nums:
-                        for name, number in phone_nums.items():
+                        for name, number in hunter_phone_nums.items():
                             if name == person:
                                 self.c.execute("UPDATE employee_data SET PhoneNumber = ? WHERE Name = ?",
                                             (number, person))
                                 self.conn.commit()
-
                     # Record their verified LinkedIn profile, if we have one from Hunter
                     if person in hunter_linkedin:
-                        for name, link in linkedin.items():
+                        for name, link in hunter_linkedin.items():
                             if name == person:
                                 self.c.execute("UPDATE employee_data SET LinkedIn = ? WHERE Name = ?",
                                             (link, person))
@@ -827,13 +782,13 @@ between requests.".format(self.hibp_sleep), fg="green")
 
         # click.secho("[*] Employee Hunter Job Finished", fg="yellow")
 
-    def create_foca_table(self, domain_name, extensions, del_files, download_dir):
+    def create_foca_table(self, domain_name, extensions, download_dir):
         """Record the file collection results, including filenames, URLs, and file metadata."""
         # Setup Google settings -- pages to look through and timeout
         page_results = 10
         socket.setdefaulttimeout(5)
         exts = extensions.split(',')
-        supported_exts = ['all', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'key']
+        supported_exts = ['all', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']
         for i in exts:
             if i.lower() not in supported_exts:
                 click.secho("[!] You've provided an unsupported file extension for --file.", fg="red")
@@ -841,12 +796,10 @@ between requests.".format(self.hibp_sleep), fg="green")
                 exts.remove(i)
         if "all" in exts:
             exts = supported_exts[1:]
-
+        # Discover files, extract metadats, and record it
         click.secho("[+] Performing file discovery under {}.".format(domain_name), fg="green")
-        parser = pyfoca.Metaparser(domain_name, page_results, exts, del_files, download_dir)
+        parser = filehunter.Metaparser(domain_name, page_results, exts, download_dir, self.webdriver)
         metadata = parser.grab_meta()
-        parser.clean_up()
-
         if metadata:
             # Write out the metadata for each found file
             for result in metadata:
@@ -859,7 +812,7 @@ between requests.".format(self.hibp_sleep), fg="green")
     def create_urlcrazy_table(self, client, domain):
         """Record the URLCrazy domains and the threat feed results for each domain."""
         # Check if urlcrazy is available and proceed with recording results
-        urlcrazy_results = self.DC.run_urlcrazy(client, domain)
+        urlcrazy_results = self.TC.run_urlcrazy(client, domain)
         if not urlcrazy_results:
             pass
         else:
@@ -869,13 +822,11 @@ between requests.".format(self.hibp_sleep), fg="green")
                 a_records = result['a-records']
                 mx_records = result['mx-records']
                 malicious = result['malicious']
-
                 self.c.execute("INSERT INTO urlcrazy VALUES (?,?,?,?,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
                                (domain, a_records, mx_records, malicious))
                 self.conn.commit()
-
                 # Check each domain with URLVoid for reputation data
-                tree = self.DC.run_urlvoid_lookup(domain)
+                tree = self.TC.run_urlvoid_lookup(domain)
                 count = ""
                 engines = ""
                 if tree is not None:
@@ -891,7 +842,6 @@ between requests.".format(self.hibp_sleep), fg="green")
                                 for engine in engines:
                                     temp.append(ET.tostring(engine, method='text').rstrip().decode('ascii'))
                                 engines = ", ".join(temp)
-
                         rep_data = tree[0]
                         if len(rep_data) == 0:
                             pass
@@ -912,7 +862,6 @@ between requests.".format(self.hibp_sleep), fg="green")
                                 hostnames = None
                                 asn = None
                                 asn_name = None
-
                             self.c.execute('''UPDATE urlcrazy
                                             SET 'urlvoid_ip'=?,
                                                 'hostname'=?,
@@ -935,7 +884,6 @@ between requests.".format(self.hibp_sleep), fg="green")
     def create_cloud_table(self, client, domain, wordlist=None, fix_wordlist=None):
         """Record findings related to cliud services and storage buckets."""
         verified_buckets, verified_accounts = self.DC.enumerate_buckets(client, domain, wordlist, fix_wordlist)
-
         if verified_buckets:
             # Write S3 Bucket table contents
             for bucket in verified_buckets:
@@ -944,7 +892,6 @@ between requests.".format(self.hibp_sleep), fg="green")
                                    (bucket['bucketName'], bucket['bucketUri'],
                                    bucket['arn'], bucket['public']))
                     self.conn.commit()
-
             click.secho("[+] Cloud storage searches are complete.", fg="green")
         else:
             click.secho("[*] Nothing was returned for the cloud storage searches.", fg="yellow")
@@ -955,11 +902,10 @@ between requests.".format(self.hibp_sleep), fg="green")
         """Attempt to take screenshots of discovered web services."""
         camera = screenshots.Screenshotter(webdriver)
         output_dir += "screenshots/"
-
-        # TODO: Take Shodan results and look for common web ports for screenshots
+        # Get the list of targets from the database
         self.c.execute("SELECT host_address FROM hosts")
         target_list = self.c.fetchall()
-
+        # Attempt a screenshot of each host using HTTP and HTTPS
         for target in target_list:
             camera.take_screenshot(target[0], output_dir)
 

@@ -244,7 +244,7 @@ now?", fg="green"), default=True):
                 founded = company_info[4]
             else:
                 name = self.organization
-                logo = website = employees = founded = "Requires Full Contact API"
+                logo = website = employees = founded = "No data provided by the Full Contact API"
 
             content = """
             <html><head><link rel="stylesheet" href="styles.css"></head>

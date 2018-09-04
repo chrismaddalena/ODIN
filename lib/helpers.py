@@ -13,6 +13,7 @@ from IPy import IP
 from neo4j.v1 import GraphDatabase
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.common.exceptions import TimeoutException,NoSuchElementException,WebDriverException
 
 
@@ -38,7 +39,6 @@ def config_section_map(section):
             section_dict[option] = CONFIG_PARSER.get(section, option)
             if section_dict[option] == -1:
                 click.secho("[*] Skipping: {}".format(option), fg="yellow")
-
         # Return the dictionary of settings and values
         return section_dict
     except configparser.Error as error:
@@ -66,7 +66,6 @@ def is_domain(value):
     names with hyphens from IP address ranges with hyphens.
     """
     result = any(check.isalpha() for check in value)
-
     return result
 
 def setup_gdatabase_conn():
@@ -93,10 +92,9 @@ def execute_query(driver, query):
     """Execute the provided query using the provided Neo4j database connection and driver."""
     with driver.session() as session:
         results = session.run(query)
-
     return results
 
-def setup_headless_chrome():
+def setup_headless_chrome(unsafe):
     """Attempt to setup a Selenium webdriver using headless Chrome. If this fails, fallback to
     PhantomJS. PhantomJS is a last resort, but better than nothing for the time being."""
     try:
@@ -105,19 +103,47 @@ def setup_headless_chrome():
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--window-size=1920x1080")
-        browser = webdriver.Chrome(chrome_options=chrome_options, executable_path=chrome_driver_path)
+        # Setup 'capabilities' to ignore expired/self-signed certs so a screenshot is captured
+        chrome_capabilities = DesiredCapabilities.CHROME.copy()
+        chrome_capabilities['acceptSslCerts'] = True
+        chrome_capabilities['acceptInsecureCerts'] = True
+        # For Kali users, Chrome will get angry if the root user is used and requires --no-sandbox
+        if unsafe:
+            chrome_options.add_argument("--no-sandbox")
+        browser = webdriver.Chrome(chrome_options=chrome_options, executable_path=chrome_driver_path,
+                                desired_capabilities=chrome_capabilities)
         click.secho("[*] Headless Chrome browser test was successful!", fg="yellow")
     # Catch issues with the web driver or path
     except WebDriverException:
-        chrome_driver_path = None
-        browser = webdriver.PhantomJS()
         click.secho("[!] There was a problem with the specified Chrome web driver in your \
-keys.config! Please check it. For now ODIN will try to use PhantomJS for HaveIBeenPwned.", fg="yellow")
+keys.config! Please check it. For now ODIN will try to use PhantomJS.", fg="yellow")
+        browser = setup_phantomjs()
     # Catch issues loading the value from the config file
     except Exception:
-        chrome_driver_path = None
-        browser = webdriver.PhantomJS()
-        click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will tryuse \
-to use PantomJS for haveIBeenPwned.", fg="yellow")
+        click.secho("[*] Could not load a Chrome webdriver for Selenium, so we will try to use \
+PantomJS, but PhantomJS is no longer actively developed and is less reliable.", fg="yellow")
+        browser = setup_phantomjs()
+    return browser
 
+def setup_phantomjs():
+    """Create and return a PhantomJS browser object."""
+    try:
+        # Setup capabilities for the PhantomJS browser
+        phantomjs_capabilities = DesiredCapabilities.PHANTOMJS
+        # Some basic creds to use against an HTTP Basic Auth prompt
+        phantomjs_capabilities['phantomjs.page.settings.userName'] = 'none'
+        phantomjs_capabilities['phantomjs.page.settings.password'] = 'none'
+        # Flags to ignore SSL problems and get screenshots
+        service_args = []
+        service_args.append('--ignore-ssl-errors=true')
+        service_args.append('--web-security=no')
+        service_args.append('--ssl-protocol=any')
+        # Create the PhantomJS browser and set the window size
+        browser = webdriver.PhantomJS(desired_capabilities=phantomjs_capabilities, service_args=service_args)
+        browser.set_window_size(1920, 1080)
+    except Exception as error:
+        click.secho("[!] Bad news: PhantomJS failed to load (not installed?), so activities \
+requiring a web browser will be skipped.", fg="red")
+        click.secho("L.. Details: {}".format(error), fg="red")
+        browser = None
     return browser

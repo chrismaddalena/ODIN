@@ -8,12 +8,9 @@ names, and cloud services.
 
 import re
 import os
-import csv
 import time
 import base64
-import subprocess
 import warnings
-from xml.etree import ElementTree as ET
 
 import click
 import whois
@@ -21,7 +18,6 @@ import shodan
 import requests
 import validators
 import dns.resolver
-from cymon import Cymon
 import censys.certificates
 from ipwhois import IPWhois
 from bs4 import BeautifulSoup
@@ -35,7 +31,6 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 from lib import helpers
 
 
-
 class DomainCheck(object):
     """A class containing the tools for performing OSINT against IP addresses and domain names."""
     # Google-friendly user-agent
@@ -43,48 +38,29 @@ class DomainCheck(object):
         en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6'}
     # Sleep time for Google and Shodan
     sleep = 10
-    # Cymon.io API endpoint
-    cymon_api = "https://api.cymon.io/v2"
     # Robtex's free API endpoint
     robtex_api = "https://freeapi.robtex.com/ipquery/"
 
     def __init__(self, webdriver):
         """Everything that should be initiated with a new object goes here."""
         self.browser = webdriver
-
         # Setup a DNS resolver so a timeout can be set
         # No timeout means a very, very long wait if a domain has no records
         self.resolver = dns.resolver.Resolver()
         self.resolver.timeout = 1
         self.resolver.lifetime = 1
-
         # Collect the API keys from the config file
         try:
-            shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
-            self.shodan_api = shodan.Shodan(shodan_api_key)
+            self.shodan_api_key = helpers.config_section_map("Shodan")["api_key"]
+            self.shodan_api = shodan.Shodan(self.shodan_api_key)
         except Exception:
             self.shodan_api = None
             click.secho("[!] Did not find a Shodan API key.", fg="yellow")
-
-        try:
-            self.cymon_api_key = helpers.config_section_map("Cymon")["api_key"]
-            self.cymon_api = Cymon(self.cymon_api_key)
-        except Exception:
-            self.cymon_api = Cymon()
-            click.secho("[!] Did not find a Cymon API key.", fg="yellow")
-
-        try:
-            self.urlvoid_api_key = helpers.config_section_map("URLVoid")["api_key"]
-        except Exception:
-            self.urlvoid_api_key = ""
-            click.secho("[!] Did not find a URLVoid API key.", fg="yellow")
-
         try:
             self.contact_api_key = helpers.config_section_map("Full Contact")["api_key"]
         except Exception:
             self.contact_api_key = None
             click.secho("[!] Did not find a Full Contact API key.", fg="yellow")
-
         try:
             censys_api_id = helpers.config_section_map("Censys")["api_id"]
             censys_api_secret = helpers.config_section_map("Censys")["api_secret"]
@@ -97,29 +73,7 @@ will be skipped.", fg="yellow")
         except Exception as error:
             self.censys_cert_search = None
             click.secho("[!] Did not find a Censys API ID/secret.", fg="yellow")
-            click.secho("L.. Details:  {}".format(error0), fg="yellow")
-
-#         try:
-#             self.chrome_driver_path =   helpers.config_section_map("WebDriver")["driver_path"]
-#             # Try loading the driver as a test
-#             self.chrome_options = Options()
-#             self.chrome_options.add_argument("--headless")
-#             self.chrome_options.add_argument("--window-size=1920x1080")
-#             self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
-#             click.secho("[*] Headless Chrome browser test was successful!", fg="yellow")
-#         # Catch issues with the web driver or path
-#         except WebDriverException:
-#             self.chrome_driver_path = None
-#             self.browser = webdriver.PhantomJS()
-#             click.secho("[!] There was a problem with the specified Chrome web driver in your \
-# keys.config! Please check it. For now ODIN will try to use PhantomJS for Netcraft.", fg="yellow")
-#         # Catch issues loading the value from the config file
-#         except Exception:
-#             self.chrome_driver_path = None
-#             self.browser = webdriver.PhantomJS()
-#             click.secho("[!] Could not load a Chrome webdriver for Selenium, so we will try \
-# to use PantomJS for Netcraft.", fg="yellow")
-
+            click.secho("L.. Details:  {}".format(error), fg="yellow")
         try:
             self.boto3_client = boto3.client('s3')
             # Test connecting to a test S3 with the creds supplied to `aws configure`
@@ -127,7 +81,6 @@ will be skipped.", fg="yellow")
         except Exception:
             self.boto3_client = None
             click.secho("[!] Could not create an AWS client with the supplied secrets.", fg="yellow")
-
         try:
             self.whoxy_api_key = helpers.config_section_map("WhoXY")["api_key"]
             try:
@@ -197,7 +150,6 @@ communicating with WhoXY later.", fg="yellow")
         except IOError as error:
             click.secho("[!] Parsing of scope file failed!", fg="red")
             click.secho("L.. Details: {}".format(error), fg="red")
-
         return scope
 
     def full_contact_domain(self, domain):
@@ -217,14 +169,30 @@ communicating with WhoXY later.", fg="yellow")
                 return resp.text.encode('ascii', 'ignore')
 
     def get_dns_record(self, domain, record_type):
-        """Simple function to get the specified DNS record type for the target domain."""
+        """Collect the specified DNS record type for the target domain."""
         answer = self.resolver.query(domain, record_type)
         return answer
 
-    def check_dns_cache(self, name_server):
-        """Function to check if the given name server is vulnerable to DNS cache snooping.
+    def parse_dns_answer(self, dns_record):
+        """Parse the provided DNS record and return a list containing each item."""
+        temp = []
+        for rdata in dns_record.response.answer:
+            for item in rdata.items:
+                temp.append(item.to_text())
+        return ", ".join(temp)
 
-        Code adapted for ODIN from work done by z0mbiehunt3r with DNS Snoopy.
+    def return_dns_record_list(self, domain, record_type):
+        """Collect and parse a DNS record for the given domain and DNS record type and then return
+        a list.
+        """
+        record = self.get_dns_record(domain, record_type)
+        return self.parse_dns_answer(record)
+
+    def check_dns_cache(self, name_server):
+        """Check if the given name server is vulnerable to DNS cache snooping.
+
+        Code adapted for ODIN from work done by z0mbiehunt3r with DNS Snoopy:
+
         https://github.com/z0mbiehunt3r/dns-snoopy
         """
         vulnerable_dns_servers = ""
@@ -238,10 +206,9 @@ communicating with WhoXY later.", fg="yellow")
         nameserver_ip = str(answers.rrset[0])
         for domain in common_domains:
             if self.dns_cache_request(domain, nameserver_ip):
-                click.secho("[+] {} resolved a cached query for {}.".format(name_server, domain), fg="green")
+                # click.secho("[+] {} resolved a cached query for {}.".format(name_server, domain), fg="green")
                 vulnerable_dns_servers = name_server
                 break
-
         return vulnerable_dns_servers
 
     def dns_cache_request(self, domain, nameserver_ip, checkttl=False, dns_snooped=False):
@@ -264,7 +231,7 @@ communicating with WhoXY later.", fg="yellow")
         """
         if len(dns_response.answer) > 0 and checkttl:
             # Get cached TTL
-            ttl_cached = dns_response.answer[0].ttl
+            # ttl_cached = dns_response.answer[0].ttl
             # First, get NS for the first cached domain
             cached_domain_dns = self.get_dns_record(domain, "NS")[0]
             # After, resolve its IP address
@@ -274,11 +241,10 @@ communicating with WhoXY later.", fg="yellow")
             query.flags ^= dns.flags.RD
 
             dns_response = dns.query.udp(q=query, where=cached_domain_dns_IP)
-            ttl_original = dns_response.answer[0].ttl
-            cached_ago = ttl_original-ttl_cached
+            # ttl_original = dns_response.answer[0].ttl
+            # cached_ago = ttl_original-ttl_cached
         elif len(dns_response.answer) > 0:
             return 1
-
         return 0
 
     def run_whois(self, domain):
@@ -306,7 +272,6 @@ communicating with WhoXY later.", fg="yellow")
             else:
                 click.secho("[*] Whois record for {} came back empty. Could be privacy protection, \
 GDPR, or the registrar. You might try looking at dnsstuff.com.".format(domain), fg="yellow")
-
             return results
         except Exception as error:
             click.secho("[!] The whois lookup for {} failed!".format(domain), fg="red")
@@ -402,7 +367,6 @@ lookup on {}.".format(domain), fg="yellow")
                         domain_name = domain['domain_name']
                         temp = self.parse_whoxy_results(domain, True)
                         whois_results[domain_name] = temp
-
                     return whois_results, total_results
                 else:
                     click.secho("[*] WhoXY returned status code 0, error/no results, for reverse \
@@ -425,125 +389,10 @@ company search.", fg="yellow")
                 warnings.filterwarnings("ignore",category=UserWarning)
                 rdapwho = IPWhois(ip_address)
                 results = rdapwho.lookup_rdap(depth=1)
-
             return results
         except Exception as error:
             click.secho("[!] Failed to collect RDAP information for {}!".format(ip_address), fg="red")
             click.secho("L.. Details: {}".format(error), fg="red")
-
-    def run_urlcrazy(self, client, target, cymon_api=cymon_api):
-        """Run urlcrazy to locate typosquatted domains related to the target domain. The full
-        output is saved to a csv file and then domains with A-records are analyzed to see if
-        they may be in use for malicious purposes. The domain names and IP addresses are checked
-        against Cymon.io's threat feeds. If a result is found (200 OK), then the domain or IP has
-        been reported to be part of some sort of malicious activity relatively recently.
-
-        The function returns a list of domains, A-records, MX-records, and the results from Cymon.
-
-        A Cymon API key is recommended, but not required.
-        """
-        # Check to see if urlcrazy is available
-        try:
-            urlcrazy_present = subprocess.getstatusoutput("urlcrazy")
-        except OSError as error:
-            if error.errno == os.errno.ENOENT:
-                # The urlcrazy command was not found
-                click.secho("[!] A test call to urlcrazy failed, so skipping urlcrazy run.", fg="yellow")
-                click.secho("L.. Details: {}".format(error), fg="yellow")
-                urlcrazy_present = "1"
-            else:
-                # Something else went wrong while trying to run urlcrazy
-                click.secho("[!] A test call to urlcrazy failed, so skipping urlcrazy run.", fg="yellow")
-                click.secho("L.. Details: {}".format(error), fg="yellow")
-                urlcrazy_present = "1"
-            return urlcrazy_present
-
-        if urlcrazy_present[0] == 0:
-            outfile = "reports/{}/crazy_temp.csv".format(client)
-            final_csv = "reports/{}/{}_urlcrazy.csv".format(client, target)
-            domains = []
-            a_records = []
-            mx_records = []
-            squatted = {}
-            click.secho("[+] Running urlcrazy for {}".format(target), fg="green")
-            try:
-                cmd = "urlcrazy -f csv -o '{}' {}".format(outfile, target)
-                with open(os.devnull, "w") as devnull:
-                    subprocess.check_call(cmd, stdout=devnull, shell=True)
-                with open(outfile, "r", encoding = "ISO-8859-1") as results:
-                    reader = csv.DictReader(row.replace("\0", "") for row in results)
-                    for row in reader:
-                        if len(row) != 0:
-                            if row['CC-A'] != "?":
-                                domains.append(row['Typo'])
-                                a_records.append(row['DNS-A'])
-                                mx_records.append(row['DNS-MX'])
-
-                squatted = zip(domains, a_records, mx_records)
-
-                session = requests.Session()
-                session.headers = {'content-type':'application/json', 'accept':'application/json'}
-                # Add the Cymon API, if available, to the headers
-                if self.cymon_api_key != None:
-                    session.headers.update({'Authorization': 'Token {0}' \
-                        .format(self.cymon_api_key)})
-
-                # Search for domains and IP addresses tied to the domain name
-                urlcrazy_results = []
-                for domain in squatted:
-                    try:
-                        request = session.get(cymon_api + "/ioc/search/domain/" + domain[0], verify=False)
-                        # results = json.loads(r.text)
-                        if request.status_code == 200:
-                            if request.json()['total'] > 0:
-                                malicious_domain = 1
-                            else:
-                                malicious_domain = 0
-                        else:
-                            malicious_domain = 0
-                    except Exception as error:
-                        malicious_domain = 0
-                        click.secho("[!] There was an error checking {} with Cymon.io!"
-                                   .format(domain[0]), fg="red")
-                    # Search for domains and IP addresses tied to the A-record IP
-                    try:
-                        r = session.get(cymon_api + "/ioc/search/ip/" + domain[1], verify=False)
-                        # results = json.loads(r.text)
-                        if r.status_code == 200:
-                            if request.json()['total'] > 0:
-                                malicious_ip = 1
-                            else:
-                                malicious_ip = 0
-                        else:
-                            malicious_ip = 0
-                    except Exception as error:
-                        malicious_ip = 0
-                        click.secho("[!] There was an error checking {} with Cymon.io!"
-                                   .format(domain[1]), fg="red")
-
-                    if malicious_domain == 1:
-                        cymon_result = "Yes"
-                    elif malicious_ip == 1:
-                        cymon_result = "Yes"
-                    else:
-                        cymon_result = "No"
-
-                    temp = {}
-                    temp['domain'] = domain[0]
-                    temp['a-records'] = domain[1]
-                    temp['mx-records'] = domain[2]
-                    temp['malicious'] = cymon_result
-                    urlcrazy_results.append(temp)
-
-                os.rename(outfile, final_csv)
-                return urlcrazy_results
-
-            except Exception as error:
-                click.secho("[!] Execution of urlcrazy failed!", fg="red")
-                click.secho("L.. Details: {}".format(error), fg="red")
-        else:
-            click.secho("[*] Skipping typosquatting checks because the urlcrazy command failed \
-to be found.", fg="yellow")
 
     def run_shodan_search(self, target):
         """Collect information Shodan has for target domain name. This uses the Shodan search
@@ -569,8 +418,8 @@ to be found.", fg="yellow")
         """
         if not helpers.is_ip(target):
             dns_resolve = "https://api.shodan.io/dns/resolve?hostnames=" \
-                        + target + "&key=" + shodan_api_key
-            resolved = requests.get(dnsResolve)
+                        + target + "&key=" + self.shodan_api_key
+            resolved = requests.get(dns_resolve)
             target_ip = resolved.json()[target]
             return target_ip
         else:
@@ -590,43 +439,8 @@ to be found.", fg="yellow")
                 target_results = self.shodan_api.host(target)
                 return target_results
             except shodan.APIError as error:
-                click.secho("\n[!] No Shodan data for {}!".format(target), fg=+"red")
+                click.secho("\n[!] No Shodan data for {}!".format(target), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
-
-    def run_shodan_exploit_search(self, CVE):
-        """Lookup CVEs through Shodan and return the results."""
-        exploits = self.shodan_api.exploits.search(CVE)
-        return exploits
-
-    def search_cymon_ip(self, target):
-        """Get reputation data from Cymon.io for target IP address. This returns two dictionaries
-        for domains and security events.
-
-        A Cymon API key is not required, but is recommended.
-        """
-        try:
-            # Search for IP and domains tied to the IP
-            data = self.cymon_api.ip_domains(target)
-            domains_results = data['results']
-            # Search for security events for the IP
-            data = self.cymon_api.ip_events(target)
-            ip_results = data['results']
-            return domains_results, ip_results
-        except Exception:
-            click.secho("[!] Cymon.io returned a 404 indicating no results.", fg="red")
-
-    def search_cymon_domain(self, target):
-        """Get reputation data from Cymon.io for target domain. This returns a dictionary for
-        the IP addresses tied to the domain.
-
-        A Cymon API key is not required, but is recommended.
-        """
-        try:
-            # Search for domains and IP addresses tied to the domain
-            results = self.cymon_api.domain_lookup(target)
-            return results
-        except Exception:
-            click.secho("[!] Cymon.io returned a 404 indicating no results.", fg="red")
 
     def search_censys_certificates(self, target):
         """Collect certificate information from Censys for the target domain name. This returns
@@ -645,7 +459,6 @@ to be found.", fg="yellow")
                         'parsed.signature_algorithm.name','parsed.signature.self_signed',
                         'parsed.validity.start','parsed.validity.end','parsed.fingerprint_sha256',
                         'parsed.subject_dn','parsed.issuer_dn'])
-
                 return results
             except censys.base.CensysRateLimitExceededException:
                 click.secho("\n[!] Censys reports your account has run out of API credits.", fg="red")
@@ -665,7 +478,6 @@ to be found.", fg="yellow")
         if "," in tmp:
             pos = tmp.find(",")
             tmp = tmp[:pos]
-
         return tmp
 
     def filter_subdomains(self, domain, subdomains):
@@ -678,30 +490,6 @@ to be found.", fg="yellow")
         https://github.com/christophetd/censys-subdomain-finder/blob/master/censys_subdomain_finder.py#L31
         """
         return [ subdomain for subdomain in subdomains if '*' not in subdomain and subdomain.endswith(domain) ]
-
-    def run_urlvoid_lookup(self, domain):
-        """Collect reputation data from URLVoid for the target domain. This returns an ElementTree
-        object.
-
-        A URLVoid API key is required.
-        """
-        if not helpers.is_ip(domain):
-            try:
-                if self.urlvoid_api_key != "":
-                    url = "http://api.urlvoid.com/api1000/{}/host/{}"\
-                        .format(self.urlvoid_api_key, domain)
-                    response = requests.get(url)
-                    tree = ET.fromstring(response.content)
-                    return tree
-                else:
-                    click.secho("[-] No URLVoid API key, so skipping this test.", fg="green")
-                    return None
-            except Exception as error:
-                click.secho("[!] Could not load URLVoid for reputation check!", fg="red")
-                click.secho("L.. Details: {}".format(error), fg="red")
-                return None
-        else:
-            click.secho("[!] Target is not a domain, so skipping URLVoid queries.", fg="red")
 
     def check_dns_dumpster(self, domain):
         """Collect subdomains known to DNS Dumpster for the provided domain. This is based on
@@ -746,11 +534,10 @@ received!".format(request.status_code), fg="red")
             image_data = None
         finally:
             results['image_data'] = image_data
-
         return results
 
     def retrieve_results(self, table):
-        """Helper function for check_dns_dumpster which extracts the results from the HTML soup."""
+        """Used by check_dns_dumpster to extract the results from the HTML."""
         results = []
         trs = table.findAll('tr')
         for tr in trs:
@@ -774,15 +561,13 @@ received!".format(request.status_code), fg="red")
                     'country': country,
                     'header': header}
             results.append(data)
-
         return results
 
     def retrieve_txt_record(self, table):
-        """Helper function for check_dns_dumpster which extracts the TXT records."""
+        """Used by check_dns_dumpster to extracts the domain's DNS TXT records."""
         results = []
         for td in table.findAll('td'):
             results.append(td.text)
-
         return results
 
     def check_netcraft(self, domain):
@@ -833,7 +618,6 @@ received!".format(request.status_code), fg="red")
                         next_page = 20 * x + 1
             else:
                 pass
-
         return results
 
     def fetch_netcraft_domain_history(self, domain):
@@ -852,7 +636,6 @@ received!".format(request.status_code), fg="red")
                 result = [str(url).split('=')[2].split(">")[1].split("<")[0], \
                 str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
                 ip_history.append(result)
-
         return ip_history
 
     def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
@@ -930,13 +713,12 @@ create {} possible buckets and spaces to check in AWS and three Digital Ocean re
         return bucket_results, account_results
 
     def validate_bucket(self, validation_type, bucket_name):
-        """Helper function used by validate_bucket_head()."""
+        """Used by validate_bucket_head() to validate an AWS bucket name."""
         validation_functions = {
             'head': self.validate_bucket_head
         }
         if validation_functions[validation_type]:
             return validation_functions[validation_type](bucket_name)
-
 
     def validate_bucket_head(self, bucket_name):
         """Check a string to see if it exists as the name of an Amazon S3 bucket. This version uses
@@ -958,7 +740,6 @@ create {} possible buckets and spaces to check in AWS and three Digital Ocean re
             'exists': False,
             'public': False
         }
-
         try:
             self.boto3_client.head_bucket(Bucket=bucket_name)
             result['exists'] = True
@@ -983,7 +764,6 @@ create {} possible buckets and spaces to check in AWS and three Digital Ocean re
 message repeatedly, it's possible your awscli region is misconfigured, or this bucket is weird.", fg="red")
             click.secho("L.. Details: {}".format(error), fg="red")
             result['exists'] = error
-
         return result
 
     def validate_bucket_noncli(self, bucket_name):
@@ -1000,7 +780,6 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
             'exists': False,
             'public': False
         }
-
         try:
             # Request the bucket to check the response
             request = requests.get(bucket_uri)
@@ -1014,7 +793,6 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
                 result['public'] = True
         except requests.exceptions.RequestException:
             result['exists'] = False
-
         return result
 
     def validate_do_space(self, region, space_name):
@@ -1027,7 +805,6 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
             'exists': False,
             'public': False
         }
-
         try:
             # Request the Space to check the response
             request = requests.get(space_uri)
@@ -1041,7 +818,6 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
                 result['public'] = True
         except requests.exceptions.RequestException:
             result['exists'] = False
-
         return result
 
     def validate_account(self, account):
@@ -1062,7 +838,6 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
         if not validators.url(result['signinUri']):
             result['error'] = 'Invalid URI'
             return result
-
         try:
             # Request the sign-in URL and don't allow the redirect
             request = requests.get(result['signinUri'], allow_redirects=False)
@@ -1071,7 +846,6 @@ message repeatedly, it's possible your awscli region is misconfigured, or this b
                 result['exists'] = True
         except requests.exceptions.RequestException as error:
             result['error'] = error
-
         return result
 
     def check_domain_fronting(self, subdomain):

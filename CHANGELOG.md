@@ -1,4 +1,11 @@
 # Change Log
+## August 31, 2018, v2.0.0 BETA
+* Removed the `extract` command from use. File metadata collection is now 100% Python and platform agnostic.
+* Screenshot module will now try to dismiss webpage alerts before taking a screenshot.
+* ODIN's web browser will now ignore expired and self-signed certificates so screenshots can be taken of the website contents.
+* Added an `unsafe` flag for Kali users running ODIN as root. Chrome will not open if the user is root and not using `--no-sandbox`, so setting `--unsafe` will add that option to the Chrome browser. While ODIN really only accesses search engines using headless Chrome, this still is not for everyone and should only be used if ODIN is being run onf a Kali Linux VM as root.
+* More clean-up work ansd small bugs squashed.
+
 ## August 28, 2016, v2.0.0 BETA
 * ODIN now makes better use of wider terminals for help text.
 * Removed the need for an additional ANSI colors library. ODIN now leverages CLICK's built-in color support for macOS and Linux.
