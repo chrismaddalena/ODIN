@@ -17,7 +17,7 @@ from time import sleep
 import click
 from xml.etree import ElementTree as ET
 
-from lib import domain_tools, email_tools, filehunter, helpers, screenshots, typosquat
+from lib import subdomains, takeovers, whois, dns, shodantools, cloud, fullcontact, email_tools, filehunter, helpers, screenshots, typosquat
 
 
 class Reporter(object):
@@ -33,6 +33,18 @@ class Reporter(object):
         # Create the report database -- NOT in memory to allow for multiprocessing and archiving
         self.webdriver = webdriver
         self.report_path = report_path
+        # Initiate the new class objects
+        self.dns_toolkit = dns.DNSCollector()
+        self.whois_toolkit = whois.Identify()
+        self.cloud_hunter = cloud.BucketHunter()
+        self.full_contact = fullcontact.FullContact()
+        self.cert_searcher = subdomains.CertSearcher()
+        self.lookalike_toolkit = typosquat.TypoCheck()
+        self.shodan_toolkit = shodantools.ShodanTools()
+        self.takeover_analzyer = takeovers.TakeoverChecks()
+        self.employee_hunter = email_tools.PeopleCheck(self.webdriver)
+        self.subdomain_hunter = subdomains.SubdomainCollector(self.webdriver)
+
         if os.path.isfile(report_name):
             if click.confirm(click.style("[!] A report for this client already exists. Are you \
 sure you want to overwrite it?", fg="red"), default=True):
@@ -40,10 +52,7 @@ sure you want to overwrite it?", fg="red"), default=True):
             else:
                 click.secho("[!] Exiting...", fg="red")
                 exit()
-        # Initiate the new class objects
-        self.DC = domain_tools.DomainCheck(self.webdriver)
-        self.PC = email_tools.PeopleCheck(self.webdriver)
-        self.TC = typosquat.TypoCheck()
+
         # Connect to our database
         self.conn = sqlite3.connect(report_name)
         self.c = self.conn.cursor()
@@ -136,15 +145,11 @@ sure you want to overwrite it?", fg="red"), default=True):
         # Generate the scope lists from the supplied scope file, if there is one
         scope = []
         if scope_file:
-            scope = self.DC.generate_scope(scope_file)
-
+            scope = helpers.generate_scope(scope_file)
         if domain:
             # Just in case the domain is not in the scope file, it's added here
             if not any(domain in d for d in scope):
-                click.secho("[*] The provided domain, {}, was not found in your scope file, so \
-it has been added to the scope for OSINT.".format(domain), fg="yellow")
                 scope.append(domain)
-
         # Create lists of IP addresses and domain names from the scope
         for item in scope:
             if helpers.is_ip(item):
@@ -157,14 +162,13 @@ it has been added to the scope for OSINT.".format(domain), fg="yellow")
         for target in scope:
             self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)", (target, True, "Scope File"))
             self.conn.commit()
-
         return scope, ip_list, domain_list
 
     def create_company_info_table(self, domain):
         """Record the company information provided by the Full Contact API."""
         # Try to collect the info from Full Contact
-        info_json = self.PC.full_contact_company(domain)
-        if info_json is not None:
+        info_json = self.full_contact.full_contact_company(domain)
+        if info_json:
             try:
                 # INSERT the data from Full Contact
                 name = info_json['name']
@@ -232,22 +236,20 @@ it has been added to the scope for OSINT.".format(domain), fg="yellow")
                                 complete += "{}, ".format(value)
                     self.c.execute("UPDATE company_info SET physical_address = '%s'" % (complete))
                     self.conn.commit()
-            except:
-                click.secho("[!] No data found for {} in Full Contact's database. This may not be \
-the company's primary domain used for their website.".format(domain), fg="red")
+            except Exception as error:
+                click.secho("\n[!] Full Contact returned no data for {}.".format(domain), fg="red")
+                click.secho("L.. Details: {}".format(error), fg="red")
 
-        # click.secho("[*] Company Info Collector Job Finished", fg="yellow")
-
-    def create_domain_report_table(self, organization, scope, ip_list, domain_list, whoxy_limit):
+    def create_domain_report_table(self, organization, scope, ip_list, domain_list, rev_domain_list, whoxy_limit):
         """Generate a domain report consisting of information like DNS records and subdomains."""
         # Get whois records and lookup other domains registerd to the same org
         for domain in domain_list:
             results = {}
             try:
                 # Run whois lookup using standard whois
-                results = self.DC.run_whois(domain)
+                results = self.whois_toolkit.run_whois(domain)
                 if results:
-                    # Check if more than one expiration date is returned
+                    # Check if more than one expiration date is returned, it happens
                     if isinstance(results['expiration_date'], datetime.date):
                         expiration_date = results['expiration_date']
                     # We have a list, so break-up list into human readable dates and times
@@ -279,7 +281,7 @@ the company's primary domain used for their website.".format(domain), fg="red")
             if not results:
                 try:
                     # Run a whois lookup using the WhoXY API
-                    whoxy_results = self.DC.run_whoxy_whois(domain)
+                    whoxy_results = self.whois_toolkit.run_whoxy_whois(domain)
                     if whoxy_results:
                         registrar = whoxy_results['registrar']
                         expiration_date = whoxy_results['expiry_date']
@@ -316,21 +318,22 @@ the company's primary domain used for their website.".format(domain), fg="red")
                              .format(org_name), fg="green")
                 try:
                     # Try to find other domains using the organization name from the whois record
-                    reverse_whoxy_results, total_results = self.DC.run_whoxy_company_search(org_name)
+                    reverse_whoxy_results, total_results = self.whois_toolkit.run_whoxy_company_search(org_name)
                     if reverse_whoxy_results:
                         if total_results > whoxy_limit:
                             click.secho("[*] WhoXY returned {} reverse whois results for \
 {}. This is above your WhoXY limit of {}.\nAdding these to the list of domain names would mean \
-ODIN would perform employee and email searches, Shodan searches, and Censys certificate searches \
-for each of these domains. This can be very hard on API credits and may take a long time. \
-ODIN won't use these domains for asset and email discovery this time. It is better to review \
-these domains manually and then consider running ODIN again with a list of domains you find \
-interesting.".format(total_results, org_name, whoxy_limit), fg="yellow")
+ODIN would perform Shodan searches and Censys/crt.sh certificate searches for each of these \
+domains. This can be very hard on API credits and may take a long time. ODIN won't use these \
+domains for asset discovery this time. It is better to review these domains manually and then \
+consider running ODIN again with a list of domains you find interesting."
+.format(total_results, org_name, whoxy_limit), fg="yellow")
                         else:
                             click.secho("[*] WhoXY returned {} reverse whois results for \
 {}. This is equal to or below the limit of {}, so ODIN will add these to the list of domains \
-to resolve them, find email addresses, collect DNS records, and search Shodan and \
-Censys.".format(total_results, org_name, whoxy_limit), fg="yellow")
+to resolve them, collect DNS records, and search Shodan and certificates."
+.format(total_results, org_name, whoxy_limit), fg="yellow")
+                        # Process the results and determine if they will be used for asset discovery
                         for result in reverse_whoxy_results:
                             rev_domain = reverse_whoxy_results[result]['domain']
                             registrar = reverse_whoxy_results[result]['registrar']
@@ -340,16 +343,17 @@ Censys.".format(total_results, org_name, whoxy_limit), fg="yellow")
                             address = reverse_whoxy_results[result]['address']
                             admin_contact = reverse_whoxy_results[result]['admin_contact']
                             tech_contact = reverse_whoxy_results[result]['tech_contact']
-                            # Add any new domain names to the master list
+                            # Add whois data for any new domain names to the database
                             if not rev_domain in domain_list:
-                                if not total_results > whoxy_limit:
-                                    domain_list.append(rev_domain)
-                                    self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)",
-                                                    (rev_domain, False, "WhoXY"))
-
                                 self.c.execute("INSERT INTO whois_data VALUES (NULL,?,?,?,?,?,?,?,?,NULL)",
                                                 (rev_domain, registrar, expiration_date, org, registrant,
                                                 admin_contact, tech_contact, address))
+                                # If whoxy-limit allows, add the rev domain(s) to the master list
+                                if not total_results > whoxy_limit:
+                                    domain_list.append(rev_domain)
+                                    rev_domain_list.append(rev_domain)
+                                    self.c.execute("INSERT INTO hosts VALUES (NULL,?,?,?)",
+                                                    (rev_domain, False, "WhoXY"))
                 except Exception as error:
                     click.secho("[!] There was an error running WhoXY reverse whois for {}!".format(org_name), fg="red")
                     click.secho("L.. Details: {}".format(error), fg="red")
@@ -361,36 +365,37 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
         with click.progressbar(label="[*] Collecting DNS records",
                         length=len(domain_list)) as bar:
             for domain in domain_list:
-                # click.secho("[+] Fetching DNS records for {}.".format(domain), fg="green")
                 vulnerable_dns_servers = []
                 # Get the DNS records for each domain, starting with NS
                 try:
                     temp = []
-                    ns_records_list = self.DC.get_dns_record(domain, "NS")
+                    ns_records_list = self.dns_toolkit.get_dns_record(domain, "NS")
                     for rdata in ns_records_list.response.answer:
                         for item in rdata.items:
                             temp.append(item.to_text())
                     ns_records = ", ".join(x.strip(".") for x in temp)
                     # Record name server that resolve cached queries
-                    for nameserver in temp:
-                        result = self.DC.check_dns_cache(nameserver.strip("."))
-                        if result:
-                            vulnerable_dns_servers.append(result)
+                    # TODO: Disabling this for now because it is taking a VERY long time in some
+                    #       cases and is not all that valuable.
+                    # for nameserver in temp:
+                    #     result = self.dns_toolkit.check_dns_cache(nameserver.strip("."))
+                    #     if result:
+                    #         vulnerable_dns_servers.append(result)
                 except:
                     ns_records = "None"
+                bar.update(.17)
                 # Collect each type of DNS record for the domain(s)
                 try:
                     temp = []
-                    a_records = self.DC.get_dns_record(domain, "A")
+                    a_records = self.dns_toolkit.get_dns_record(domain, "A")
                     for rdata in a_records.response.answer:
                         for item in rdata.items:
-                            # Add A record IP to a temp list
                             temp.append(item.to_text())
-                            # Check if this a known IP and add it to hosts if not
+                            # Check if this a known IP and add new addresses to the list
                             self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (item.to_text(),))
                             res = self.c.fetchone()
                             if res[0] == 0:
-                                self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                self.c.execute("INSERT INTO 'hosts' VALUES (NULL,?,?,?)",
                                                 (item.to_text(), False, "Domain DNS"))
                                 self.conn.commit()
                                 # Also add A record IP addressess to the master list
@@ -399,51 +404,55 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                     a_records = ", ".join(temp)
                 except:
                     a_records = "None"
+                bar.update(.17)
                 try:
-                    mx_records = self.DC.return_dns_record_list(domain, "MX")
+                    mx_records = self.dns_toolkit.return_dns_record_list(domain, "MX")
                 except:
                     mx_records = "None"
+                bar.update(.17)
                 try:
                     temp = []
-                    txt_records = self.DC.return_dns_record_list(domain, "TXT")
+                    txt_records = self.dns_toolkit.return_dns_record_list(domain, "TXT")
                 except:
                     txt_records = "None"
+                bar.update(.17)
                 try:
                     temp = []
-                    soa_records = self.DC.return_dns_record_list(domain, "SOA")
+                    soa_records = self.dns_toolkit.return_dns_record_list(domain, "SOA")
                 except:
                     soa_records = "None"
+                bar.update(.17)
                 try:
                     temp = []
-                    dmarc_record = self.DC.return_dns_record_list("_dmarc" + domain, "TXT")
+                    dmarc_record = self.dns_toolkit.return_dns_record_list("_dmarc" + domain, "TXT")
                 except:
                     dmarc_record = "None"
                 # INSERT the DNS records into the table
                 self.c.execute("INSERT INTO 'dns' VALUES (NULL,?,?,?,?,?,?,?,?)",
                             (domain, ns_records, a_records, mx_records, txt_records, soa_records,
-                                dmarc_record, ", ".join(vulnerable_dns_servers)))
+                             dmarc_record, ", ".join(vulnerable_dns_servers)))
                 self.conn.commit()
-                bar.update(1)
+                bar.update(.17)
 
         # Next phase, loop to collect the subdomain information
-        # NetCraft, DNS Dumpster, and TLS certificates (Censys) are used for this
+        # Netcraft, DNS Dumpster, and TLS certificates (Censys & crt.sh) are used for this
         with click.progressbar(label="[*] Collecting subdomains",
                         length=len(domain_list)) as bar:
             for domain in domain_list:
-                # click.secho("[+] Collecting subdomain data for {}...".format(domain), fg="green")
                 collected_subdomains = []
                 dumpster_results = []
                 netcraft_results = []
                 try:
-                    dumpster_results = self.DC.check_dns_dumpster(domain)
+                    dumpster_results = self.subdomain_hunter.check_dns_dumpster(domain)
                 except:
                     click.secho("\n[!] There was a problem collecting results from DNS Dumpster for {}."
                                 .format(domain), fg="red")
                 try:
-                    netcraft_results = self.DC.check_netcraft(domain)
-                except:
-                    click.secho("\n[!] There was a problem collecting results from NetCraft for {}."
+                    netcraft_results = self.subdomain_hunter.check_netcraft(domain)
+                except Exception as error:
+                    click.secho("\n[!] There was a problem collecting results from Netcraft for {}."
                                 .format(domain), fg="red")
+                bar.update(.25)
                 # Check DNS Dumpster data
                 if dumpster_results:
                     # See if we can save the domain map from DNS Dumpster
@@ -454,17 +463,18 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                     for result in dumpster_results['dns_records']['host']:
                         if result['reverse_dns']:
                             subdomain = result['domain']
-                            ip = result['ip']
+                            # ip = result['ip']
                             # asn = result['as']
                             # provider = result['provider']
                         else:
                             subdomain = result['domain']
-                            ip = result['ip']
+                            # ip = result['ip']
                             # asn = result['as']
                             # provider = result['provider']
                         # Avoid adding the base domain to our subdomains list
                         if not bool(re.search("^" + re.escape(domain), subdomain.rstrip("HTTP:"), re.IGNORECASE)):
                             collected_subdomains.append(subdomain.rstrip("HTTP:"))
+                bar.update(.25)
                 # Check Netcraft data
                 if netcraft_results:
                     for result in netcraft_results:
@@ -473,66 +483,100 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                             collected_subdomains.append(result)
                 # Try to collect certificate data for the domain
                 try:
-                    cert_data = self.DC.search_censys_certificates(domain)
-                    # Go through each certificate returned by Censys
+                    # Search for certificates catalogued by censys.io
+                    cert_data = self.cert_searcher.search_censys_certificates(domain)
                     if cert_data:
-                        for cert in cert_data:
-                            subject = cert["parsed.subject_dn"]
-                            issuer = cert["parsed.issuer_dn"]
-                            fingerprint = cert["parsed.fingerprint_sha256"]
-                            parsed_names = cert["parsed.names"]
-                            signature_algo = cert["parsed.signature_algorithm.name"]
-                            self_signed = cert["parsed.signature.self_signed"]
-                            start_date = cert["parsed.validity.start"]
-                            exp_date = cert["parsed.validity.end"]
-                            cert_domain = self.DC.parse_cert_subdomain(subject)
-                            # Insert the certiticate info into the certificates table
-                            self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,?,?,?,?,?,?,?,?)",
-                                        (cert_domain, subject, issuer, fingerprint, signature_algo,
-                                        self_signed, start_date, exp_date, ", ".join(parsed_names)))
-                            self.conn.commit()
-                            # Add the collected names to the list of subdomains
-                            collected_subdomains.append(cert_domain)
-                            collected_subdomains.extend(parsed_names)
-                        # Filter out any uninteresting domains caught in the net and remove duplicates
-                        # Also removes wildcards, i.e. *.google.com doesn't resolve to anything
-                        collected_subdomains = self.DC.filter_subdomains(domain, collected_subdomains)
-                        unique_collected_subdomains = set(collected_subdomains)
-                        # Resolve the subdomains to IP addresses
-                        for unique_sub in unique_collected_subdomains:
-                            if not bool(re.match("^" + domain, unique_sub)):
-                                try:
-                                    ip_address = socket.gethostbyname(unique_sub)
-                                    # Check if this a known IP and add it to hosts if not
-                                    self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
-                                    res = self.c.fetchone()
-                                    if res[0] == 0:
-                                        self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
-                                                        (ip_address, False, "Subdomain Enumeration"))
-                                        self.conn.commit()
-                                        # Also add it to our list of IP addresses
-                                        ip_list.append(ip_address)
-                                except:
-                                    ip_address = "Lookup Failed"
-                                # Check for any CDNs that can be used for domain fronting
-                                frontable = self.DC.check_domain_fronting(unique_sub)
-                                # Record the results for this subdomain
-                                self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?)",
-                                            (domain, unique_sub, ip_address, frontable))
+                        try:
+                            for cert in cert_data:
+                                subject = cert["parsed.subject_dn"]
+                                issuer = cert["parsed.issuer_dn"]
+                                fingerprint = cert["parsed.fingerprint_sha256"]
+                                parsed_names = cert["parsed.names"]
+                                signature_algo = cert["parsed.signature_algorithm.name"]
+                                self_signed = cert["parsed.signature.self_signed"]
+                                start_date = cert["parsed.validity.start"]
+                                exp_date = cert["parsed.validity.end"]
+                                cert_domain = self.cert_searcher.parse_cert_subdomain(subject)
+                                # Insert the certiticate info into the certificates table
+                                self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,?,?,?,?,?,?,?,?)",
+                                            (cert_domain, subject, issuer, fingerprint, signature_algo,
+                                            self_signed, start_date, exp_date, ", ".join(parsed_names)))
                                 self.conn.commit()
+                                # Add the collected names to the list of subdomains
+                                collected_subdomains.append(cert_domain)
+                                collected_subdomains.extend(parsed_names)
+                        except Exception as error:
+                            if "400 (max_results)" in str(error):
+                                click.secho("\n[!] Too many results for a free API key, so we \
+can only get the first 1,000. Consider using crt.sh.", fg="red")
+                                click.secho("L.. Details: {}".format(error), fg="red")
+                            else:
+                                click.secho("L.. Details: {}".format(error), fg="red")
+                            pass
                 except:
                     pass
+                bar.update(.17)
+                try:
+                    # Search for certificates catalogued by crt.sh
+                    cert_data = self.cert_searcher.search_crtsh(domain, True)
+                    if cert_data:
+                        for cert in cert_data:
+                            try:
+                                issuer = cert["issuer_name"].replace('"','')
+                                name_value = cert["name_value"]
+                                start_date = cert["not_before"]
+                                exp_date = cert["not_after"]
+                                # Only record this certificate if the crt.sh name_value field is
+                                # unknown. This should avoid recording duplicate certificates.
+                                # Unfortunately, crt.sh does not have fingerprints to compare.
+                                if name_value not in collected_subdomains:
+                                    self.c.execute("INSERT INTO 'certificates' VALUES (NULL,?,NULL,?,NULL,NULL,NULL,?,?,?)",
+                                                (domain, issuer, start_date, exp_date, name_value))
+                                    self.conn.commit()
+                                    collected_subdomains.append(name_value)
+                            except:
+                                pass
+                except:
+                    pass
+                bar.update(.17)
+                # Filter out any uninteresting domains caught in the net and remove duplicates
+                # Also removes wildcards, i.e. *.google.com doesn't resolve to anything
+                collected_subdomains = self.cert_searcher.filter_subdomains(domain, collected_subdomains)
+                unique_collected_subdomains = set(collected_subdomains)
+                # Resolve the subdomains to IP addresses
+                for unique_sub in unique_collected_subdomains:
+                    if not bool(re.match("^" + domain, unique_sub)):
+                        try:
+                            ip_address = socket.gethostbyname(unique_sub)
+                            # Check if this a known IP and add it to hosts if not
+                            self.c.execute("SELECT count(*) FROM hosts WHERE host_address=?", (ip_address,))
+                            res = self.c.fetchone()
+                            if res[0] == 0:
+                                self.c.execute("INSERT INTO 'hosts' VALUES (Null,?,?,?)",
+                                                (ip_address, False, "Subdomain Enumeration"))
+                                self.conn.commit()
+                                # Also add it to our list of IP addresses
+                                ip_list.append(ip_address)
+                        except:
+                            ip_address = "Lookup Failed"
+                        # Check for any CDNs that can be used for domain fronting
+                        frontable = self.takeover_analzyer.check_domain_fronting(unique_sub)
+                        # Record the results for this subdomain
+                        self.c.execute("INSERT INTO 'subdomains' VALUES (NULL,?,?,?,?)",
+                                    (domain, unique_sub, ip_address, frontable))
+                        self.conn.commit()
+                bar.update(.17)
+
                 # Take a break for Censys's rate limits
                 sleep(self.sleep)
-                bar.update(1)
 
         # Loop through domains to collect IP history from NetCraft
         for domain in domain_list:
             ip_history = []
             try:
-                ip_history = self.DC.fetch_netcraft_domain_history(domain)
+                ip_history = self.subdomain_hunter.fetch_netcraft_domain_history(domain)
             except:
-                click.secho("[!] There was a problem collecting domain history from NetCraft for {}."
+                click.secho("[!] There was a problem collecting domain history from Netcraft for {}."
                              .format(domain), fg="red")
             if ip_history:
                 for result in ip_history:
@@ -566,7 +610,7 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                 else:
                     target_ip = socket.gethostbyname(target)
                 # Log RDAP lookups
-                results = self.DC.run_rdap(target_ip)
+                results = self.whois_toolkit.run_rdap(target_ip)
                 if results:
                     rdap_source = results['asn_registry']
                     org = results['network']['name']
@@ -574,7 +618,7 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                     asn = results['asn']
                     country_code = results['asn_country_code']
                     # Check Robtex for results for the current target
-                    robtex = self.DC.lookup_robtex_ipinfo(target_ip)
+                    robtex = self.whois_toolkit.lookup_robtex_ipinfo(target_ip)
                     if robtex:
                         results = []
                         for result in robtex['pas']:
@@ -593,8 +637,6 @@ so this one has been skipped for WhoXY reverse lookups.".format(org_name), fg="y
                 click.secho("[!] The RDAP lookup failed for {}!".format(target), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
 
-        # click.secho("[*] Domain and IP Hunter Job Finished", fg="yellow")
-
     def create_shodan_table(self, ip_list, domain_list):
         """Record Shodan search results in the SQLite3 database."""
         num_of_addresses = len(ip_list)
@@ -605,11 +647,11 @@ minutes with the {} second API request delay."
                      .format(num_of_addresses, minutes, self.sleep), fg="yellow")
 
         with click.progressbar(domain_list,
-                                label="[*] Checking domains with Shodan",
-                                length=len(domain_list)) as bar:
+                               label="[*] Checking domains with Shodan",
+                               length=len(domain_list)) as bar:
             for domain in bar:
                 try:
-                    shodan_search_results = self.DC.run_shodan_search(domain)
+                    shodan_search_results = self.shodan_toolkit.run_shodan_search(domain)
                     if shodan_search_results['total'] > 0:
                         for result in shodan_search_results['matches']:
                             ip_address = result['ip_str']
@@ -628,11 +670,11 @@ minutes with the {} second API request delay."
                 sleep(self.sleep)
 
         with click.progressbar(ip_list,
-                                label="[*] Checking IPs with Shodan",
-                                length=len(ip_list)) as bar:
+                               label="[*] Checking IPs with Shodan",
+                               length=len(ip_list)) as bar:
             for ip in bar:
                 try:
-                    shodan_lookup_results = self.DC.run_shodan_lookup(ip)
+                    shodan_lookup_results = self.shodan_toolkit.run_shodan_lookup(ip)
                     if shodan_lookup_results:
                         ip_address = shodan_lookup_results['ip_str']
                         operating_system = shodan_lookup_results.get('os', 'n/a')
@@ -649,9 +691,7 @@ minutes with the {} second API request delay."
                 # Take a break for Shodan's rate limits
                 sleep(self.sleep)
 
-        # click.secho("[*] Shodan Hunter Job Finished", fg="yellow")
-
-    def create_people_table(self, domain_list, client):
+    def create_people_table(self, domain_list, rev_domain_list, client):
         """Record publicly available information related to individuals, including email addresses
         and social media profiles.
         """
@@ -664,21 +704,22 @@ minutes with the {} second API request delay."
         hunter_phone_nums = {}
 
         # Search for LinkedIn profiles using the company name
-        harvested_linkedin = self.PC.harvest_linkedin(client)
+        harvested_linkedin = self.employee_hunter.harvest_linkedin(client)
         # Search for social media profiles and email addresses associated with each domain
         for domain in domain_list:
-            # Search for emails, names, and social media handles
-            harvesterd_emails, harvested_twitter = self.PC.harvest_all(domain)
-            hunter_json = self.PC.harvest_emailhunter(domain)
-            # Process the collected data
-            temp_emails, temp_people, temp_twitter, temp_job_titles, temp_linkedin, temp_phone_nums = \
-            self.PC.process_harvested_lists(harvesterd_emails, harvested_twitter, hunter_json)
-            unique_emails.extend(temp_emails)
-            unique_people.extend(temp_people)
-            unique_twitter.extend(temp_twitter)
-            hunter_job_titles.update(temp_job_titles)
-            hunter_linkedin.update(temp_linkedin)
-            hunter_phone_nums.update(temp_phone_nums)
+            if domain not in rev_domain_list:
+                # Search for emails, names, and social media handles
+                harvesterd_emails, harvested_twitter = self.employee_hunter.harvest_all(domain)
+                hunter_json = self.employee_hunter.harvest_emailhunter(domain)
+                # Process the collected data
+                temp_emails, temp_people, temp_twitter, temp_job_titles, temp_linkedin, temp_phone_nums = \
+                self.employee_hunter.process_harvested_lists(harvesterd_emails, harvested_twitter, hunter_json)
+                unique_emails.extend(temp_emails)
+                unique_people.extend(temp_people)
+                unique_twitter.extend(temp_twitter)
+                hunter_job_titles.update(temp_job_titles)
+                hunter_linkedin.update(temp_linkedin)
+                hunter_phone_nums.update(temp_phone_nums)
         # If we have emails, record them and check HaveIBeenPwned
         if unique_emails:
             unique_emails = list(set(unique_emails))
@@ -696,8 +737,8 @@ between requests.".format(self.hibp_sleep), fg="green")
                             pass
                         else:
                             # click.secho("[+] Checking {} with HIBP".format(email), fg="green")
-                            pwned = self.PC.pwn_check(email)
-                            pastes = self.PC.paste_check(email)
+                            pwned = self.employee_hunter.pwn_check(email)
+                            pastes = self.employee_hunter.paste_check(email)
                             if pwned:
                                 hits = []
                                 for pwn in pwned:
@@ -720,7 +761,7 @@ between requests.".format(self.hibp_sleep), fg="green")
                         # Give HIBP a rest for a few seconds
                         sleep(self.hibp_sleep)
                     except Exception as error:
-                        click.secho("[!] Error checking {} with HaveIBeenPwned's database!".format(email), fg="red")
+                        click.secho("\n[!] Error checking {} with HaveIBeenPwned's database!".format(email), fg="red")
                         click.secho("L.. Detail: {}".format(error), fg="red")
         # If we have Twitter handles, check Twitter for user data
         if unique_twitter:
@@ -732,7 +773,7 @@ between requests.".format(self.hibp_sleep), fg="green")
                                     length=len(unique_twitter)) as bar:
                 for handle in bar:
                     try:
-                        data = self.PC.harvest_twitter(handle)
+                        data = self.employee_hunter.harvest_twitter(handle)
                         if data:
                             self.c.execute("INSERT INTO twitter VALUES (?,?,?,?,?)",
                                         (data['handle'], data['real_name'], data['followers'],
@@ -780,8 +821,6 @@ between requests.".format(self.hibp_sleep), fg="green")
                 except:
                     pass
 
-        # click.secho("[*] Employee Hunter Job Finished", fg="yellow")
-
     def create_foca_table(self, domain_name, extensions, download_dir):
         """Record the file collection results, including filenames, URLs, and file metadata."""
         # Setup Google settings -- pages to look through and timeout
@@ -807,12 +846,10 @@ between requests.".format(self.hibp_sleep), fg="green")
                                (result[0],result[1],result[2],result[3],result[4]))
                 self.conn.commit()
 
-        # click.secho("[*] File Hunter Job Finished", fg="yellow")
-
     def create_urlcrazy_table(self, client, domain):
         """Record the URLCrazy domains and the threat feed results for each domain."""
         # Check if urlcrazy is available and proceed with recording results
-        urlcrazy_results = self.TC.run_urlcrazy(client, domain)
+        urlcrazy_results = self.lookalike_toolkit.run_urlcrazy(client, domain)
         if not urlcrazy_results:
             pass
         else:
@@ -826,7 +863,7 @@ between requests.".format(self.hibp_sleep), fg="green")
                                (domain, a_records, mx_records, malicious))
                 self.conn.commit()
                 # Check each domain with URLVoid for reputation data
-                tree = self.TC.run_urlvoid_lookup(domain)
+                tree = self.lookalike_toolkit.run_urlvoid_lookup(domain)
                 count = ""
                 engines = ""
                 if tree is not None:
@@ -878,12 +915,10 @@ between requests.".format(self.hibp_sleep), fg="green")
                             self.conn.commit()
                     except:
                         click.secho("[!] There was an error getting the data for {}.".format(domain), fg="red")
-        
-        # click.secho("[*] Lookalike Domain Reviewer Job Finished", fg="yellow")
 
     def create_cloud_table(self, client, domain, wordlist=None, fix_wordlist=None):
         """Record findings related to cliud services and storage buckets."""
-        verified_buckets, verified_accounts = self.DC.enumerate_buckets(client, domain, wordlist, fix_wordlist)
+        verified_buckets = self.cloud_hunter.enumerate_buckets(client, domain, wordlist, fix_wordlist)
         if verified_buckets:
             # Write S3 Bucket table contents
             for bucket in verified_buckets:
@@ -896,8 +931,6 @@ between requests.".format(self.hibp_sleep), fg="green")
         else:
             click.secho("[*] Nothing was returned for the cloud storage searches.", fg="yellow")
 
-        # click.secho("[*] Cloud Hunter Job Finished", fg="yellow")
-
     def capture_web_snapshots(self, output_dir, webdriver):
         """Attempt to take screenshots of discovered web services."""
         camera = screenshots.Screenshotter(webdriver)
@@ -909,4 +942,3 @@ between requests.".format(self.hibp_sleep), fg="green")
         for target in target_list:
             camera.take_screenshot(target[0], output_dir)
 
-        # click.secho("[*] Screenshot Snapper Job Finished", fg="yellow")

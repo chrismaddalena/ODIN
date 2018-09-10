@@ -90,34 +90,6 @@ class PeopleCheck(object):
         except WebDriverException:
             return []
 
-    def full_contact_email(self, email):
-        """Collect social information for the target email address using the Full Contact API."""
-        # TODO: Implement the use of the People API -- Also, update this for v3 of the API.
-        if self.contact_api_key is None:
-            click.secho("[!] No Full Contact API key, so skipping these searches.", fg="red")
-        else:
-            base_url = "https://api.fullcontact.com/v2/person.json"
-            payload = {'email':email, 'apiKey':self.contact_api_key}
-            resp = requests.get(base_url, params=payload)
-            if resp.status_code == 200:
-                return resp.json()
-
-    def full_contact_company(self, domain):
-        """Collect company profile information for the target domain using the Full Contact API."""
-        if self.contact_api_key is None:
-            click.secho("[!] No Full Contact API key, so skipping company lookup.", fg="red")
-            return None
-        else:
-            base_url = "https://api.fullcontact.com/v3/company.enrich"
-            headers = {"Authorization":"Bearer %s" % self.contact_api_key}
-            payload = {'domain':domain}
-            resp = requests.post(base_url, data=json.dumps(payload), headers=headers)
-            if resp.status_code == 200:
-                return resp.json()
-            elif resp.status_code == 401:
-                click.secho("[!] Full Contact says the provided API key is no good. Make sure you \
-are using a valid key for API v3.", fg="red")
-
     def harvest_all(self, domain):
         """Discover email addresses and employee names using search engines like Google, Yahoo,
         and Bing.
@@ -144,8 +116,8 @@ are using a valid key for API v3.", fg="red")
         twit_harvest = search.get_people()
         # Combine lists and strip out duplicate findings for unique lists
         all_emails = google_harvest + bing_harvest + yahoo_harvest
-        click.secho("[+] The search engines returned {} emails and {} Twitter handles for {}."
-                     .format(len(all_emails), len(twit_harvest), domain), fg="green")
+        # click.secho("[+] The search engines returned {} emails and {} Twitter handles for {}."
+        #              .format(len(all_emails), len(twit_harvest), domain), fg="green")
         # Return the results for emails, people, and Twitter accounts
         return all_emails, twit_harvest
 
@@ -186,13 +158,12 @@ lookups.", fg="yellow")
                     # Get href links from Bing's source
                     link = hit.a['href']
                     link_text = hit.a.getText().strip(" ...")
-                    name = link_text.split(" - ")[0]
+                    name = link_text.split(" - ")[0].strip("| LinkedIn")
                     try:
                         job_title = link_text.split(" - ")[1]
                     except:
                         job_title = ""
-                    if '/dir/' in link or '/title/' in link or 'groupItem' in link or \
-                        not 'linkedin.com' in link:
+                    if '/dir/' in link or '/title/' in link or 'groupItem' in link or not 'linkedin.com' in link:
                         continue
                     else:
                         profiles[name] = {'job_title': job_title, 'linkedin_profile': link}
@@ -221,7 +192,7 @@ lookups.", fg="yellow")
                 click.secho("[!] The request to EmailHunter returned an error!", fg="red")
                 click.secho("L.. Details: {}".format(results['errors']), fg="red")
                 return None
-            click.secho("[+] Hunter has contact data for {} people."
+            click.secho("\n[+] Hunter has contact data for {} people."
                          .format(len(results['data']['emails'])), fg="green")
         return results
 

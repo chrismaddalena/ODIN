@@ -170,12 +170,12 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         manager = Manager()
         ip_list = manager.list()
         domain_list = manager.list()
-        # Create reporter object and generate final list, the scope from scope file
+        rev_domain_list = manager.list()
+        # Create reporter object and generate lists of everything, just IP addresses, and just domains
         browser = helpers.setup_headless_chrome(unsafe)
         report = reporter.Reporter(report_path, output_report, browser)
         report.create_tables()
         scope, ip_list, domain_list = report.prepare_scope(ip_list, domain_list, scope_file, domain)
-
         # Create some jobs and put Python to work!
         # Job queue 1 is for the initial phase
         jobs = []
@@ -183,7 +183,6 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         more_jobs = []
         # Job queue 3 is used for jobs that take a while and use the progress bar, i.e. AWS enum
         even_more_jobs = []
-
         # Phase 1 jobs
         company_info = Process(name="Company Info Collector",
                                target=report.create_company_info_table,
@@ -191,13 +190,12 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         jobs.append(company_info)
         employee_report = Process(name="Employee Hunter",
                                   target=report.create_people_table,
-                                  args=(domain_list, organization))
+                                  args=(domain_list, rev_domain_list, organization))
         jobs.append(employee_report)
         domain_report = Process(name="Domain and IP Hunter",
                                 target=report.create_domain_report_table,
-                                args=(organization, scope, ip_list, domain_list, whoxy_limit))
+                                args=(organization, scope, ip_list, domain_list, rev_domain_list, whoxy_limit))
         jobs.append(domain_report)
-
         # Phase 2 jobs
         shodan_report = Process(name="Shodan Hunter",
                                 target=report.create_shodan_table,
@@ -218,42 +216,40 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
                                    target=report.create_foca_table,
                                    args=(domain, ext, report_path))
             more_jobs.append(files_report)
-
         # Phase 3 jobs
         cloud_report = Process(name="Cloud Hunter",
                                target=report.create_cloud_table,
                                args=(organization, domain, aws, aws_fixes))
         even_more_jobs.append(cloud_report)
-
+        # Process the lists of jobs in phases, starting with phase 1
         click.secho("[+] Beginning initial discovery phase! This could take some time...", fg="green")
         for job in jobs:
             click.secho("[+] Starting new process: {}".format(job.name), fg="green")
             job.start()
         for job in jobs:
             job.join()
-
+        # Wait for phase 1 and then begin phase 2 jobs
         click.secho("[+] Initial discovery is complete! Proceeding with additional queries...", fg="green")
         for job in more_jobs:
             click.secho("[+] Starting new process: {}".format(job.name), fg="green")
             job.start()
         for job in more_jobs:
             job.join()
-
+        # Wait for phase 2 and then begin phase 3 jobs
         click.secho("[+] Final phase: checking the cloud and web services...", fg="green")
         for job in even_more_jobs:
             click.secho("[+] Starting new process: {}".format(job.name), fg="green")
             job.start()
         for job in even_more_jobs:
             job.join()
-
+        # All jobs are done, so close out the SQLIte3 database connection
         report.close_out_reporting()
         click.secho("[+] Job's done! Your results are in {} and can be viewed and queried with \
 any SQLite browser.".format(output_report), fg="green")
-
+        # Perform addiitonal tasks depending on the user's command line options
         if graph:
             graph_reporter = grapher.Grapher(output_report)
             click.secho("[+] Loading ODIN database file {} for conversion to Neo4j".format(output_report), fg="green")
-
             if nuke:
                 if click.confirm(click.style("[!] You set the --nuke option. This wipes out all nodes for a \
 fresh start. Proceed?", fg="red"), default=True):
@@ -265,7 +261,6 @@ fresh start. Proceed?", fg="red"), default=True):
 Run lib/grapher.py with the appropriate options.", fg="red")
             else:
                 graph_reporter.convert()
-
         if html:
             click.secho("\n[+] Creating the HTML report using {}.".format(output_report), fg="green")
             html_reporter = htmlreporter.HTMLReporter(organization, report_path + "/html_report/", output_report)
@@ -308,13 +303,10 @@ Acceptable IP addresses/ranges include:
     click.secho("\tRelease v{}, {}".format(VERSION, CODENAME), fg="magenta")
     click.secho("[+] Scope Verification Module Selected: ODIN will attempt to verify who owns \
 the provided IP addresses.", fg="green")
-
     setup_reports(organization)
     report_path = "reports/{}/{}".format(organization, report)
-
     expanded_scope = []
     results = {}
-
     try:
         verification.prepare_scope(scope_file, expanded_scope)
         verification.perform_whois(expanded_scope, results)
@@ -322,8 +314,8 @@ the provided IP addresses.", fg="green")
     except Exception as error:
         click.secho("[!] Verification failed!", fg="red")
         click.secho("L.. Details: {}".format(error), fg="red")
-
     click.secho("[+] Job's done! Your identity report is in {}.".format(report_path), fg="green")
+
 
 if __name__ == "__main__":
     odin()

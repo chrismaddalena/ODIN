@@ -11,6 +11,7 @@ import configparser
 import click
 from IPy import IP
 from neo4j.v1 import GraphDatabase
+from netaddr import IPNetwork, iter_iprange
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -147,3 +148,56 @@ requiring a web browser will be skipped.", fg="red")
         click.secho("L.. Details: {}".format(error), fg="red")
         browser = None
     return browser
+
+def generate_scope(scope_file):
+    """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
+    with hyphens, underscores, and CIDRs.
+    """
+    scope = []
+    try:
+        with open(scope_file, "r") as scope_file:
+            for target in scope_file:
+                target = target.rstrip()
+                # Record individual IPs and expand CIDRs
+                if is_ip(target):
+                    ip_list = list(IPNetwork(target))
+                    for address in sorted(ip_list):
+                        str_address = str(address)
+                        scope.append(str_address)
+                # Sort IP ranges from domain names and expand the ranges
+                if not is_domain(target):
+                    # Check for hyphenated ranges like those accepted by Nmap
+                    # Ex: 192.168.1.1-50 will become 192.168.1.1 ... 192.168.1.50
+                    if "-" in target:
+                        target = target.rstrip()
+                        parts = target.split("-")
+                        startrange = parts[0]
+                        b = parts[0]
+                        dot_split = b.split(".")
+                        temp = "."
+                        # Join the values using a "." so it makes a valid IP
+                        combine = dot_split[0], dot_split[1], dot_split[2], parts[1]
+                        endrange = temp.join(combine)
+                        # Calculate the IP range
+                        ip_list = list(iter_iprange(startrange, endrange))
+                        # Iterate through the range and remove ip_list
+                        for x in ip_list:
+                            temp = str(x)
+                            scope.append(temp)
+                    # Check if range has an underscore because underscores are fine, I guess?
+                    # Ex: 192.168.1.2_192.168.1.155
+                    elif "_" in target:
+                        target = target.rstrip()
+                        parts = target.split("_")
+                        startrange = parts[0]
+                        endrange = parts[1]
+                        ip_list = list(iter_iprange(startrange, endrange))
+                        for address in ip_list:
+                            str_address = str(address)
+                            scope.append(str_address)
+                else:
+                    scope.append(target.rstrip())
+    except IOError as error:
+        click.secho("[!] Parsing of scope file failed!", fg="red")
+        click.secho("L.. Details: {}".format(error), fg="red")
+    return scope
