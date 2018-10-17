@@ -19,7 +19,7 @@ class TakeoverChecks(object):
 
     def check_domain_fronting(self, subdomain):
         """Function to check the A records for a given subdomain and look for references to various
-        CDNs to flag the submdomain for domain frontability.
+        CDNs to flag the subdomain for domain frontability.
 
         Many CDN keywords provided by rvrsh3ll on GitHub:
         https://github.com/rvrsh3ll/FindFrontableDomains
@@ -51,9 +51,9 @@ class TakeoverChecks(object):
                         return "Level 3: {}".format(target)
                     elif "cloudflare" in target:
                         return "Cloudflare: {}".format(target)
-                    elif 'unbouncepages.com' in target:
+                    elif "unbouncepages.com" in target:
                         return "Unbounce: {}".format(target)
-                    elif 'secure.footprint.net' in target:
+                    elif "secure.footprint.net" in target:
                         return "Level 3: {}".format(target)
                     else:
                         return False

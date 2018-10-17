@@ -114,7 +114,6 @@ class Metaparser:
                 # Namespaces for app.xml
                 # app_ns = {"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"}
                 # vt_ns = {"vt": "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"}
-
                 # tags = doc_xml.xpath('//cp:keywords', namespaces=cp_ns)[0].text
                 # description = doc_xml.xpath('//dc:description', namespaces=dc_ns)[0].text
                 author = doc_xml.xpath('//dc:creator', namespaces=dc_ns)[0].text
@@ -175,7 +174,7 @@ class Metaparser:
                     contents = self.browser.page_source
                     if "https://www.google.com/recaptcha/api2/anchor" in contents:
                         click.secho("\n[!] Google returned their recaptcha prompt! File searches \
-    cannot be performed.", fg="red")
+cannot be performed.", fg="red")
                         exit()
                     new_pattern = "(?P<url>https?://[^:]+\.%s)" % extension
                     new_pattern = re.findall(new_pattern, contents)
@@ -192,16 +191,13 @@ class Metaparser:
                     pass
             # Sleep to try to avoid Google's recaptcha between extension searches
             time.sleep(10)
-
         if len(files) == 0:
             click.secho("[+] No files were located within Google based on the extension(s) and \
 domain you provided.", fg="green")
             exit()
-
         # Create downloads directory if it doesn't exist
         if not os.path.exists(self.download_dir):
             os.makedirs(self.download_dir)
-
         # Set maximum number of spaces for file names
         spaces = 0
         for item in files:
@@ -209,9 +205,6 @@ domain you provided.", fg="green")
             short_file = item
             if len(short_file) > spaces:
                 spaces = len(short_file) + 3
-
-        click.secho("[+] Attempting to download files...", fg="green")
-
         # Download each file that has been added to the 'files' list
         for item in files:
             # Throw out any truncated addresses
@@ -231,10 +224,8 @@ domain you provided.", fg="green")
                              .format(item), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
                 continue
-
         for item in files:
             filename = item[item.rfind("/")+1:]
             self.process_file(self.download_dir + filename)
-
         return self.container
 

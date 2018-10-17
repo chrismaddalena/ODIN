@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 
 """
-This module contains functions for brute forcing bucket names for Amazon Web Services and Digial
+This module contains functions for brute forcing bucket names for Amazon Web Services and Digital
 Ocean. If a bucket is found, the bucket can be checked for public access.
 """
 
 import re
+
 import click
 import requests
 import validators
@@ -28,8 +29,8 @@ class BucketHunter(object):
             click.secho("[!] Could not create an AWS client with the supplied secrets.", fg="yellow")
 
     def enumerate_buckets(self, client, domain, wordlist=None, fix_wordlist=None):
-        """Search for AWS S3 buckets and accounts. Default search terms are the client, domain, and
-        domain without its TLD. A wordlist is optional.
+        """Search for AWS S3 buckets and Digital Ocean Spaces. Default search terms are the
+        client, domain, and domain without its TLD. A wordlist is optional.
 
         This is based on modules from aws_pwn by dagrz on GitHub.
         """
@@ -43,7 +44,6 @@ class BucketHunter(object):
                  "legacy", "adhoc", "docs", "documents", "res", "nas"]
         bucket_results = []
         # account_results = []
-
         # Add user-provided wordlist terms to our list of search terms
         if wordlist is not None:
             with open(wordlist, "r") as bucket_list:
@@ -51,7 +51,6 @@ class BucketHunter(object):
                     name = name.strip()
                     if name and not name.startswith('#'):
                         search_terms.append(name)
-
         # Add user-provided list of pre/suffixes to our list of fixes
         if fix_wordlist is not None:
             with open(fix_wordlist, "r") as new_fixes:
@@ -59,7 +58,6 @@ class BucketHunter(object):
                     fix = fix.strip()
                     if fix and not fix.startswith('#'):
                         fixes.append(fix)
-
         # Modify search terms with some common prefixes and suffixes
         # We use this new list to avoid endlessly looping
         final_search_terms = []
@@ -74,13 +72,11 @@ class BucketHunter(object):
         # Now include our original list of base terms
         for term in search_terms:
             final_search_terms.append(term)
-
         # Ensure we have only unique search terms in our list and start hunting
         final_search_terms = list(set(final_search_terms))
         click.secho("[*] Your provided keywords and prefixes/suffixes have been combined to \
 create {} possible buckets and spaces to check in AWS and three Digital Ocean regions".format(
                     len(final_search_terms)), fg="yellow")
-
         with click.progressbar(final_search_terms,
                                label="[*] Enumerating AWS Keywords",
                                length=len(final_search_terms)) as bar:
@@ -98,7 +94,6 @@ create {} possible buckets and spaces to check in AWS and three Digital Ocean re
                 # Check for accounts
                 # result = self.validate_account(term)
                 # account_results.append(result)
-
         return bucket_results
 
     def validate_bucket(self, validation_type, bucket_name):

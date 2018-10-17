@@ -97,3 +97,28 @@ class DNSCollector(object):
         elif len(dns_response.answer) > 0:
             return 1
         return 0
+
+    def check_office_365(self, domain):
+        """Checks if the provided domain is an Office 365 tenant. If records are returned, the
+        domain is an Office 365 tenant. Otherwise, the look-up will fail (NXDOMAIN).
+        """
+        domain = domain.replace(".", "-")
+        na_o365 = domain + ".mail.protection.outlook.com"
+        china_o365 = domain + ".mail.protection.partner.outlook.cn"
+        international_o365 = domain + ".mail.protection.outlook.de"
+        try:
+            answer = self.get_dns_record(na_o365, "A")
+            return "Yes;" + na_o365
+        except:
+            pass
+        try:
+            answer = self.get_dns_record(china_o365, "A")
+            return "Yes;" + china_o365
+        except:
+            pass
+        try:
+            answer = self.get_dns_record(international_o365, "A")
+            return "Yes;" + international_o365
+        except:
+            pass
+        return "No"

@@ -77,7 +77,7 @@ now?", fg="green"), default=True):
                     FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(whois_id) REFERENCES whois_data(id))
                     ''')
         except:
-            click.secho("[!] Could not create Whois link table! It may already exist.", fg="red")
+            click.secho("[!] Could not create WHOIS link table! It may already exist.", fg="red")
 
         try:
             self.c.execute('''CREATE TABLE 'rdap_link'
@@ -326,11 +326,11 @@ now?", fg="green"), default=True):
     def create_people_page(self):
         """Create the people.html page in the report directory."""
         with open(self.report_path + "people.html", "w") as report:
-            self.c.execute("SELECT * FROM email_addresses")
+            self.c.execute("SELECT * FROM email_addresses ORDER BY email_address ASC")
             emails = self.c.fetchall()
-            self.c.execute("SELECT * FROM employee_data")
+            self.c.execute("SELECT * FROM employee_data ORDER BY name ASC")
             employees = self.c.fetchall()
-            self.c.execute("SELECT * FROM twitter")
+            self.c.execute("SELECT * FROM twitter ORDER BY handle ASC")
             twitter = self.c.fetchall()
 
             content = """
@@ -397,7 +397,7 @@ now?", fg="green"), default=True):
     def create_certificates_page(self):
         """Create the certificates.html page in the report directory."""
         with open(self.report_path + "certificates.html", "w") as report:
-            self.c.execute("SELECT host,subject,issuer FROM certificates")
+            self.c.execute("SELECT host,subject,issuer FROM certificates ORDER BY host ASC")
             certificates = self.c.fetchall()
 
             content = """
@@ -482,11 +482,11 @@ now?", fg="green"), default=True):
             registration_data = self.c.fetchall()
             self.c.execute("SELECT domain,organization,admin_contact,tech_contact,address FROM whois_data")
             whois_contacts = self.c.fetchall()
-            self.c.execute("SELECT domain,ns_record,a_record,mx_record,txt_record,soa_record,dmarc FROM dns")
+            self.c.execute("SELECT domain,ns_record,a_record,mx_record,txt_record,soa_record,dmarc FROM dns ORDER BY domain ASC")
             dns_records = self.c.fetchall()
             self.c.execute("SELECT domain,ns_record,vulnerable_cache_snooping FROM dns WHERE vulnerable_cache_snooping IS NOT NULL")
             cache_snoop = self.c.fetchall()
-            self.c.execute("SELECT domain,netblock_owner,ip_address FROM ip_history")
+            self.c.execute("SELECT domain,ip_address,netblock_owner FROM ip_history ORDER BY ip_address,domain ASC")
             ip_history = self.c.fetchall()
 
             content = """
@@ -510,7 +510,7 @@ now?", fg="green"), default=True):
             content += "</table><p><br /></p>"
 
             content += """
-            <h2>Whois Contacts</h2>
+            <h2>WHOIS Contacts</h2>
             <p>This table contains the contact information tied to the domain names:
             <table style="width:100%" border="1">
             <tr>
@@ -542,7 +542,15 @@ now?", fg="green"), default=True):
             """
 
             for row in dns_records:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
+                if row[6] == "None":
+                    dmarc = '<p style="color:red">{}</p>'.format(row[6])
+                else:
+                    dmarc = row[6]
+                if "-all" not in row[4]:
+                    spf = '<p style="color:red">{}</p>'.format(row[4])
+                else:
+                    spf = row[4]
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2], row[3], spf, row[5], dmarc)
             content += "</table><p><br /></p>"
 
             content += """
@@ -557,7 +565,11 @@ now?", fg="green"), default=True):
             """
 
             for row in cache_snoop:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
+                if row[2]:
+                    vuln_server = '<p style="color:red">{}</p>'.format(row[2])
+                else:
+                    vuln_server = "<center>None</center"
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], vuln_server)
             content += "</table><p><br /></p>"
 
             content += """
@@ -566,8 +578,8 @@ now?", fg="green"), default=True):
             <table style="width:100%" border="1">
             <tr>
             <th>Domain</th>
-            <th>Netblock Owner</th>
             <th>IP Address</th>
+            <th>Netblock Owner</th>
             </tr>
             """
 
@@ -585,7 +597,7 @@ now?", fg="green"), default=True):
     def create_subdomains_page(self):
         """Create the subdomains.html page in the report directory."""
         with open(self.report_path + "subdomains.html", "w") as report:
-            self.c.execute("SELECT domain,subdomain,ip_address FROM subdomains")
+            self.c.execute("SELECT domain,subdomain,ip_address FROM subdomains ORDER BY ip_address,domain,subdomain ASC")
             subdomains = self.c.fetchall()
             self.c.execute("SELECT domain,subdomain,domain_frontable FROM subdomains WHERE domain_frontable <> 0")
             frontable = self.c.fetchall()
@@ -598,7 +610,6 @@ now?", fg="green"), default=True):
             <h1>Subdomains</h1>
             """
 
-
             if frontable:
                 content += """
                 <h2>Frontable Subdomains</h2>
@@ -610,7 +621,7 @@ now?", fg="green"), default=True):
                 <th>CDN Information</th>
                 </tr>
                 """
-                
+
                 for row in frontable:
                     content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0], row[1], row[2])
                 content += "</table><p><br /></p>"    
@@ -640,9 +651,9 @@ now?", fg="green"), default=True):
     def create_networks_page(self):
         """Create the networks.html page in the report directory."""
         with open(self.report_path + "networks.html", "w") as report:
-            self.c.execute("SELECT ip_address,rdap_source,organization,network_cidr,asn,country_code FROM rdap_data")
+            self.c.execute("SELECT ip_address,rdap_source,organization,network_cidr,asn,country_code FROM rdap_data ORDER BY organization,ip_address ASC")
             rdap_data = self.c.fetchall()
-            self.c.execute("SELECT ip_address,robtex_related_domains FROM rdap_data")
+            self.c.execute("SELECT ip_address,robtex_related_domains FROM rdap_data ORDER BY ip_address ASC")
             related_domains = self.c.fetchall()
 
             content = """
@@ -692,7 +703,7 @@ now?", fg="green"), default=True):
     def create_shodan_page(self):
         """Create the shodan.html page in the report directory."""
         with open(self.report_path + "shodan.html", "w") as report:
-            self.c.execute("SELECT ip_address,os,organization,port,banner_data FROM shodan_host_lookup")
+            self.c.execute("SELECT ip_address,os,organization,port,banner_data FROM shodan_host_lookup ORDER BY organization ASC")
             shodan_lookup = self.c.fetchall()
             self.c.execute("SELECT domain,ip_address,hostname,os,port,banner_data FROM shodan_search")
             shodan_search = self.c.fetchall()

@@ -13,7 +13,7 @@ import sqlite3
 import click
 from neo4j.v1 import GraphDatabase
 
-# Try importing helpers.py two different ways to allow for graphers.py to be executed independantly
+# Try importing helpers.py two different ways to allow for graphers.py to be executed independently
 try:
     from lib import helpers
 except:
@@ -39,13 +39,15 @@ class Grapher(object):
         and Full Contact API results.
         """
         org_names = []
-        try:
-            self.c.execute("SELECT organization FROM whois_data")
-            whois_orgs = self.c.fetchall()
-            for org in whois_orgs:
-                org_names.append(org[0])
-        except:
-            pass
+        # Disabling this for now because it was mostly bad. Many of the orgs returned with WHOIS
+        # were just unavailable or registrars.
+        # try:
+        #     self.c.execute("SELECT organization FROM whois_data")
+        #     whois_orgs = self.c.fetchall()
+        #     for org in whois_orgs:
+        #         org_names.append(org[0])
+        # except:
+        #     pass
 
         try:
             self.c.execute("SELECT company_name,website,website_overview,employees,year_founded FROM company_info")
@@ -61,8 +63,14 @@ class Grapher(object):
                 query = """
                 MERGE (x:Organization {Name:"%s"})
                 RETURN x
-                """% (org)
+                """ % (org)
                 helpers.execute_query(self.neo4j_driver, query)
+        else:
+            query = """
+            MERGE (x:Organization {Name:"Target"})
+            RETURN x
+            """
+            helpers.execute_query(self.neo4j_driver, query)
 
         if company_info:
             query = """

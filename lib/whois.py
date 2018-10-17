@@ -4,7 +4,7 @@
 """
 This module contains the tools to collect ownership information for domain names and
 IP addresses/ranges and discover additional domain names. Ownership is checked using
-whois records and RDAP records. Domains are discovered via reverse whois look-ups
+WHOIS records and RDAP records. Domains are discovered via reverse WHOIS look-ups
 using WhoXY.
 """
 
@@ -46,7 +46,7 @@ communicating with WhoXY later.", fg="yellow")
             click.secho("[!] Did not find a WhoXY API key.", fg="yellow")
 
     def run_whois(self, domain):
-        """Perform a whois lookup for the provided target domain. The whois results are returned
+        """Perform a whois lookup for the provided target domain. The WHOIS results are returned
         as a dictionary.
 
         This can fail, usually if the domain is registered through a registrar outside of
@@ -68,11 +68,11 @@ communicating with WhoXY later.", fg="yellow")
                     who.city, who.zipcode, who.state, who.country)
                 results['dnssec'] = who.dnssec
             else:
-                click.secho("[*] Whois record for {} came back empty. Could be privacy protection, \
+                click.secho("[*] WHOIS record for {} came back empty. Could be privacy protection, \
 GDPR, or the registrar. You might try looking at dnsstuff.com.".format(domain), fg="yellow")
             return results
         except Exception as error:
-            click.secho("[!] The whois lookup for {} failed!".format(domain), fg="red")
+            click.secho("[!] The WHOIS lookup for {} failed!".format(domain), fg="red")
             click.secho("L.. Details: {}".format(error), fg="red")
 
     def parse_whoxy_results(self, whoxy_data, reverse=False):
@@ -103,9 +103,9 @@ GDPR, or the registrar. You might try looking at dnsstuff.com.".format(domain), 
             results['registrant'] = "None Listed"
 
         if reverse:
-            results['address'] = "Unavailable for Reverse Whois"
-            results['admin_contact'] = "Unavailable for Reverse Whois"
-            results['tech_contact'] = "Unavailable for Reverse Whois"
+            results['address'] = "Unavailable for Reverse WHOIS"
+            results['admin_contact'] = "Unavailable for Reverse WHOIS"
+            results['tech_contact'] = "Unavailable for Reverse WHOIS"
         else:
             try:
                 reg_address = whoxy_data['registrant_contact']['mailing_address']
@@ -145,7 +145,7 @@ GDPR, or the registrar. You might try looking at dnsstuff.com.".format(domain), 
         return results
 
     def run_whoxy_whois(self, domain):
-        """Perform a whois lookup for the provided target domain using WhoXY's API. The whois
+        """Perform a WHOIS lookup for the provided target domain using WhoXY's API. The whois
         results are returned as a dictionary.
         """
         if self.whoxy_api_key:
@@ -155,10 +155,10 @@ GDPR, or the registrar. You might try looking at dnsstuff.com.".format(domain), 
                     whois_results = self.parse_whoxy_results(results)
                     return whois_results
                 else:
-                    click.secho("[*] WhoXY returned status code 0, error/no results, for whois \
+                    click.secho("[*] WhoXY returned status code 0, error/no results, for WHOIS \
 lookup on {}.".format(domain), fg="yellow")
             except requests.exceptions.RequestException as error:
-                click.secho("[!] Error connecting to WhoXY for whois on {}!".format(domain), fg="red")
+                click.secho("[!] Error connecting to WhoXY for WHOIS on {}!".format(domain), fg="red")
                 click.secho("L.. Details: {}".format(error), fg="red")
 
     def run_whoxy_company_search(self, company):
@@ -187,7 +187,7 @@ company search.", fg="yellow")
         """Perform an RDAP lookup for an IP address. An RDAP lookup object is returned.
 
         From IPWhois: IPWhois.lookup_rdap() is now the recommended lookup method. RDAP provides
-        a far better data structure than legacy whois and REST lookups (previous implementation).
+        a far better data structure than legacy WHOIS and REST lookups (previous implementation).
         RDAP queries allow for parsing of contact information and details for users, organizations,
         and groups. RDAP also provides more detailed network information.
         """

@@ -14,7 +14,6 @@ https://github.com/laramies/theHarvester
 """
 
 import re
-import string
 
 
 class Parser:

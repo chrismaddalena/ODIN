@@ -28,6 +28,7 @@ class CertSearcher(object):
     """Class for searching crt.sh and Censys.io for certificates and parsing the results."""
     user_agent = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1"
     crtsh_base_uri = "https://crt.sh/?q={}&output=json"
+    findsubdomains_uri = "https://findsubdomains.com/subdomains-of/{}"
 
     def __init__(self):
         """Everything that should be initiated with a new object goes here."""
@@ -275,3 +276,17 @@ received!".format(request.status_code), fg="red")
                 str(url.parent.findNext('td')).strip("<td>").strip("</td>")]
                 ip_history.append(result)
         return ip_history
+
+    def query_subdomainof(self, domain):
+        """Look-up the given domain on findsubdomains.com and parse the results to get a list of
+        subdomains.
+        """
+        subdomains = []
+        request = requests.get(self.findsubdomains_uri.format(domain))
+        soup = BeautifulSoup(request.content, "lxml")
+        subdomain_links = soup.findAll('a', {'class': 'aggregated-link'})
+        for subdomain in subdomain_links:
+            if not subdomain.string.strip() == domain:
+                subdomains.append(subdomain.string.strip())
+        unique_subdomains = list(set(subdomains))
+        return unique_subdomains

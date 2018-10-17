@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This module interacts with the Full Contsact API to collect information about a company and/or its
+This module interacts with the Full Contact API to collect information about a company and/or its
 employees.
 """
 

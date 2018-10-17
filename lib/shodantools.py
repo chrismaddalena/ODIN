@@ -14,7 +14,7 @@ from . import helpers
 
 
 class ShodanTools(object):
-    """Class with various tools for itneracting with Shodan to search for IP addresses and domains."""
+    """Class with various tools for interacting with Shodan to search for IP addresses and domains."""
     shodan_dns_resolve_uri = "https://api.shodan.io/dns/resolve?hostnames={}&key={}"
 
     def __init__(self):
@@ -39,8 +39,9 @@ class ShodanTools(object):
                 target_results = self.shodan_api.search(target)
                 return target_results
             except shodan.APIError as error:
-                click.secho("\n[!] No Shodan data for {}!".format(target), fg="red")
-                click.secho("L.. Details: {}".format(error), fg="red")
+                # click.secho("\n[!] No Shodan data for {}!".format(target), fg="red")
+                # click.secho("L.. Details: {}".format(error), fg="red")
+                pass
 
     def run_shodan_resolver(self, target):
         """Resolve a hosname to an IP address using the Shodan API's DNS endpoint.
@@ -68,5 +69,11 @@ class ShodanTools(object):
                 target_results = self.shodan_api.host(target)
                 return target_results
             except shodan.APIError as error:
-                click.secho("\n[!] No Shodan data for {}!".format(target), fg="red")
-                click.secho("L.. Details: {}".format(error), fg="red")
+                # click.secho("\n[!] No Shodan data for {}!".format(target), fg="red")
+                # click.secho("L.. Details: {}".format(error), fg="red")
+                if error == "Invalid IP":
+                    click.secho("[*] A domain resolved to {}, which Shodan has flagged as an invalid \
+IP address. Review it and cehck the hostname in the final results. If it is a valid address, the \
+domain may resolve to an internal asset or have a CNAME for an internal asset.", fg="yellow")
+                else:
+                    pass

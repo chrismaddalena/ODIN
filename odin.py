@@ -88,8 +88,8 @@ Run 'odin.py <MODULE> --help' for more information on a specific module.
 # The OSINT module -- This is the primary module that does all the stuff
 # Basic, required arguments
 @odin.command(name='osint', short_help="The full OSINT suite of tools will be run (see README).")
-@click.option('-o', '--organization', help="The target client, such as `ABC Company`, to use for \
-report titles and searches for domains and cloud storage buckets.", required=True)
+@click.option('-o', '--organization', help='The target client, such as "ABC Company," to use for \
+report titles and searches for domains and cloud storage buckets.', required=True)
 @click.option('-d', '--domain', help="The target's primary domain, such as example.com. Use \
 whatever the target uses for email and their main website. Provide additional domains in a scope \
 file using --scope-file.",required=True)
@@ -143,9 +143,9 @@ HaveIBeenPwned, Twitter's API, and search engines to collect additional informat
 ODIN also uses various tools and APIs to collect information on the provided IP addresses
 and domain names, including things like DNS and IP address history.
 
-View the README for the full detailsand lists of API keys.
+View the wiki for the full details, reporting information, and lists of API keys.
 
-Note: If providing a scope file, acceptable IP addresses/ranges include:
+Note: If providing any IP addresses in a scope file, acceptable IP addresses/ranges include:
 
     * Single Address:      8.8.8.8
 
@@ -173,7 +173,7 @@ Note: If providing a scope file, acceptable IP addresses/ranges include:
         rev_domain_list = manager.list()
         # Create reporter object and generate lists of everything, just IP addresses, and just domains
         browser = helpers.setup_headless_chrome(unsafe)
-        report = reporter.Reporter(report_path, output_report, browser)
+        report = reporter.Reporter(organization, report_path, output_report, browser)
         report.create_tables()
         scope, ip_list, domain_list = report.prepare_scope(ip_list, domain_list, scope_file, domain)
         # Create some jobs and put Python to work!
@@ -270,8 +270,8 @@ Run lib/grapher.py with the appropriate options.", fg="red")
 # The VERIFY module -- No OSINT, just a way to check a ownership of a list of IPs
 @odin.command(name='verify', short_help="This module assists with verifying ownership of a list \
 of IP addresses. This returns a csv file with SSL cert, whois, and other data for verification.")
-@click.option('-o', '--organization', help="The target client, such as `ABC Company`, to use for \
-report titles and some keyword searches.", required=True)
+@click.option('-o', '--organization', help='The target client, such as "ABC Company," to use for \
+report titles and some keyword searches.', required=True)
 @click.option('-sf', '--scope-file', help="Name of the file with your IP addresses.", \
               type=click.Path(exists=True, readable=True, resolve_path=True), required=True)
 @click.option('-r', '--report', default="Verification.csv", help="Output file (CSV) for the \
