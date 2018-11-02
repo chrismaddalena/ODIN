@@ -1,4 +1,21 @@
 # Change Log
+## November 1, 2018, Commit 200 and v2.0.0 RELEASE!
+* Many, many changes were made to clean-up code, squash some bugs, and prepare everything for v2.0.0. A few notable fixes:
+    * Web requests now have strict timeouts (10-15 seconds in most cases) to address failed web requests occasionally causing modules to hang or take a very long time to complete.
+    * Some small issues with parsing HTML for names, emails, and Twitter handles have been addressed to weed out bad results.
+    * Fixed an issue with Have I Been Pwned where a misplaced `sleep` was slowing things down without having the desired effect on requests.
+* New features have been added for this release:
+  * Findsubdomains.com is now queried as an additional source of pre-indexed subdomains.
+  * ODIN now checks for the domains and DNS records necessary to determine if a domain is an Office 365 tenant.
+  * The HTML report is a bit more colorful now with some text highlighted to call out interesting things. This includes:
+        * Office 365 tenants
+        * Weak or missing SPF records
+        * Weak or missing DMARC records
+    * The TakeoverChecks module now checks subdomains against 50 fingerprints for different services and CDNs to flag possible domain takeovers.
+    * Neo4j graphs have been improved. Subdomains of subdomains are now linked in chains rather than every subdomain being linked to the base domain (e.g. dev.api.foo.com-[:SUBDOMAIN_OF]->api.foo.com-[:SUBDOMAIN_OF]->foo.com).
+    * To try to avoid Google reCAPTCHAs for longer periods of time when users want to search under many domains or for all filetypes, there is now a variable sleep time between requests to help randomize the  somewhat.
+    * The typosquatting module has been rewritten to remove reliances on URLCrazy as an external command. The new module is implemented completely in Python and uses ODIN's own modules.
+
 ## August 31, 2018, v2.0.0 BETA
 * Removed the `extract` command from use. File metadata collection is now 100% Python and platform agnostic.
 * Screenshot module will now try to dismiss webpage alerts before taking a screenshot.

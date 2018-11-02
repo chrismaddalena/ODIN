@@ -20,41 +20,50 @@ import tweepy
 import requests
 from bs4 import BeautifulSoup as BS
 
-from . import searchparser, helpers
+from . import searchparser,helpers
 
 
 class SearchTwitter:
     """Class for searching Google using 'site:twitter.com intitle:{keyword}' to find Twitter profiles."""
+    # Set the timeout, in seconds, for web requests
+    requests_timeout = 10
+    # Set the user-agent and URL for the web requests
+    search_url = "https://www.google.com/search?num=100&start={}&hl=en&meta=&q=site%3Atwitter.com%20intitle%3A%22on+Twitter%22%20{}"
+    user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"
 
-    def __init__(self, word, limit):
-        """Everything that should be initiated with a new object goes here."""
-        self.word = word.replace(' ', '%20')
-        self.results = ""
-        self.totalresults = ""
-        self.server = "www.google.com"
-        self.userAgent = "(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100116 Firefox/3.7"
-        self.quantity = "100"
-        self.limit = int(limit)
+    def __init__(self,word,limit):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        word        The keyword to use for the Google searches
+        limit       A limit on the number of search results to parse
+        """
         self.counter = 0
+        self.results = ""
+        self.quantity = "100"
+        self.totalresults = ""
+        self.limit = int(limit)
+        self.word = word.replace(' ','%20')
 
     def do_search(self):
         """Execute a Google search for site:twitter.com intitle:on+Twitter keyword."""
+        headers = {'User-Agent':self.user_agent}
         try:
-            urly = "https://"+ self.server + "/search?num=100&start=" + str(self.counter) + "&hl=en&meta=&q=site%3Atwitter.com%20intitle%3A%22on+Twitter%22%20" + self.word
-        except Exception as error:
-            print(error)
-        headers = {'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:34.0) Gecko/20100101 Firefox/34.0'}
-        try:
-            req = requests.get(urly, headers=headers)
+            req = requests.get(self.search_url.format(self.counter,self.word),headers=headers,timeout=self.requests_timeout)
             self.results = req.content
             self.totalresults += str(self.results)
-        except Exception as error:
-            pass
+        except requests.exceptions.Timeout:
+            click.secho("\n[!] The connection to Google timed out!",fg="red")
+        except requests.exceptions.TooManyRedirects:
+            click.secho("\n[!] The connection to Google encountered too many redirects!",fg="red")
+        except requests.exceptions.RequestException as error:
+            click.secho("\n[!] The connection to Google encountered an error!",fg="red")
+            click.secho("L.. Details: {}".format(error),fg="red")
 
     def get_people(self):
         """Parse the Google search results to get Twitter handles."""
-        rawres = searchparser.Parser(self.totalresults, self.word)
-        return rawres.parse_twitter()
+        raw_results = searchparser.Parser(self.totalresults,self.word)
+        return raw_results.parse_twitter()
 
     def process(self):
         """Process the Google search results page by page up to the limit."""
@@ -65,29 +74,38 @@ class SearchTwitter:
 
 class SearchYahoo:
     """Class for searching Yahoo using a domain as the keyword to collect email addresses."""
+    # Set the timeout, in seconds, for web requests
+    requests_timeout = 10
+    # Set the user-agent and URL for the web requests
+    search_url = 'https://search.yahoo.com/search?p="%40{}"&b={}&pz=10'
+    user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"
 
-    def __init__(self, word, limit):
-        """Everything that should be initiated with a new object goes here."""
+    def __init__(self,word,limit):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        word        The keyword to use for the Yahoo searches
+        limit       A limit on the number of search results to parse
+        """
         self.word = word
-        self.totalresults = ""
-        self.server = "search.yahoo.com"
-        self.userAgent = "(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6"
-        self.limit = limit
         self.counter = 0
+        self.limit = limit
+        self.totalresults = ""
 
     def do_search(self):
         """Execute a Yahoo search for the given domain to find email addresses."""
-        headers = { 'User-Agent' : self.userAgent }
+        headers = {'User-Agent':self.user_agent}
         try:
-            urly = "http://" + self.server + "/search?p=\"%40" + self.word + "\"&b=" + str(self.counter) + "&pz=10"
-        except Exception as error:
-            print(error)
-        try:
-            req = requests.get(urly, headers=headers)
+            req = requests.get(self.search_url.format(self.word,self.counter),headers=headers,timeout=self.requests_timeout)
             self.results = req.content
             self.totalresults += str(self.results)
-        except Exception as error:
-            pass
+        except requests.exceptions.Timeout:
+            click.secho("\n[!] The connection to Yahoo timed out!",fg="red")
+        except requests.exceptions.TooManyRedirects:
+            click.secho("\n[!] The connection to Yahoo encountered too many redirects!",fg="red")
+        except requests.exceptions.RequestException as error:
+            click.secho("\n[!] The connection to Yahoo encountered an error!",fg="red")
+            click.secho("L.. Details: {}".format(error),fg="red")
 
     def process(self):
         """Process the Yahoo search results page by page up to the limit."""
@@ -98,42 +116,52 @@ class SearchYahoo:
 
     def get_emails(self):
         """Parse the Yahoo search results to get the email addresses."""
-        rawres = searchparser.Parser(self.totalresults, self.word)
-        return rawres.parse_emails()
+        raw_results = searchparser.Parser(self.totalresults,self.word)
+        return raw_results.parse_emails()
 
 
 class SearchGoogle:
     """Class for searching Google using a domain as the keyword to collect email addresses."""
+    # Set the timeout, in seconds, for web requests
+    requests_timeout = 10
+    # Set the user-agent and URL for the web requests
+    search_url = 'https://www.google.com/search?num={}&start={}&hl=en&meta=&q=%40"{}"'
+    user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"
 
-    def __init__(self, word, limit, start):
-        """Everything that should be initiated with a new object goes here."""
+    def __init__(self,word,limit,start):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        word        The keyword to use for the Google searches
+        limit       A limit on the number of search results to parse
+        start       The search result number to start with for parsing (e.g. 0)
+        """
         self.word = word
         self.results = ""
-        self.totalresults = ""
-        self.server = "www.google.com"
-        self.userAgent = "(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6"
-        self.quantity = "100"
         self.limit = limit
         self.counter = start
+        self.quantity = "100"
+        self.totalresults = ""
 
     def do_search(self):
         """Execute a Google search for the given domain to find email addresses."""
-        headers = { 'User-Agent' : self.userAgent }
+        headers = {'User-Agent':self.user_agent}
         try:
-            urly = "http://" + self.server + "/search?num=" + self.quantity + "&start=" + str(self.counter) + "&hl=en&meta=&q=%40\"" + self.word + "\""
-        except Exception as error:
-            print(error)
-        try:
-            req = requests.get(urly, headers=headers)
+            req = requests.get(self.search_url.format(self.quantity,self.counter,self.word),headers=headers,timeout=self.requests_timeout)
             self.results = req.content
             self.totalresults += str(self.results)
-        except Exception as error:
-            pass
+        except requests.exceptions.Timeout:
+            click.secho("\n[!] The connection to Google timed out!",fg="red")
+        except requests.exceptions.TooManyRedirects:
+            click.secho("\n[!] The connection to Google encountered too many redirects!",fg="red")
+        except requests.exceptions.RequestException as error:
+            click.secho("\n[!] The connection to Google encountered an error!",fg="red")
+            click.secho("L.. Details: {}".format(error),fg="red")
 
     def get_emails(self):
         """Parse Google search results to get email addresses."""
-        rawres = searchparser.Parser(self.totalresults, self.word)
-        return rawres.parse_emails()
+        raw_results = searchparser.Parser(self.totalresults,self.word)
+        return raw_results.parse_emails()
 
     def process(self):
         """Process the search results page by page up to the limit."""
@@ -145,36 +173,46 @@ class SearchGoogle:
 
 class SearchBing:
     """Class for searching Bing using a domain as the keyword to collect email addresses."""
+    # Set the timeout, in seconds, for web requests
+    requests_timeout = 10
+    # Set the user-agent and URL for the web requests
+    search_url = 'https://www.bing.com/search?q=%40{}&count=50&first={}'
+    user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"
 
-    def __init__(self, word, limit, start):
-        """Everything that should be initiated with a new object goes here."""
-        self.word = word.replace(' ', '%20')
+    def __init__(self,word,limit,start):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        word        The keyword to use for the Bing searches
+        limit       A limit on the number of search results to parse
+        start       The search result number to start with for parsing (e.g. 0)
+        """
         self.results = ""
-        self.totalresults = ""
-        self.server = "www.bing.com"
-        self.userAgent = "(Mozilla/5.0 (Windows; U; Windows NT 6.0;en-US; rv:1.9.2) Gecko/20100115 Firefox/3.6"
         self.quantity = "50"
-        self.limit = int(limit)
         self.counter = start
+        self.totalresults = ""
+        self.limit = int(limit)
+        self.word = word.replace(' ','%20')
 
     def do_search(self):
         """Execute a Bing search for the given domain to find email addresses."""
-        headers = { 'User-Agent' : self.userAgent }
+        headers = {'User-Agent':self.user_agent}
         try:
-            urly = "http://" + self.server + "/search?q=%40" + self.word + "&count=50&first=" + str(self.counter)
-        except Exception as error:
-            print(error)
-        try:
-            req = requests.get(urly, headers=headers)
+            req = requests.get(self.search_url.format(self.word,self.counter),headers=headers,timeout=self.requests_timeout)
             self.results = req.content
             self.totalresults += str(self.results)
-        except Exception as error:
-            pass
+        except requests.exceptions.Timeout:
+            click.secho("\n[!] The connection to Bing timed out!",fg="red")
+        except requests.exceptions.TooManyRedirects:
+            click.secho("\n[!] The connection to Bing encountered too many redirects!",fg="red")
+        except requests.exceptions.RequestException as error:
+            click.secho("\n[!] The connection to Bing encountered an error!",fg="red")
+            click.secho("L.. Details: {}".format(error),fg="red")
 
     def get_emails(self):
         """Parse Bing search results to get email addresses."""
-        rawres = searchparser.Parser(self.totalresults, self.word)
-        return rawres.parse_emails()
+        raw_results = searchparser.Parser(self.totalresults,self.word)
+        return raw_results.parse_emails()
 
     def process(self):
         """Process the Bing search results page by page up to the limit."""
@@ -186,16 +224,23 @@ class SearchBing:
 
 class SearchEmailHunter:
     """Class for searching Email Hunter for email addresses tied to a domain."""
+    # Set the timeout, in seconds, for web requests
+    requests_timeout = 10
+    # Set the URL for the web requests
     emailhunter_api_url = "https://api.hunter.io/v2/domain-search?domain={}&api_key={}"
 
-    def __init__(self, domain):
-        """Everything that should be initiated with a new object goes here."""
+    def __init__(self,domain):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        domain      The domain to search for in Email Hunter's database
+        """
         self.domain = domain
         try:
             self.emailhunter_api_key = helpers.config_section_map("EmailHunter")["api_key"]
         except Exception:
             self.emailhunter_api_key = ""
-            click.secho("[!] Could not fetch EmailHunter API key.", fg="yellow")
+            click.secho("[!] Could not fetch EmailHunter API key.",fg="yellow")
 
     def do_search(self):
         """"Collect known email addresses for a domain and other information, such as names and job
@@ -205,41 +250,55 @@ class SearchEmailHunter:
         """
         results = None
         if self.emailhunter_api_key:
-            request = requests.get(self.emailhunter_api_url.format(self.domain, self.emailhunter_api_key))
-            results = request.json()
-            if "errors" in results:
-                click.secho("[!] The request to EmailHunter returned an error!", fg="red")
-                click.secho("L.. Details: {}".format(results['errors']), fg="red")
-                return None
-            click.secho("\n[+] Hunter has contact data for {} people."
-                            .format(len(results['data']['emails'])), fg="green")
+            try:
+                request = requests.get(self.emailhunter_api_url.format(self.domain,self.emailhunter_api_key),timeout=self.requests_timeout)
+                results = request.json()
+                if "errors" in results:
+                    click.secho("[!] The request to EmailHunter returned an error!",fg="red")
+                    click.secho("L.. Details: {}".format(results['errors']),fg="red")
+                    return None
+                click.secho("\n[+] Hunter has contact data for {} people.".format(len(results['data']['emails'])),fg="green")
+            except requests.exceptions.Timeout:
+                click.secho("\n[!] The connection to Email Hunter timed out!",fg="red")
+            except requests.exceptions.TooManyRedirects:
+                click.secho("\n[!] The connection to Email Hunter encountered too many redirects!",fg="red")
+            except requests.exceptions.RequestException as error:
+                click.secho("\n[!] The connection to Email Hunter encountered an error!",fg="red")
+                click.secho("L.. Details: {}".format(error),fg="red")
         return results
 
 
 class SearchLinkedIn:
     """Class to scrape LinkedIn profiles from Bing search results."""
-    bing_search_query = 'http://www.bing.com/search?q=site:linkedin.com/in%20"{}"&count=50&first={}'
+    # Set the timeout, in seconds, for web requests
+    requests_timeout = 10
+    # Set the user-agent and URL for the web requests
+    search_url = 'http://www.bing.com/search?q=site:linkedin.com/in%20"{}"&count=50&first={}'
+    user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"
 
-    def __init__(self, company, limit=100):
-        """Everything that should be initiated with a new object goes here."""
-        self.company = company
+    def __init__(self,company,limit=100):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        company     The company name to search for on LinkedIn
+        limit       A limit on the number of search results to parse (Default: 100)
+        """
         self.limit = limit
+        self.company = company
 
     def do_search(self):
         """Construct a Bing search URL and scrape LinkedIn profile information related to the
         given company name.
         """
-        profiles = {}
         counter = 0
-        self.company = self.company.replace(" ", "%20")
+        profiles = {}
+        self.company = self.company.replace(" ","%20")
         while (counter < self.limit):
             try:
-                url = self.bing_search_query.format(self.company, counter)
-                # self.browser.get(url)
-                # soup = BS(self.browser.page_source, "html.parser")
-                req = requests.get(url)
-                soup = BS(req.text, "html.parser")
-                results = soup.findAll('li', {'class': 'b_algo'})
+                headers = {'User-Agent':self.user_agent}
+                req = requests.get(self.search_url.format(self.company,counter),headers=headers,timeout=self.requests_timeout)
+                soup = BS(req.text,"html.parser")
+                results = soup.findAll('li',{'class':'b_algo'})
                 for hit in results:
                     # Get href links from Bing's source
                     link = hit.a['href']
@@ -252,7 +311,7 @@ class SearchLinkedIn:
                     if '/dir/' in link or '/title/' in link or 'groupItem' in link or not 'linkedin.com' in link:
                         continue
                     else:
-                        profiles[name] = {'job_title': job_title, 'linkedin_profile': link}
+                        profiles[name] = {'job_title':job_title,'linkedin_profile':link}
             except requests.exceptions.RequestException:
                 pass
             sleep(1)
@@ -262,6 +321,11 @@ class SearchLinkedIn:
 
 class Harvester:
     """Class to run all harvest modules and process the results."""
+    # Set the search configuration for harvesting email addresses and social media profiles
+    harvest_start = 0
+    harvest_limit = 100
+    # Setup Tweepy with a timeout value, the default is 60 seconds
+    tweepy_timeout = 10
 
     def __init__(self):
         """Everything that should be initiated with a new object goes here."""
@@ -270,54 +334,57 @@ class Harvester:
             consumer_key_secret = helpers.config_section_map("Twitter")["key_secret"]
             access_token = helpers.config_section_map("Twitter")["access_token"]
             access_token_secret = helpers.config_section_map("Twitter")["token_secret"]
-            twit_auth = tweepy.OAuthHandler(consumer_key, consumer_key_secret)
-            twit_auth.set_access_token(access_token, access_token_secret)
-            # Setup Tweepy with a timeout value, the default is 60 seconds
-            self.twit_api = tweepy.API(twit_auth, timeout=10)
+            twit_auth = tweepy.OAuthHandler(consumer_key,consumer_key_secret)
+            twit_auth.set_access_token(access_token,access_token_secret)
+            self.twit_api = tweepy.API(twit_auth,timeout=self.tweepy_timeout)
         except Exception:
             self.twit_api = None
-            click.secho("[!] Could not setup OAuth for Twitter API.", fg="yellow")
+            click.secho("[!] Could not setup OAuth for Twitter API.",fg="yellow")
 
-    def harvest_all(self, domain):
+    def harvest_all(self,domain):
         """Discover email addresses and employee names using search engines like Google, Yahoo,
         and Bing.
+
+        Parameters:
+        domain      The domain to search for across all search engines for email addresses and
+                    social media profiles
         """
-        # Set the search configuration for harvesting email addresses and social media profiles
-        harvest_limit = 100
-        harvest_start = 0
-        # click.secho("[+] Beginning the harvesting of email addresses for {}...".format(domain), fg="green")
+        # click.secho("[+] Beginning the harvesting of email addresses for {}...".format(domain),fg="green")
         # Google search
-        search = SearchGoogle(domain, harvest_limit, harvest_start)
+        search = SearchGoogle(domain,self.harvest_limit,self.harvest_start)
         search.process()
         google_harvest = search.get_emails()
         # Yahoo search
-        search = SearchYahoo(domain, harvest_limit)
+        search = SearchYahoo(domain,self.harvest_limit)
         search.process()
         yahoo_harvest = search.get_emails()
         # Bing search
-        search = SearchBing(domain, harvest_limit, harvest_start)
+        search = SearchBing(domain,self.harvest_limit,self.harvest_start)
         search.process()
         bing_harvest = search.get_emails()
         # Twitter search
-        search = SearchTwitter(domain, harvest_limit)
+        search = SearchTwitter(domain,self.harvest_limit)
         search.process()
         twit_harvest = search.get_people()
         # Combine lists and strip out duplicate findings for unique lists
         all_emails = google_harvest + bing_harvest + yahoo_harvest
-        # click.secho("[+] The search engines returned {} emails and {} Twitter handles for {}."
-        #              .format(len(all_emails), len(twit_harvest), domain), fg="green")
         # Return the results for emails, people, and Twitter accounts
         return all_emails, twit_harvest
 
-    def process_harvested_lists(self, harvester_emails, harvester_twitter, hunter_json):
+    def process_harvested_lists(self,harvester_emails,harvester_twitter,hunter_json):
         """Take data harvested from EmailHunter and search engines, combine the data, make unique
         lists, and return the total results.
+
+        Parameters:
+        harvester_emails    The email output returned by harvest_all()
+        harvester_twitter   The Twitter output returned by harvest_all()
+        hunter_json         The json output returned by SearchEmailHunter.do_search()
         """
         temp_emails = []
         twitter_handles = []
         harvester_people = []
-        job_titles = {}
         linkedin = {}
+        job_titles = {}
         phone_nums = {}
         # Convert all emails from search engines to lowercase for de-duping
         for email in harvester_emails:
@@ -331,7 +398,6 @@ class Harvester:
             for result in hunter_json['data']['emails']:
                 email = result['value'].lower()
                 temp_emails.append(email)
-
                 if "first_name" in result and "last_name" in result:
                     if result['first_name'] is not None and result['last_name'] is not None:
                         person = result['first_name'] + " " + result['last_name']
@@ -348,13 +414,11 @@ class Harvester:
                 if "twitter" in email:
                     if result['twitter'] is not None:
                         harvester_twitter.append(result['twitter'])
-
         # Remove any duplicate results
         unique = set(temp_emails)
         unique_emails = list(unique)
         unique = set(harvester_people)
         unique_people = list(unique)
-
         for twit in harvester_twitter:
             # Split handle from account description and strip rogue periods
             handle = twit.split(' ')[0]
@@ -362,19 +426,20 @@ class Harvester:
             twitter_handles.append(handle.lower())
         unique = set(twitter_handles)
         unique_twitter = list(unique)
-
         click.secho("[+] Final unique findings: {} emails, {} people, {} Twitter handles."
-                     .format(len(unique_emails), len(unique_people), len(unique_twitter)), fg="green")
+                     .format(len(unique_emails), len(unique_people), len(unique_twitter)),fg="green")
         return unique_emails, unique_people, unique_twitter, job_titles, linkedin, phone_nums
 
-    def harvest_twitter(self, handle):
-        """Check the provided Twitter handle using Tweepy and the Twitter API."""
+    def harvest_twitter(self,handle):
+        """Check the provided Twitter handle using Tweepy and the Twitter API.
+
+        Parameters:
+        handle      The Twitter handle to check using the Twitter API
+        """
         if self.twit_api is None:
-            click.secho("[*] Twitter API access is not setup, so skipping Twitter handle \
-lookups.", fg="yellow")
+            click.secho("[*] Twitter API access is not setup, so skipping Twitter handle lookups.",fg="yellow")
         else:
             try:
-                # click.secho("[+] Looking up {} on Twitter".format(handle), fg="green")
                 user_data = {}
                 user = self.twit_api.get_user(handle.strip('@'))
                 user_data['real_name'] = user.name
@@ -384,5 +449,5 @@ lookups.", fg="yellow")
                 user_data['user_description'] = user.description
                 return user_data
             except Exception as error:
-                click.secho("\n[!] Error involving {} -- could be an invalid account.".format(handle), fg="red")
-                click.secho("L.. Details: {}".format(error), fg="red")
+                click.secho("\n[!] Error involving {} -- could be an invalid account.".format(handle),fg="red")
+                click.secho("L.. Details: {}".format(error),fg="red")

@@ -9,33 +9,44 @@ security breaches and public pastes.
 import json
 
 import click
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from selenium.common.exceptions import TimeoutException,NoSuchElementException,WebDriverException
 
 from lib import helpers
 
 
 class HaveIBeenPwned(object):
-    """Class containing the tools for checking email addresses agaisnt the Have I Been Pwned
+    """Class containing the tools for checking email addresses against the Have I Been Pwned
     breach and paste databases.
     """
-    # Headers for use with Requests
-    user_agent = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)"
-    headers = {'User-Agent' : user_agent}
+    # Set the timeout, in seconds, for the webdriver
+    browser_timeout = 10
+    # The Have I Been Pwned API endpoints
+    hibp_paste_uri = "https://haveibeenpwned.com/api/v2/pasteaccount/{}"
+    hibp_breach_uri = "https://haveibeenpwned.com/api/v2/breachedaccount/{}"
 
-    def __init__(self, webdriver):
-        """Everything that should be initiated with a new object goes here."""
+    def __init__(self,webdriver):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        webdriver   A Selenium webdriver object to be used for web browsing
+        """
         self.browser = webdriver
+        self.browser.set_page_load_timeout(self.browser_timeout)
 
-    def pwn_check(self, email):
-        """Check for the target's email in public security breaches using HIBP's API."""
+    def pwn_check(self,email):
+        """Check for the target's email in public security breaches using HIBP's API.
+
+        Parameters:
+        email       The email address to look-up in Have I Been Pwned's breach database
+        """
         try:
-            self.browser.get('https://haveibeenpwned.com/api/v2/breachedaccount/{}'.format(email))
+            self.browser.get(self.hibp_breach_uri.format(email))
             # cookies = browser.get_cookies()
             json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pwned = json.loads(json_text)
             return pwned
         except TimeoutException:
-            click.secho("[!] The connectionto HaveIBeenPwned timed out!", fg="red")
+            click.secho("[!] The connection to HaveIBeenPwned timed out!",fg="red")
             return []
         except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
@@ -43,27 +54,24 @@ class HaveIBeenPwned(object):
         except WebDriverException:
             return []
 
-    def paste_check(self, email):
+    def paste_check(self,email):
         """Check for the target's email in pastes across multiple paste websites. This includes
         sites like Slexy, Ghostbin, Pastebin using HIBP's API.
+
+        Parameters:
+        email       The email address to look-up in Have I Been Pwned's pastes database
         """
         try:
-            self.browser.get('https://haveibeenpwned.com/api/v2/pasteaccount/{}'.format(email))
+            self.browser.get(self.hibp_paste_uri.format(email))
             # cookies = browser.get_cookies()
             json_text = self.browser.find_element_by_css_selector('pre').get_attribute('innerText')
             pastes = json.loads(json_text)
             return pastes
         except TimeoutException:
-            click.secho("[!] The connection to HaveIBeenPwned timed out!", fg="red")
+            click.secho("[!] The connection to HaveIBeenPwned timed out!",fg="red")
             return []
         except NoSuchElementException:
             # This is likely an "all clear" -- no hits in HIBP
             return []
         except WebDriverException:
             return []
-
-
-
-
-
-

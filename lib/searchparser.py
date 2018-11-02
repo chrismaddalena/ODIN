@@ -20,34 +20,38 @@ class Parser:
     """Class for parsing search results to extract specific information, such as email addresses
     and social media profiles.
     """
-    def __init__(self, results, word):
-        """Everything that should be initiated with a new object goes here."""
-        self.results = results
-        self.word = word
+    def __init__(self,results,word):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        results     Results from a harvester.py module to search
+        word        The word to search for
+        """
         self.temp = []
+        self.word = word
+        self.results = results
 
     def generic_clean(self):
         """Remove generic HTML tags from the results and replace URL encoded characters."""
-        self.results = re.sub('<em>', '', self.results)
-        self.results = re.sub('<b>', '', self.results)
-        self.results = re.sub('</b>', '', self.results)
-        self.results = re.sub('</em>', '', self.results)
-        self.results = re.sub('%2f', ' ', self.results)
-        self.results = re.sub('%3a', ' ', self.results)
-        self.results = re.sub('<strong>', '', self.results)
-        self.results = re.sub('</strong>', '', self.results)
-        self.results = re.sub('<wbr>', '', self.results)
-        self.results = re.sub('</wbr>', '', self.results)
-
-        for character in ('>', ':', '=', '<', '/', '\\', ';', '&', '%3A', '%3D', '%3C'):
-            self.results = str.replace(self.results, character, ' ')
+        self.results = re.sub('<em>','',self.results)
+        self.results = re.sub('<b>','',self.results)
+        self.results = re.sub('</b>','',self.results)
+        self.results = re.sub('</em>','',self.results)
+        self.results = re.sub('%2f',' ',self.results)
+        self.results = re.sub('%3a',' ',self.results)
+        self.results = re.sub('<strong>','',self.results)
+        self.results = re.sub('</strong>','',self.results)
+        self.results = re.sub('<wbr>','',self.results)
+        self.results = re.sub('</wbr>','',self.results)
+        for character in ('>',':','=','<','/','\\',';','&','%3A','%3D','%3C'):
+            self.results = str.replace(self.results,character,' ')
 
     def parse_emails(self):
         """Search for and return email addresses in the search results."""
         self.generic_clean()
         reg_emails = re.compile(
             # Local part is required, charset is flexible
-            # https://tools.ietf.org/html/rfc6531 (removed * and () as they provide FP mostly )
+            # https://tools.ietf.org/html/rfc6531 (removed * and () as they provide FP mostly)
             '[a-zA-Z0-9.\-_+#~!$&\',;=:]+' +
             '@' +
             '[a-zA-Z0-9.-]*' + self.word)
@@ -63,10 +67,12 @@ class Parser:
         profiles = self.unique()
         results = []
         for user in profiles:
-            user = user.replace('hashtag/', '').replace('#!/', '')
-            # Filter out the generic Twitter links that have "/i/web/" in place of the username
-            if user != " " and user != "i/web":
-                results.append(user)
+            # Skip over handle/lists/list_name and statuses/status_id strings
+            if not "/lists/" in user and not "statuses/" in user:
+                user = user.replace('hashtag/','').replace('#!/','')
+                # Filter out the generic Twitter links that have "/i/web/" in place of the username
+                if user != " " and user != "i/web":
+                    results.append(user)
         return results
 
     def unique(self):
