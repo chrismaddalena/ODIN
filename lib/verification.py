@@ -1,116 +1,117 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""This module contains tools to help verify the ownership of a list of IP addresses and/or
-domains. This is accomplished via certificates, whois data, and IP ownership data.
+"""
+This module contains tools to help verify the ownership of a list of IP addresses and/or
+domains. This is accomplished via certificates, WHOIS data, and IP ownership data.
 
-Credit to the creator of original version of this script, Ninjasl0th!
+This is based on the verification script created by Ninjasl0th. The original code is here:
+
 https://github.com/NinjaSl0th/IP-Check
 """
 
-
-from time import sleep
 import sys
 import ssl
 import csv
 import socket
+from time import sleep
+
+import click
 import OpenSSL
 import requests
-from netaddr import iter_iprange, IPNetwork
-from colors import green, yellow
+from netaddr import iter_iprange,IPNetwork
+
 from lib import helpers
 
 
-def update_progress(progress):
-    """Helper function to update progress of the verification checks."""
-    sys.stdout.write('Progress: [{0}] {1}%\n'.format('#' * int((progress / 10)), progress))
-    # Flush stdout to keep the progress "bar" updated
-    sys.stdout.flush()
+# Set a socket timeout so the verification does not take ages for long lists
+socket.setdefaulttimeout(5)
 
 
-def prepare_scope(ifile, ip_list, breakrange):
-    """Function to get the targets from the file and put them into a scope array."""
-    # Open the file and readlines so each line is separate
-    pre_parse = open(ifile, "r").readlines()
-    # Start iterating through each line
-    for i in pre_parse:
-        i = i.rstrip()
-        # Check if the range includes a -
-        # Example 192.168.1.1-50 becomes 192.168.1.1,192.168.1.50
-        if "-" in i:
-            a = i.split("-")
-            startrange = a[0]
-            b = a[0]
-            dot_split = b.split(".")
-            j = "."
-            # Join the values using a "." so it makes a valid IP
-            combine = dot_split[0], dot_split[1], dot_split[2], a[1]
-            endrange = j.join(combine)
-            # Calculate the IP range
-            expanded_range = list(iter_iprange(startrange, endrange))
-            # Iterate through the range and remove the IPList
-            for address in expanded_range:
-                print(address)
-                a = str(address)
-                # Append the ip_list
-                ip_list.append(a)
-        # Check if the range includes a _
-        # Ranges like 192.168.1.2_192.168.1.155 will have all ip_list between it and append it.
-        elif "_" in i:
-            a = i.split("_")
-            startrange = a[0]
-            endrange = a[1]
-            expanded_range = list(iter_iprange(startrange, endrange))
-            for address in expanded_range:
-                a = str(address)
-                # Append the ip_list to the array
-                ip_list.append(a)
-        # Identify and expand CIDRs
-        elif breakrange:
-            if "/" in i:
-                expanded_range = list(IPNetwork(i))
-                for e in sorted(expanded_range):
-                    st = str(e)
-                    ip_list.append(st)
-            else:
-                ip_list.append(i.rstrip())
-        # Line is probably not an IP range, so add it to the list
-        else:
-            ip_list.append(i.rstrip())
+def prepare_scope(scope_file,expanded_scope):
+    """Parse IP ranges inside the provided scope file to expand IP ranges. This supports ranges
+    with hyphens, underscores, and CIDRs.
+
+    Parameters:
+    scope_file          A file containing domain name and IP addresses/ranges
+    expanded_scope      A list object for storing to expanded scope list
+    """
+    try:
+        with open(scope_file,"r") as scope_file:
+            for target in scope_file:
+                target = target.rstrip()
+                # Record individual IPs and expand CIDRs
+                if helpers.is_ip(target):
+                    ip_list = list(IPNetwork(target))
+                    for address in sorted(ip_list):
+                        str_address = str(address)
+                        expanded_scope.append(str_address)
+                # Sort IP ranges from domain names and expand the ranges
+                if not helpers.is_domain(target):
+                    # Check for hyphenated ranges like those accepted by Nmap, e.g. 192.168.1.1-50
+                    if "-" in target:
+                        target = target.rstrip()
+                        parts = target.split("-")
+                        startrange = parts[0]
+                        b = parts[0]
+                        dot_split = b.split(".")
+                        temp = "."
+                        # Join the values using a "." so it makes a valid IP
+                        combine = dot_split[0],dot_split[1],dot_split[2],parts[1]
+                        endrange = temp.join(combine)
+                        # Calculate the IP range
+                        ip_list = list(iter_iprange(startrange,endrange))
+                        # Iterate through the range and remove ip_list
+                        for x in ip_list:
+                            temp = str(x)
+                            expanded_scope.append(temp)
+                    # Check if range has an underscore, e.g. 192.168.1.2_192.168.1.155
+                    elif "_" in target:
+                        target = target.rstrip()
+                        parts = target.split("_")
+                        startrange = parts[0]
+                        endrange = parts[1]
+                        ip_list = list(iter_iprange(startrange,endrange))
+                        for address in ip_list:
+                            str_address = str(address)
+                            expanded_scope.append(str_address)
+                else:
+                    expanded_scope.append(target.rstrip())
+            click.secho("[+] Scope list expanded to {} items. Proceeding with verification \
+checks.".format(len(expanded_scope)),fg="green")
+    except IOError as error:
+        click.secho("[!] Parsing of scope file failed!",fg="red")
+        click.secho("L.. Details: {}".format(error),fg="red")
 
 
 def reverse_lookup(target):
-    """Function to get reverse DNS information."""
-    # Check if the IP is a CIDR value because we can't navigate to a CIDR value
-    if "/" in target:
-        # Return None so that we at least akcnowledge there is nothing
+    """Attempt to resolve the provided IP address to a hostname.
+
+    Parameters:
+    target      The target to look-up
+    """
+    try:
+        check = socket.gethostbyaddr(target)
+        return check[0]
+    except:
         return None
-    else:
-        print(green("[+] Trying a reverse DNS lookup for {}.".format(target)))
-        ip_address = target
-        try:
-            # Try and get the hostname via sockets :D
-            check = socket.gethostbyaddr(ip_address)
-            return check[0]
-        except:
-            return None
 
 
 def get_certificate(target):
-    """Function to get SSL certificate information."""
-    # Return None becasue we can't navigate to a CIDR for SSL
-    if "/" in target:
-        return None
+    """Attempt to collect SSL/TLS certificate information for the given host.
+    
+    Parameters:
+    target      The domain name to be used for certificate collection
+    """
+    # Attempt to connect over port 443
     try:
-        # Attempt to connect over port 443
-        print(green("[+] Trying to get certificate information for {}.".format(target)))
-        cert = ssl.get_server_certificate((target, 443))
+        cert = ssl.get_server_certificate((target,443))
+    # If it can't connect, return nothing/fail
     except:
-        # If it can't connect, return nothing/fail
         return None
+    # Try to use OpenSSL to pull certificate information
     try:
-        # Use OpenSSL to pull cert information
-        certificate = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
+        certificate = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM,cert)
         subj = certificate.get_subject()
         comp = subj.get_components()
         for i in comp:
@@ -120,73 +121,61 @@ def get_certificate(target):
                 continue
             else:
                 return None
+    # If OpenSSL fails to get information, return nothing/fail
     except:
-        # If OpenSSL fails to get information, return nothing/fail
         return None
 
-def perform_whois(ip_list, output):
-    """Function to lookup IP or CIDR in the ARIN database."""
-    update_progress(0)
-    total = len(ip_list)
-    prog = 0.0
-    for address in ip_list:
-        if not helpers.is_ip(address):
-            print(yellow("[*] {} is not a valid IP address, so skipping it.".format(address)))
-        elif "/" in address:
-            try:
-                r = requests.get("http://whois.arin.net/rest/cidr/" + address + ".json")
-                if str(r.status_code) == '404':
-                    # IF ARIN gives us a 4 oh 4, then try the next cidr value.
-                    continue
-                else:
-                    pass
-            except:
-                # Die, because we can't connect
-                exit("Cannot connect to ARIN!")
-            tmp = r.json()
-            if "orgRef" not in tmp:
-                name = 'None'
+
+def perform_whois(expanded_scope,output):
+    """Look-up the provided IP address in the ARIN database.
+    
+    Parameters:
+    expanded_scope      A list of domain name and IP addresses (no ranges)
+    output              A list object for storing the output
+    """
+    total_addresses = len(expanded_scope)
+    with click.progressbar(expanded_scope,
+                           label='Collecting information on addresses',
+                           length=total_addresses) as bar:
+        for address in bar:
+            if not helpers.is_ip(address):
+                pass
             else:
-                name = tmp['net']['orgRef']['@name']
-            start = tmp['net']['netBlocks']['netBlock']['startAddress']['$']
-            end = tmp['net']['netBlocks']['netBlock']['endAddress']['$']
-            hostname = reverse_lookup(address)
-            cn = get_certificate(address)
-            output[address] = address, name, start, end, hostname, cn
-
-        else:
-            try:
-                # Send GET request to the ARIN RESTFUL API for IP values
-                r = requests.get("http://whois.arin.net/rest/ip/" + address + ".json")
-                tmp = r.json()
-            except:
-                # Die, because we can't connect
-                exit("Cannot connect to ARIN!")
-
-            try:
-                name = tmp['net']['customerRef']['@name']
-                start = tmp['net']['netBlocks']['netBlock']['startAddress']['$']
-                end = tmp['net']['netBlocks']['netBlock']['endAddress']['$']
-                hostname = reverse_lookup(address)
-                cn = get_certificate(address)
-                output[address] = address, name, start, end, hostname, cn
-            except:
-                # The formatting of ARIN data may change if there is an org as the contact info
-                name = tmp['net']['orgRef']['@name']
-                start = tmp['net']['netBlocks']['netBlock']['startAddress']['$']
-                end = tmp['net']['netBlocks']['netBlock']['endAddress']['$']
-                hostname = reverse_lookup(address)
-                cn = get_certificate(address)
-                output[address] = address, name, start, end, hostname, cn
-            prog += 1
-            update_progress(int(prog / total * 100))
-        # Pause for just a sec to not destroy ARIN with requests
-        sleep(1)
+                # Try to send GET request to the ARIN REST API for IP values
+                try:
+                    r = requests.get("http://whois.arin.net/rest/ip/" + address + ".json",timeout=10)
+                    tmp = r.json()
+                    try:
+                        name = tmp['net']['customerRef']['@name']
+                        # start = tmp['net']['netBlocks']['netBlock']['startAddress']['$']
+                        # end = tmp['net']['netBlocks']['netBlock']['endAddress']['$']
+                        hostname = reverse_lookup(address)
+                        cn = get_certificate(address)
+                        output[address] = address,name,hostname,cn
+                    except:
+                        # The formatting of ARIN data may change if an org is used for the contact
+                        name = tmp['net']['orgRef']['@name']
+                        # start = tmp['net']['netBlocks']['netBlock']['startAddress']['$']
+                        # end = tmp['net']['netBlocks']['netBlock']['endAddress']['$']
+                        hostname = reverse_lookup(address)
+                        cn = get_certificate(address)
+                        output[address] = address,name,hostname,cn
+                except:
+                    pass
+            # Pause for just a sec to not destroy ARIN with requests
+            sleep(1)
 
 
-def print_output(out, ofile):
-    """Helper function to output the final dict to a csv."""
-    writer = csv.writer(open(ofile, 'w'))
-    a = list(out.values())
-    for i in a:
-        writer.writerow(i)
+def print_output(results,report_path):
+    """Write the final results to a csv.
+    
+    Parameters:
+    results        The results to be written to the file
+    report_path    File path for the report output
+    """
+    with open(report_path,"w") as csv_report:
+        writer = csv.writer(csv_report)
+        writer.writerow(["Address","Organization","Hostname","Certificate CN"])
+        result_values = list(results.values())
+        for values in result_values:
+            writer.writerow(values)

@@ -1,20 +1,16 @@
 [[source]]
-
 url = "https://pypi.python.org/simple"
 verify_ssl = true
 name = "pypi"
 
 [packages]
-
 shodan = "*"
 python-whois = "*"
 bs4 = "*"
-ansicolors = "*"
 netaddr = "*"
 cymon = "*"
 tweepy = "*"
 ipwhois = "*"
-pyopenssl = "*"
 IPy = "*"
 dnspython = "*"
 censys = "*"
@@ -28,8 +24,7 @@ boto3 = "*"
 neo4j-driver = "*"
 
 [dev-packages]
-
+pylint = "*"
 
 [requires]
-
-python_version = "3.6"
+python_version = "3.7"

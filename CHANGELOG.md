@@ -1,4 +1,47 @@
 # Change Log
+## November 1, 2018, Commit 200 and v2.0.0 RELEASE!
+* Many, many changes were made to clean-up code, squash some bugs, and prepare everything for v2.0.0. A few notable fixes:
+    * Web requests now have strict timeouts (10-15 seconds in most cases) to address failed web requests occasionally causing modules to hang or take a very long time to complete.
+    * Some small issues with parsing HTML for names, emails, and Twitter handles have been addressed to weed out bad results.
+    * Fixed an issue with Have I Been Pwned where a misplaced `sleep` was slowing things down without having the desired effect on requests.
+* New features have been added for this release:
+  * Findsubdomains.com is now queried as an additional source of pre-indexed subdomains.
+  * ODIN now checks for the domains and DNS records necessary to determine if a domain is an Office 365 tenant.
+  * The HTML report is a bit more colorful now with some text highlighted to call out interesting things. This includes:
+        * Office 365 tenants
+        * Weak or missing SPF records
+        * Weak or missing DMARC records
+    * The TakeoverChecks module now checks subdomains against 50 fingerprints for different services and CDNs to flag possible domain takeovers.
+    * Neo4j graphs have been improved. Subdomains of subdomains are now linked in chains rather than every subdomain being linked to the base domain (e.g. dev.api.foo.com-[:SUBDOMAIN_OF]->api.foo.com-[:SUBDOMAIN_OF]->foo.com).
+    * To try to avoid Google reCAPTCHAs for longer periods of time when users want to search under many domains or for all filetypes, there is now a variable sleep time between requests to help randomize the  somewhat.
+    * The typosquatting module has been rewritten to remove reliances on URLCrazy as an external command. The new module is implemented completely in Python and uses ODIN's own modules.
+
+## August 31, 2018, v2.0.0 BETA
+* Removed the `extract` command from use. File metadata collection is now 100% Python and platform agnostic.
+* Screenshot module will now try to dismiss webpage alerts before taking a screenshot.
+* ODIN's web browser will now ignore expired and self-signed certificates so screenshots can be taken of the website contents.
+* Added an `unsafe` flag for Kali users running ODIN as root. Chrome will not open if the user is root and not using `--no-sandbox`, so setting `--unsafe` will add that option to the Chrome browser. While ODIN really only accesses search engines using headless Chrome, this still is not for everyone and should only be used if ODIN is being run onf a Kali Linux VM as root.
+* More clean-up work ansd small bugs squashed.
+
+## August 28, 2016, v2.0.0 BETA
+* ODIN now makes better use of wider terminals for help text.
+* Removed the need for an additional ANSI colors library. ODIN now leverages CLICK's built-in color support for macOS and Linux.
+* Added "." to wordlist generation for S3 bucket hunting. ODIN now generates wordlists using all possible DNS-compliant names for the given keywords and affixes. This means a 33% increase in wordlist size, but that just means more buckets that can be found!
+* Added progress bars to reduce some terminal noise and simultaneously improve visibility into what ODIN is crunching when it may appear to be "stuck."
+* Reworked large pieces of email and social media discovery:
+    * ODIN used to rely on TheHarvester for the bulk of this work. TheHarvester has been removed, but the new code is still based on its concepts and ideas.
+    * Jigsaw has been removed. It no longer exists and probably stopped being a thing a long time ago. Jigsaw now just redirects to https://connect.data.com/.
+    * Replaced LinkedIn search functions. The old LinkedIn search produced a lot unrelated and duplicate names and the profile link search was really just a stab in the dark most of the time. ODIN now does a better job of finding LinkedIn profiles for people that may be related to the target organization and will try to pull names and job titles from the results to go with the discovered profile links.
+    * Replaced Twitter profile search functions. The old Twitter profile search relied on regex for "@some_handle" which missed some profiles when the handle did not make it into the search egnine result description and also returned a lot of false positives, i.e. returned webpage elements with "@something" that were not Twitter handles. This has been improved and now the results are much better and cleaner.
+    * Email harvesting functions are now in harvester.py.
+    * Parse class used for finding Twitter profiles and email addresses in search results are now in searchparser.py.
+* The urlcrazy/lookalike domain/malicious domain checks are now optional and enabled using `--typo`.
+* Overhauled the `verify` module to make it much better at its job, a bit faster, and improve the output. It might actually be useful now.
+* Cleaned-up a lot of function descriptors and some lines of code. Nothing of consequence worth documenting specifically.
+
+## August 25, 2018, 1.9.3
+* Fixed a bug that could occur during whois lookups that would cause ODIN to stop.
+
 ## August 11, 2018, Post-Vegas Edition, 1.9.2
 * Improved WhoXY record parsing and stopped assuming whois and reverse whois results had identical JSON.
 * ODIN now checks WhoXY whois and reverse whois API crdit balances and warns users if their balance is below the user's WhoXY limit.

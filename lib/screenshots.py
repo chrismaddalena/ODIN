@@ -1,71 +1,66 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-"""This module contains all of tools and functions used for takin screenshots of webpages."""
+"""This module contains all of tools and functions used for taking screenshots of webpages."""
 
+import click
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
-from colors import red, green, yellow
+from selenium.common.exceptions import TimeoutException,NoSuchElementException,WebDriverException
+
 from lib import helpers
 
+
 class Screenshotter(object):
-    """A class containing the tools for taking screenshots of webpages."""
+    """Class containing the tools for taking screenshots of webpages."""
+    # Set the timeout, in seconds, for the webdriver
+    browser_timeout = 10
 
-    def __init__(self):
-        """Everything that should be initiated with a new object goes here."""
-        # Collect settings from the config file
+    def __init__(self,webdriver):
+        """Everything that should be initiated with a new object goes here.
+
+        Parameters:
+        webdriver   A Selenium webdriver object to use for automated web browsing
+        """
+        self.browser = webdriver
+        self.browser.set_page_load_timeout(self.browser_timeout)
+
+    def take_screenshot(self,target,directory):
+        """Function to take a screenshot of a target webpage.
+
+        Parameters:
+        target      The IP address or domain name to use for the web request
+        directory   The directory where the saved screenshots will be stored
+        """
         try:
-            self.chrome_driver_path = helpers.config_section_map("WebDriver")["driver_path"]
-            # Try loading the driver as a test
-            self.chrome_options = Options()
-            self.chrome_options.add_argument("--headless")
-            self.chrome_options.add_argument("--window-size=1920x1080")
-            self.chrome_options.add_argument('--ignore-certificate-errors')
-            self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chrome_driver_path)
-            self.browser_capable = True
-        # Catch issues with the web driver or path
-        except WebDriverException:
-            self.chrome_driver_path = None
-            self.browser_capable = False
-        # Catch issues loading the value from the config file
-        except Exception:
-            self.chrome_driver_path = None
-            self.browser_capable = False
-
-        if self.browser_capable is False:
+            out_name = target.split("//")[1]
+        except:
+            out_name = target
+            target = "http://" + target
+            target_ssl = "https://" + target
+        # Attempt to take a screenshot of the target using HTTP and HTTPS
+        try:
+            # Try HTTPS
+            self.browser.get(target_ssl)
+            # Attempt to dismiss any alerts
             try:
-                self.browser = webdriver.PhantomJS()
-                self.browser_capable = True
-                print(green("[*] PhantomJS for web screenshots test was successful!"))
-            except WebDriverException:
-                self.chrome_driver_path = None
-                self.browser_capable = False
-                print(red("[*] PhantomJS test failed, so we won't take web screenshots."))
-            except Exception:
-                self.chrome_driver_path = None
-                self.browser_capable = False
-                print(red("[*] PhantomJS test failed, so we won't take web screenshots."))
-
-    def take_screenshot(self, target, directory):
-        """Function to take a screenshot of a target webpage."""
-        if self.browser_capable:
-            try:
-                out_name = target.split("//")[1]
+                alert = self.browser.switch_to.alert
+                alert.dismiss()
             except:
-                out_name = target
-                target = "http://" + target
-                target_ssl = "https://" + target
-
-            # Attempt to take a screenshot of the target
-            try: 
-                self.browser.get(target)
-                self.browser.save_screenshot(directory + out_name + ".png")
-                self.browser.get(target_ssl)
-                self.browser.save_screenshot(directory + out_name + "_ssl.png")
-            except TimeoutException:
                 pass
-            except WebDriverException:
+            self.browser.save_screenshot(directory + out_name + "_ssl.png")
+            # Try HTTP
+            self.browser.get(target)
+            # Attempt to dismiss any alerts
+            try:
+                alert = self.browser.switch_to.alert
+                alert.dismiss()
+            except:
                 pass
-            except Exception:
-                pass
+            self.browser.save_screenshot(directory + out_name + ".png")
+        except TimeoutException:
+            pass
+        except WebDriverException:
+            pass
+        except Exception:
+            pass
