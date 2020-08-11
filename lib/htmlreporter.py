@@ -6,10 +6,10 @@ This script opens the provided ODIN SQLite3 database and generates an HTML repor
 of doing so, link tables are created in the SQLite3 database to support the queries.
 """
 
-import os
-import sys
 import html
+import os
 import sqlite3
+import sys
 
 import click
 
@@ -17,13 +17,19 @@ import click
 class HTMLReporter(object):
     """A class that opens an ODIN SQLite3 database and generates an HTML report."""
 
-    def __init__(self,organization,report_path,database_path):
+    def __init__(self, organization, report_path, database_path):
         """Everything that should be initiated with a new object goes here.
-        
-        Parameters:
-        organization    The name of the organization, to be used for titles
-        report_path     A file path to be used for saving the HTML report
-        database_path   The file path of the SQLite3 database
+
+        **Parameters**
+
+        ``organization``
+            Name of the organization, to be used for titles
+
+        ``report_path``
+            File path to be used for saving the HTML report
+
+        ``database_path``
+            File path of the SQLite3 database
         """
         self.organization = organization
         self.report_path = report_path
@@ -42,23 +48,30 @@ class HTMLReporter(object):
             try:
                 os.makedirs(report_path)
             except OSError as error:
-                click.secho("[!] Could not create the HTML report directory!",fg="red")
-                click.secho("L.. Details: {}".format(error),fg="red")
+                click.secho("[!] Could not create the HTML report directory!", fg="red")
+                click.secho("L.. Details: {}".format(error), fg="red")
         # Try to connect to the SQLite database
         try:
             self.conn = sqlite3.connect(database_path)
             self.c = self.conn.cursor()
         except sqlite3.DatabaseError as error:
-                click.secho("[!] Could not create a connection with the database file!",fg="red")
-                click.secho("L.. Details: {}".format(error),fg="red")
+            click.secho(
+                "[!] Could not create a connection with the database file!", fg="red"
+            )
+            click.secho("L.. Details: {}".format(error), fg="red")
 
     def close_out_reporting(self):
         """Check the new database and tables and close the connection."""
         # Prompt the user to determine if the report will be opened or not
-        if click.confirm(click.style("[+] Job's done! Do you wan to view the HTML report now?",fg="green"),default=True):
+        if click.confirm(
+            click.style(
+                "[+] Job's done! Do you wan to view the HTML report now?", fg="green"
+            ),
+            default=True,
+        ):
             os.system("open '{}/report.html'".format(self.report_path))
         else:
-            click.secho("[+] Exiting...",fg="green")
+            click.secho("[+] Exiting...", fg="green")
             exit()
         # Close the connection to the database
         self.conn.close()
@@ -68,146 +81,187 @@ class HTMLReporter(object):
         Each table is named <something>_link and uses a link_id as its primary key.
         """
         # Try to create each of the link tables
-        try:
-            self.c.execute('''CREATE TABLE 'dns_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'dns_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(dns_id) REFERENCES dns(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create DNS link table! It may already exist.",fg="red")
-        try:
-            self.c.execute('''CREATE TABLE 'whois_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'whois_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(whois_id) REFERENCES whois_data(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create WHOIS link table! It may already exist.",fg="red")
-        try:
-            self.c.execute('''CREATE TABLE 'rdap_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'rdap_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(rdap_id) REFERENCES rdap_data(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create RDAP link table! It may already exist.",fg="red")
-        try:
-            self.c.execute('''CREATE TABLE 'subdomain_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'subdomain_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(subdomain_id) REFERENCES subdomains(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create Subdomain link table! It may already exist.",fg="red")
-        try:
-            self.c.execute('''CREATE TABLE 'shodan_search_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_host_lookup(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create Shodan link table! It may already exist.",fg="red")
-        try:
-            self.c.execute('''CREATE TABLE 'shodan_host_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_search(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create Shodan Host link table! It may already exist.",fg="red")
-        try:
-            self.c.execute('''CREATE TABLE 'ip_hist_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'hist_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(hist_id) REFERENCES ip_history(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create IP History link table! It may already exist.",fg="red")
-        try:
-            self.c.execute('''CREATE TABLE 'certificate_link'
-                    ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'cert_id' text, 
-                    FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(cert_id) REFERENCES certificates(id))
-                    ''')
-        except:
-            click.secho("[!] Could not create Certificate link table! It may already exist.",fg="red")
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'domain_dns_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'dns_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(dns_id) REFERENCES dns(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'subdomain_dns_link'
+                ('link_id' INTEGER PRIMARY KEY, 'subdomain_id' text, 'dns_id' text,
+                FOREIGN KEY(subdomain_id) REFERENCES subdomain(id), FOREIGN KEY(dns_id) REFERENCES dns(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'whois_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'whois_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(whois_id) REFERENCES whois_data(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'rdap_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'rdap_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(rdap_id) REFERENCES rdap_data(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'subdomain_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'subdomain_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(subdomain_id) REFERENCES subdomains(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'shodan_search_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_host_lookup(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'shodan_host_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'shodan_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(shodan_id) REFERENCES shodan_search(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'ip_hist_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'hist_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(hist_id) REFERENCES ip_history(id))
+                """
+        )
+
+        self.c.execute(
+            """CREATE TABLE IF NOT EXISTS 'certificate_link'
+                ('link_id' INTEGER PRIMARY KEY, 'host_id' text, 'cert_id' text,
+                FOREIGN KEY(host_id) REFERENCES hosts(id), FOREIGN KEY(cert_id) REFERENCES certificates(id))
+                """
+        )
 
     def link_the_tables(self):
         """Perform the queries necessary to populate the link tables."""
         # Link hosts and the dns records
-        self.c.execute('SELECT id,domain FROM dns')
+        self.c.execute("SELECT id, domain FROM dns")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'dns_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'domain_dns_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
+                        self.conn.commit()
+        self.c.execute("SELECT id, domain FROM dns WHERE subdomain  <> 0")
+        records = self.c.fetchall()
+        for row in records:
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM subdomain"):
+                    if x.strip() == host_info[1]:
+                        self.c.execute(
+                            "INSERT INTO 'subdomain_dns_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
         # Link hosts and the whois records
-        self.c.execute('SELECT id,domain FROM whois_data')
+        self.c.execute("SELECT id, domain FROM whois_data")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'whois_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'whois_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
         # Link hosts and the rdap records
-        self.c.execute('SELECT id,ip_address FROM rdap_data')
+        self.c.execute("SELECT id, ip_address FROM rdap_data")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'rdap_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'rdap_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
         # Link hosts and the subdomain records
-        self.c.execute('SELECT id,domain FROM subdomains')
+        self.c.execute("SELECT id, domain FROM subdomains")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'subdomain_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'subdomain_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
         # Link hosts and the shodan host lookup records
-        self.c.execute('SELECT id,ip_address FROM shodan_host_lookup')
+        self.c.execute("SELECT id, ip_address FROM shodan_host_lookup")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'shodan_host_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'shodan_host_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
         # Link hosts and the shodan search records
-        self.c.execute('SELECT id,domain FROM shodan_search')
+        self.c.execute("SELECT id, domain FROM shodan_search")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'subdomain_search_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'subdomain_search_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
         # Link hosts and the certificates records
-        self.c.execute('SELECT id,host FROM certificates')
+        self.c.execute("SELECT id, host FROM certificates")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'certificate_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'certificate_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
         # Link hosts and the IP history records
-        self.c.execute('SELECT id,domain FROM ip_history')
+        self.c.execute("SELECT id, domain FROM ip_history")
         records = self.c.fetchall()
         for row in records:
-            for x in row[1].split(","):
-                for host_info in self.c.execute('SELECT id,host_address FROM hosts'):
+            for x in row[1].split(", "):
+                for host_info in self.c.execute("SELECT id, host FROM hosts"):
                     if x.strip() == host_info[1]:
-                        self.c.execute("INSERT INTO 'ip_hist_link' VALUES (NULL,?,?)",(host_info[0],row[0]))
+                        self.c.execute(
+                            "INSERT INTO 'ip_hist_link' VALUES (NULL, ?, ?)",
+                            (host_info[0], row[0]),
+                        )
                         self.conn.commit()
 
     def create_css(self):
         """Create the styles.css and define styling used for the HTML report pages."""
-        with open(self.report_path + "styles.css","w") as styles:
+        with open(self.report_path + "styles.css", "w") as styles:
             styling = """
             table {
                 border-collapse: collapse;
             }
-            table,th,td {
+            table, th, td {
                 border: 1px solid black;
             }
             th {
@@ -221,7 +275,7 @@ class HTMLReporter(object):
 
     def create_report_page(self):
         """Create the main reports.html page in the report directory."""
-        with open(self.report_path + "report.html","w") as report:
+        with open(self.report_path + "report.html", "w") as report:
             self.c.execute("SELECT * FROM company_info")
             company_info = self.c.fetchone()
             if company_info:
@@ -232,7 +286,9 @@ class HTMLReporter(object):
                 founded = company_info[4]
             else:
                 name = self.organization
-                logo = website = employees = founded = "No data provided by the Full Contact API"
+                logo = (
+                    website
+                ) = employees = founded = "No data provided by the Full Contact API"
             content = """
             <html><head><link rel="stylesheet" href="styles.css"></head>
             <title>ODIN Report for {}</title><body>
@@ -252,21 +308,20 @@ class HTMLReporter(object):
             <li><a href='networks.html'>IP Address Data</li>
             <li><a href='shodan.html'>Shodan Data</a></li>
             <li><a href='certificates.html'>Certificates</li>
-            <li><a href='metadata.html'>File Metadata</li>
             <li><a href='cloud.html'>Cloud Services</a></li>
-            <li><a href='screenshots.html'>Screenshots</li>
-            <li><a href='people.html'>Social & Email</li>
             <li><a href='lookalike.html'>Lookalike Domains</li>
             </body></html>
-            """.format(name,name,logo,website,employees,founded)
+            """.format(
+                name, name, logo, website, employees, founded
+            )
             report.write(content)
 
     def create_hosts_page(self):
         """Create the hosts.html page in the report directory."""
-        with open(self.report_path + "hosts.html","w") as report:
-            self.c.execute("SELECT host_address,source FROM hosts WHERE in_scope_file=0")
+        with open(self.report_path + "hosts.html", "w") as report:
+            self.c.execute("SELECT host, source FROM hosts WHERE in_scope_file=0")
             out_of_scope = self.c.fetchall()
-            self.c.execute("SELECT host_address FROM hosts WHERE in_scope_file=1")
+            self.c.execute("SELECT host FROM hosts WHERE in_scope_file=1")
             in_scope = self.c.fetchall()
             content = """
             <html>
@@ -282,7 +337,7 @@ class HTMLReporter(object):
             </tr>
             """
             for row in in_scope:
-                for x in row[0].split(","):
+                for x in row[0].split(", "):
                     content += "<tr><td>{}</td></tr>".format(x)
             content += "</table><p><br /></p>"
             content += """
@@ -295,7 +350,7 @@ class HTMLReporter(object):
             </tr>
             """
             for row in out_of_scope:
-                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0],row[1])
+                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
             content += "</table><p><br /></p>"
             content += """
             </body>
@@ -305,7 +360,7 @@ class HTMLReporter(object):
 
     def create_people_page(self):
         """Create the people.html page in the report directory."""
-        with open(self.report_path + "people.html","w") as report:
+        with open(self.report_path + "people.html", "w") as report:
             self.c.execute("SELECT * FROM email_addresses ORDER BY email_address ASC")
             emails = self.c.fetchall()
             self.c.execute("SELECT * FROM employee_data ORDER BY name ASC")
@@ -329,7 +384,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in emails:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2]
+                )
             content += "</table><p><br /></p>"
             content += """
             <h2>Employee Data</h2>
@@ -342,7 +399,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in employees:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2]
+                )
             content += "</table><p><br /></p>"
             content += """
             <h2>Twitter Profiles</h2>
@@ -357,7 +416,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in twitter:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],row[4])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2], row[3], row[4]
+                )
             content += "</table><p><br /></p>"
             content += """
             </body>
@@ -367,8 +428,10 @@ class HTMLReporter(object):
 
     def create_certificates_page(self):
         """Create the certificates.html page in the report directory."""
-        with open(self.report_path + "certificates.html","w") as report:
-            self.c.execute("SELECT host,subject,issuer FROM certificates ORDER BY host ASC")
+        with open(self.report_path + "certificates.html", "w") as report:
+            self.c.execute(
+                "SELECT host, subject, issuer FROM certificates ORDER BY host ASC"
+            )
             certificates = self.c.fetchall()
             content = """
             <html>
@@ -386,7 +449,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in certificates:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2]
+                )
             content += "</table><p><br /></p>"
             content += """
             </body>
@@ -396,10 +461,14 @@ class HTMLReporter(object):
 
     def create_cloud_page(self):
         """Create the cloud.html page in the report directory."""
-        with open(self.report_path + "cloud.html","w") as report:
-            self.c.execute("SELECT name,bucket_uri,bucket_arn,publicly_accessible FROM cloud")
+        with open(self.report_path + "cloud.html", "w") as report:
+            self.c.execute(
+                "SELECT name, bucket_uri, bucket_arn, publicly_accessible FROM cloud"
+            )
             all_cloud = self.c.fetchall()
-            self.c.execute("SELECT name,bucket_uri,bucket_arn,publicly_accessible FROM cloud WHERE publicly_accessible=1")
+            self.c.execute(
+                "SELECT name, bucket_uri, bucket_arn, publicly_accessible FROM cloud WHERE publicly_accessible=1"
+            )
             public_cloud = self.c.fetchall()
             content = """
             <html>
@@ -416,7 +485,7 @@ class HTMLReporter(object):
             </tr>
             """
             for row in public_cloud:
-                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0],row[1])
+                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
             content += "</table><p><br /></p>"
             content += """
             <h2>All Discovered Resources</h2>
@@ -428,7 +497,7 @@ class HTMLReporter(object):
             </tr>
             """
             for row in all_cloud:
-                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0],row[1])
+                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
             content += "</table><p><br /></p>"
             content += """
             </body>
@@ -438,17 +507,21 @@ class HTMLReporter(object):
 
     def create_domains_page(self):
         """Create the people.html page in the report directory."""
-        with open(self.report_path + "domains.html","w") as report:
-            self.c.execute("SELECT domain,registrar,expiration FROM whois_data")
-            registration_data = self.c.fetchall()
-            self.c.execute("SELECT domain,organization,admin_contact,tech_contact,address FROM whois_data")
-            whois_contacts = self.c.fetchall()
-            self.c.execute("SELECT domain,ns_record,a_record,mx_record,txt_record,soa_record,dmarc,office_365_tenant FROM dns ORDER BY domain ASC")
-            dns_records = self.c.fetchall()
-            self.c.execute("SELECT domain,ns_record,vulnerable_cache_snooping FROM dns WHERE vulnerable_cache_snooping IS NOT NULL")
-            cache_snoop = self.c.fetchall()
-            self.c.execute("SELECT domain,ip_address,netblock_owner FROM ip_history ORDER BY ip_address,domain ASC")
-            ip_history = self.c.fetchall()
+        self.c.execute("SELECT domain, registrar, expiration FROM whois_data")
+        registration_data = self.c.fetchall()
+        self.c.execute(
+            "SELECT domain, organization, admin_contact, tech_contact, address FROM whois_data"
+        )
+        whois_contacts = self.c.fetchall()
+        self.c.execute(
+            "SELECT domain, ns_record, a_record, cname_record, mx_record, txt_record, soa_record, dmarc_record, office_365_tenant FROM dns ORDER BY domain ASC"
+        )
+        dns_records = self.c.fetchall()
+        self.c.execute(
+            "SELECT domain, ip_address, netblock_owner FROM ip_history ORDER BY ip_address, domain ASC"
+        )
+        ip_history = self.c.fetchall()
+        with open(self.report_path + "domains.html", "w") as report:
             content = """
             <html>
             <head><link rel="stylesheet" href="styles.css"></head>
@@ -465,7 +538,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in registration_data:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2]
+                )
             content += "</table><p><br /></p>"
             content += """
             <h2>WHOIS Contacts</h2>
@@ -480,7 +555,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in whois_contacts:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],row[4])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2], row[3], row[4]
+                )
             content += "</table><p><br /></p>"
             content += """
             <h2>DNS Records</h2>
@@ -490,6 +567,7 @@ class HTMLReporter(object):
             <th>Domain</th>
             <th>NS Record(s)</th>
             <th>A Record(s)</th>
+            <th>CNAME Record(s)</th>
             <th>MX Record(s)</th>
             <th>TXT Record(s)</th>
             <th>SOA Record</th>
@@ -498,36 +576,22 @@ class HTMLReporter(object):
             </tr>
             """
             for row in dns_records:
-                if "-all" not in row[4]:
-                    spf = '<p style="color:red">{}</p>'.format(row[4])
+                if row[5]:
+                    if "-all" not in row[5]:
+                        spf = '<p style="color:red">{}</p>'.format(row[5])
                 else:
-                    spf = row[4]
-                if row[6] == "None":
-                    dmarc = '<p style="color:red">{}</p>'.format(row[6])
+                    spf = row[5]
+                if row[7] == "":
+                    dmarc = '<p style="color:red">{}</p>'.format(row[7])
                 else:
-                    dmarc = row[6]
-                if row[7] == "No":
-                    o365 = row[7]
+                    dmarc = row[7]
+                if row[8] == "":
+                    o365 = row[8]
                 else:
-                    o365 = '<p style="color:red">{}</p>'.format(row[7])
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],spf,row[5],dmarc,o365)
-            content += "</table><p><br /></p>"
-            content += """
-            <h2>Name Server Cache Snooping</h2>
-            <p>This table contains the domain's name servers and flags those vulnerable to DNS cache snooping:
-            <table style="width:100%" border="1">
-            <tr>
-            <th>Domain</th>
-            <th>NS Record(s)</th>
-            <th>Vulnerable Name Server</th>
-            </tr>
-            """
-            for row in cache_snoop:
-                if row[2]:
-                    vuln_server = '<p style="color:red">{}</p>'.format(row[2])
-                else:
-                    vuln_server = "<center>None</center"
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],vuln_server)
+                    o365 = '<p style="color:red">{}</p>'.format(row[8])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2], row[3], row[4], spf, row[6], dmarc, o365
+                )
             content += "</table><p><br /></p>"
             content += """
             <h2>IP History</h2>
@@ -540,7 +604,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in ip_history:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2]
+                )
             content += "</table><p><br /></p>"
             content += """
             </body>
@@ -550,74 +616,86 @@ class HTMLReporter(object):
 
     def create_subdomains_page(self):
         """Create the subdomains.html page in the report directory."""
-        with open(self.report_path + "subdomains.html","w") as report:
-            self.c.execute("SELECT domain,subdomain,ip_address FROM subdomains ORDER BY ip_address,domain,subdomain ASC")
-            subdomains = self.c.fetchall()
-            self.c.execute("SELECT domain,subdomain,domain_frontable FROM subdomains WHERE domain_frontable <> 0")
-            frontable = self.c.fetchall()
-            self.c.execute("SELECT domain,subdomain,domain_takeover FROM subdomains WHERE domain_takeover <> 0")
-            takeovers = self.c.fetchall()
-            content = """
-            <html>
-            <head><link rel="stylesheet" href="styles.css"></head>
-            <title>Subdomains</title>
-            <body>
-            <h1>Subdomains</h1>
-            """
-            if frontable:
+        self.c.execute(
+            "SELECT domain, subdomain FROM subdomains ORDER BY domain, subdomain ASC"
+        )
+        subdomains = self.c.fetchall()
+        self.c.execute(
+            "SELECT domain, subdomain, domain_frontable FROM subdomains WHERE domain_frontable <> 0"
+        )
+        frontable = self.c.fetchall()
+        self.c.execute(
+            "SELECT domain, subdomain, domain_takeover FROM subdomains WHERE domain_takeover <> 0"
+        )
+        takeovers = self.c.fetchall()
+        if subdomains:
+            with open(self.report_path + "subdomains.html", "w") as report:
+                content = """
+                <html>
+                <head><link rel="stylesheet" href="styles.css"></head>
+                <title>Subdomains</title>
+                <body>
+                <h1>Subdomains</h1>
+                """
+                if frontable:
+                    content += """
+                    <h2>Frontable Subdomains</h2>
+                    <p>This table contains domains and subdomains that may be used for domain fronting:
+                    <table style="width:100%" border="1">
+                    <tr>
+                    <th>Base Domain</th>
+                    <th>Domain</th>
+                    <th>CDN Information</th>
+                    </tr>
+                    """
+                    for row in frontable:
+                        content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                            row[0], row[1], row[2]
+                        )
+                    content += "</table><p><br /></p>"
+                if takeovers:
+                    content += """
+                    <h2>Possible Domain Takeovers</h2>
+                    <p>This table contains domains and subdomains that may be vulnerable to a domain takeover:
+                    <table style="width:100%" border="1">
+                    <tr>
+                    <th>Base Domain</th>
+                    <th>Domain</th>
+                    <th>Takeover Information</th>
+                    </tr>
+                    """
+                    for row in takeovers:
+                        content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                            row[0], row[1], row[2]
+                        )
+                    content += "</table><p><br /></p>"
                 content += """
-                <h2>Frontable Subdomains</h2>
-                <p>This table contains domains and subdomains that may be used for domain fronting:
+                <h2>Discovered Subdomains</h2>
+                <p>This table contains all of the subdomains ODIN identified and the IP address of the subdomain:
                 <table style="width:100%" border="1">
                 <tr>
                 <th>Base Domain</th>
-                <th>Domain</th>
-                <th>CDN Information</th>
+                <th>Subdomain</th>
                 </tr>
                 """
-                for row in frontable:
-                    content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
+                for row in subdomains:
+                    content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0], row[1])
                 content += "</table><p><br /></p>"
-            if takeovers:
                 content += """
-                <h2>Possible Domain Takeovers</h2>
-                <p>This table contains domains and subdomains that may be vulnerable to a domain takeover:
-                <table style="width:100%" border="1">
-                <tr>
-                <th>Base Domain</th>
-                <th>Domain</th>
-                <th>Takeover Information</th>
-                </tr>
+                </body>
+                </html>
                 """
-                for row in takeovers:
-                    content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
-                content += "</table><p><br /></p>"
-            content += """
-            <h2>Discovered Subdomains</h2>
-            <p>This table contains all of the subdomains ODIN identified and the IP address of the subdomain:
-            <table style="width:100%" border="1">
-            <tr>
-            <th>Base Domain</th>
-            <th>Subdomain</th>
-            <th>IP Address</th>
-            </tr>
-            """
-            for row in subdomains:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2])
-            content += "</table><p><br /></p>"
-            content += """
-            </body>
-            </html>
-            """
-            report.write(content)
+                report.write(content)
+        else:
+            pass
 
     def create_networks_page(self):
         """Create the networks.html page in the report directory."""
-        with open(self.report_path + "networks.html","w") as report:
-            self.c.execute("SELECT ip_address,rdap_source,organization,network_cidr,asn,country_code FROM rdap_data ORDER BY organization,ip_address ASC")
-            rdap_data = self.c.fetchall()
-            self.c.execute("SELECT ip_address,robtex_related_domains FROM rdap_data ORDER BY ip_address ASC")
-            related_domains = self.c.fetchall()
+        self.c.execute(
+            "SELECT ip_address, rdap_source, organization, network_cidr, asn, country_code FROM rdap_data ORDER BY organization, ip_address ASC"
+        )
+        rdap_data = self.c.fetchall()
+        with open(self.report_path + "networks.html", "w") as report:
             content = """
             <html>
             <head><link rel="stylesheet" href="styles.css"></head>
@@ -637,19 +715,9 @@ class HTMLReporter(object):
             </tr>
             """
             for row in rdap_data:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],row[4],row[5])
-            content += "</table><p><br /></p>"
-            content += """
-            <h2>Related Domains</h2>
-            <p>This table contains domain names known to be tied to these IP addresses (via Robtex):
-            <table style="width:100%" border="1">
-            <tr>
-            <th>IP Address</th>
-            <th>Related Domain</th>
-            </tr>
-            """
-            for row in related_domains:
-                content += "<tr><td>{}</td><td>{}</td></tr>".format(row[0],row[1])
+                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                    row[0], row[1], row[2], row[3], row[4], row[5]
+                )
             content += "</table><p><br /></p>"
             content += """
             </body>
@@ -659,180 +727,196 @@ class HTMLReporter(object):
 
     def create_shodan_page(self):
         """Create the shodan.html page in the report directory."""
-        with open(self.report_path + "shodan.html","w") as report:
-            self.c.execute("SELECT ip_address,os,organization,port,banner_data FROM shodan_host_lookup ORDER BY organization ASC")
-            shodan_lookup = self.c.fetchall()
-            self.c.execute("SELECT domain,ip_address,hostname,os,port,banner_data FROM shodan_search")
-            shodan_search = self.c.fetchall()
-            content = """
-            <html>
-            <head><link rel="stylesheet" href="styles.css"></head>
-            <title>Shodan Data</title>
-            <body>
-            <h1>Shodan Data</h1>
-            <h2>Shodan Search Results</h2>
-            <p>This table contains the results for Shodan searches on domain names:
-            <table style="width:100%" border="1">
-            <tr>
-            <th>Search Term</th>
-            <th>IP Address</th>
-            <th>Hostname</th>
-            <th>OS</th>
-            <th>Port</th>
-            <th>Banner</th>
-            </tr>
-            """
-            for row in shodan_search:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],row[4],html.escape(row[5]))
-            content += "</table><p><br /></p>"
-            content += """
-            <h2>Shodan Host Lookups</h2>
-            <p>This table contains the information Shodan has on the identified IP addresses:
-            <table style="width:100%" border="1">
-            <tr>
-            <th>IP Address</th>
-            <th>OS</th>
-            <th>Organization</th>
-            <th>Port</th>
-            <th>Banner</th>
-            </tr>
-            """
-            for row in shodan_lookup:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],html.escape(row[4]))
-            content += "</table><p><br /></p>"
-            content += """
-            </body>
-            </html>
-            """
-            report.write(content)
+        self.c.execute(
+            "SELECT ip_address, os, organization, port, banner_data FROM shodan_host_lookup ORDER BY organization ASC"
+        )
+        shodan_lookup = self.c.fetchall()
+        self.c.execute(
+            "SELECT domain, ip_address, hostname, os, port, banner_data FROM shodan_search"
+        )
+        shodan_search = self.c.fetchall()
+        if shodan_lookup or shodan_search:
+            with open(self.report_path + "shodan.html", "w") as report:
+                content = """
+                <html>
+                <head><link rel="stylesheet" href="styles.css"></head>
+                <title>Shodan Data</title>
+                <body>
+                <h1>Shodan Data</h1>
+                <h2>Shodan Search Results</h2>
+                <p>This table contains the results for Shodan searches on domain names:
+                <table style="width:100%" border="1">
+                <tr>
+                <th>Search Term</th>
+                <th>IP Address</th>
+                <th>Hostname</th>
+                <th>OS</th>
+                <th>Port</th>
+                <th>Banner</th>
+                </tr>
+                """
+                for row in shodan_search:
+                    content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                        row[0], row[1], row[2], row[3], row[4], html.escape(row[5])
+                    )
+                content += "</table><p><br /></p>"
+                content += """
+                <h2>Shodan Host Lookups</h2>
+                <p>This table contains the information Shodan has on the identified IP addresses:
+                <table style="width:100%" border="1">
+                <tr>
+                <th>IP Address</th>
+                <th>OS</th>
+                <th>Organization</th>
+                <th>Port</th>
+                <th>Banner</th>
+                </tr>
+                """
+                for row in shodan_lookup:
+                    content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                        row[0], row[1], row[2], row[3], html.escape(row[4])
+                    )
+                content += "</table><p><br /></p>"
+                content += """
+                </body>
+                </html>
+                """
+                report.write(content)
+        else:
+            pass
 
     def create_lookalike_page(self):
         """Create the lookalike.html page in the report directory."""
-        with open(self.report_path + "lookalike.html","w") as report:
-            self.c.execute("SELECT domain,rank,a_record,mx_record FROM lookalike ORDER BY rank DESC")
-            lookalikes = self.c.fetchall()
-            self.c.execute("SELECT domain,a_record,cymon_hit,urlvoid_ip,hostname,domain_age,google_rank,alexa_rank,asn,asn_name,urlvoid_hit,urlvoid_engines FROM lookalike")
-            mal_check = self.c.fetchall()
-            content = """
-            <html>
-            <head><link rel="stylesheet" href="styles.css"></head>
-            <title>Lookalike Domain Report</title>
-            <body>
-            <h1>Lookalike Domain Report</h1>
-            <h2>Lookalike Domain Results</h2>
-            <p>This table contains lookalike domains for the provided domain name. Domains are ranked by how closely they mimic the provided domain:
-            <table style="width:100%" border="1">
-            <tr>
-            <th>Domain</th>
-            <th>Rank</th>
-            <th>A Record</th>
-            <th>MX Record</th>
-            </tr>
-            """
-            for row in lookalikes:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3])
-            content += "</table><p><br /></p>"
-            content += """
-            <h2>Malicious Content Review</h2>
-            <p>This table shows the results from Cymon.io and URLVoid for the registered lookalike domains.:
-            <table style="width:100%" border="1">
-            <tr>
-            <th>Domain</th>
-            <th>A Record</th>
-            <th>Cymon Hits</th>
-            <th>URLVoid IP Address</th>
-            <th>URLVoid Hostname</th>
-            <th>Domain Age</th>
-            <th>Google Rank</th>
-            <th>Alexa Rank</th>
-            <th>ASN</th>
-            <th>ASN Name</th>
-            <th>URLVoid Hits</th>
-            <th>URLVoid Engines</th>
-            </tr>
-            """
-            for row in mal_check:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[11])
-            content += "</table><p><br /></p>"
-            content += """
-            <p>Note: A positive hit in the above table does not mean the domain/IP address is 
-            malicious. It might be a shared IP address, the malicious activity may have been
-            shutdown, or the domain may have already been seized and just happens to still be
-            pointing at the bad IP address. Don't jump to any conclusions until you check the
-            threat feed reports yourself!
-            </body>
-            </html>
-            """
-            report.write(content)
+        self.c.execute(
+            "SELECT domain, rank, a_record, mx_record FROM lookalike ORDER BY rank DESC"
+        )
+        lookalikes = self.c.fetchall()
+        self.c.execute(
+            "SELECT domain, a_record, cymon_hit, urlvoid_ip, hostname, domain_age, google_rank, alexa_rank, asn, asn_name, urlvoid_hit, urlvoid_engines FROM lookalike"
+        )
+        mal_check = self.c.fetchall()
+        if lookalikes:
+            with open(self.report_path + "lookalike.html", "w") as report:
+                content = """
+                <html>
+                <head><link rel="stylesheet" href="styles.css"></head>
+                <title>Lookalike Domain Report</title>
+                <body>
+                <h1>Lookalike Domain Report</h1>
+                <h2>Lookalike Domain Results</h2>
+                <p>This table contains lookalike domains for the provided domain name. Domains are ranked by how closely they mimic the provided domain:
+                <table style="width:100%" border="1">
+                <tr>
+                <th>Domain</th>
+                <th>Rank</th>
+                <th>A Record</th>
+                <th>MX Record</th>
+                </tr>
+                """
+                for row in lookalikes:
+                    content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                        row[0], row[1], row[2], row[3]
+                    )
+                content += "</table><p><br /></p>"
+                content += """
+                <h2>Malicious Content Review</h2>
+                <p>This table shows the results from Cymon.io and URLVoid for the registered lookalike domains.:
+                <table style="width:100%" border="1">
+                <tr>
+                <th>Domain</th>
+                <th>A Record</th>
+                <th>Cymon Hits</th>
+                <th>URLVoid IP Address</th>
+                <th>URLVoid Hostname</th>
+                <th>Domain Age</th>
+                <th>Google Rank</th>
+                <th>Alexa Rank</th>
+                <th>ASN</th>
+                <th>ASN Name</th>
+                <th>URLVoid Hits</th>
+                <th>URLVoid Engines</th>
+                </tr>
+                """
+                for row in mal_check:
+                    content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                        row[0],
+                        row[1],
+                        row[2],
+                        row[3],
+                        row[4],
+                        row[5],
+                        row[6],
+                        row[7],
+                        row[8],
+                        row[9],
+                        row[10],
+                        row[11],
+                    )
+                content += "</table><p><br /></p>"
+                content += """
+                <p>Note: A positive hit in the above table does not mean the domain/IP address is
+                malicious. It might be a shared IP address, the malicious activity may have been
+                shutdown, or the domain may have already been seized and just happens to still be
+                pointing at the bad IP address. Don't jump to any conclusions until you check the
+                threat feed reports yourself!
+                </body>
+                </html>
+                """
+                report.write(content)
+        else:
+            pass
 
     def create_metadata_page(self):
         """Create the metadata.html page in the report directory."""
-        with open(self.report_path + "metadata.html","w") as report:
-            self.c.execute("SELECT filename,creation_date,author,produced_by,modification_date FROM file_metadata")
-            metadata = self.c.fetchall()
-            content = """
-            <html>
-            <head><link rel="stylesheet" href="styles.css"></head>
-            <title>File Metadata Report</title>
-            <body>
-            <h1>File Metadata Report</h1>
-            <h2>Found Metadata</h2>
-            <p>This table contains the metadata extracted from files found via Google's search engine:
-            <table style="width:100%" border="1">
-            <tr>
-            <th>Filename</th>
-            <th>Creation Date</th>
-            <th>Author</th>
-            <th>Software</th>
-            <th>Modification Date</th>
-            </tr>
-            """
-            for row in metadata:
-                content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row[0],row[1],row[2],row[3],row[4])
-            content += "</table><p><br /></p>"
-            content += """
-            </body>
-            </html>
-            """
-            report.write(content)
-
-    def create_screenshots_page(self):
-        """Create the screenshots.html page in the report directory."""
-        with open(self.report_path + "screenshots.html","w") as report:
-            content = """
-            <html>
-            <head><link rel="stylesheet" href="styles.css"></head>
-            <title>Screenshots Report</title>
-            <body>
-            <h1>Screenshots Report</h1>
-            <p>This page contains the screenshots captured for web services:</p>
-            """
-            screenshot_images = os.listdir(self.report_path + "../screenshots")
-            for screenshot in screenshot_images:
+        self.c.execute(
+            "SELECT filename, creation_date, author, produced_by, modification_date FROM file_metadata"
+        )
+        metadata = self.c.fetchall()
+        if metadata:
+            with open(self.report_path + "metadata.html", "w") as report:
+                content = """
+                <html>
+                <head><link rel="stylesheet" href="styles.css"></head>
+                <title>File Metadata Report</title>
+                <body>
+                <h1>File Metadata Report</h1>
+                <h2>Found Metadata</h2>
+                <p>This table contains the metadata extracted from files found via Google's search engine:
+                <table style="width:100%" border="1">
+                <tr>
+                <th>Filename</th>
+                <th>Creation Date</th>
+                <th>Author</th>
+                <th>Software</th>
+                <th>Modification Date</th>
+                </tr>
+                """
+                for row in metadata:
+                    content += "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                        row[0], row[1], row[2], row[3], row[4]
+                    )
+                content += "</table><p><br /></p>"
                 content += """
-                <h2># {}</h2>
-                <img src='{}' />
-                """.format(screenshot.strip(".png"),"../screenshots/" + screenshot)
-            content += """
-            </body>
-            </html>
-            """
-            report.write(content)
+                </body>
+                </html>
+                """
+                report.write(content)
+        else:
+            pass
 
     def generate_full_report(self):
         """Perform all actions necessary to generate a full HTML report for the ODIN database."""
         self.generate_link_tables()
         self.create_css()
-        self.create_report_page()
         self.create_hosts_page()
         self.create_domains_page()
         self.create_networks_page()
         self.create_subdomains_page()
         self.create_certificates_page()
         self.create_shodan_page()
-        self.create_people_page()
+        # self.create_people_page()
         self.create_cloud_page()
-        self.create_lookalike_page()
-        self.create_metadata_page()
-        self.create_screenshots_page()
+        # self.create_lookalike_page()
+        # self.create_metadata_page()
+        self.create_report_page()
         self.close_out_reporting()

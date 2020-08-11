@@ -1,37 +1,30 @@
-[Shodan]
-api_key:
-
-[Cymon]
-api_key:
-
 [Full Contact]
 api_key:
 
-[EmailHunter]
-api_key: 
-
-[URLVoid]
+[Shodan]
 api_key:
 
 [Censys]
 api_id:
 api_secret:
 
-[Twitter]
-consumer_key:
-key_secret:
-access_token:
-token_secret: 
+[WhoXY]
+api_key:
+
+[EmailHunter]
+api_key:
+
+[URLVoid]
+api_key:
+
+[VirusTotal]
+api_key:
+
+[HIBP]
+api_key:
 
 [WebDriver]
 driver_path: /Users/Odin/Downloads/chromedriver
-
-[AWS]
-access_key: 
-secret: 
-
-[WhoXY]
-api_key:
 
 [GraphDatabase]
 uri: bolt://localhost:####

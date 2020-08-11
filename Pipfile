@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 shodan = "*"
+pyopenssl = "*"
 python-whois = "*"
 bs4 = "*"
 netaddr = "*"
@@ -22,9 +23,10 @@ selenium = "*"
 multiprocess = "*"
 boto3 = "*"
 neo4j-driver = "*"
+aiohttp = "*"
 
 [dev-packages]
 pylint = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.8"

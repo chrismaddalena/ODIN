@@ -5,32 +5,44 @@
 
 import click
 from selenium import webdriver
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    TimeoutException,
+    WebDriverException,
+)
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException,NoSuchElementException,WebDriverException
 
 from lib import helpers
 
 
 class Screenshotter(object):
-    """Class containing the tools for taking screenshots of webpages."""
+    """Take screenshots of webpages."""
+
     # Set the timeout, in seconds, for the webdriver
     browser_timeout = 10
 
-    def __init__(self,webdriver):
-        """Everything that should be initiated with a new object goes here.
+    def __init__(self, webdriver):
+        """
+        Everything that should be initiated with a new object goes here.
 
-        Parameters:
-        webdriver   A Selenium webdriver object to use for automated web browsing
+        **Parameters**
+
+        ``webdriver``
+            Selenium webdriver object to use for automated web browsing
         """
         self.browser = webdriver
         self.browser.set_page_load_timeout(self.browser_timeout)
 
-    def take_screenshot(self,target,directory):
-        """Function to take a screenshot of a target webpage.
+    def take_screenshot(self, target, directory):
+        """
+        Take a screenshot of the target webpage.
 
-        Parameters:
-        target      The IP address or domain name to use for the web request
-        directory   The directory where the saved screenshots will be stored
+        **Parameters**
+
+        ``target``
+            IP address or domain name to use for the web request
+        ``directory``
+            Directory where the saved screenshots will be stored
         """
         try:
             out_name = target.split("//")[1]

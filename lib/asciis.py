@@ -17,7 +17,6 @@ def print_art():
   ======  :: =======  :: === :: ===  === ::
         """
 
-
     r2 = """
  ██████╗    ██████╗    ██╗   ███╗   ██╗
 ██╔═══██╗   ██╔══██╗   ██║   ████╗  ██║
@@ -59,6 +58,6 @@ def print_art():
  ▀█▄▀▪ ▀ ▀▀▀▀▀•  ▀ ▀▀▀ ▀ ▀▀ █▪ ▀
  		"""
 
-    art = [r1,r2,r3,r4,r5]
+    art = [r1, r2, r3, r4, r5]
     chosen_ascii = random.choice(art)
     return chosen_ascii
