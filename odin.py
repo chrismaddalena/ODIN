@@ -18,6 +18,7 @@ Description: Observation, Detection, and Investigation of Networks
 
              ODIN is made possible through the help, input, and work provided by others. Therefore,
              this project is entirely open source and available to all to use/modify.
+             special for hacktoberfest
 """
 
 import os
